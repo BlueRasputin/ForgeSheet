@@ -70,6 +70,8 @@ body[data-theme="dark"] .party-card,
 body[data-theme="dark"] .party-summary article,
 body[data-theme="dark"] .rest-preview article,
 body[data-theme="dark"] .rule-card,
+body[data-theme="dark"] .roll-item,
+body[data-theme="dark"] .prep-suggestions span,
 body[data-theme="dark"] .dm-sheet,
 body[data-theme="dark"] .activity-item,
 body[data-theme="dark"] .note-section,
@@ -464,7 +466,7 @@ body.split-view .split-panel .class-option-row textarea {
 
 .action-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) 140px minmax(140px, 1fr) minmax(140px, 1fr) 88px;
+  grid-template-columns: minmax(140px, 1fr) 140px minmax(140px, 1fr) minmax(140px, 1fr) 76px 88px;
   gap: 8px;
   align-items: start;
   border: 1px solid var(--line);
@@ -477,9 +479,88 @@ body.split-view .split-panel .class-option-row textarea {
   grid-column: 1 / 5;
 }
 
+.roll-controls,
+.hit-dice-controls,
+.concentration-box {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.3fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.hit-dice-controls {
+  grid-template-columns: minmax(180px, 1fr) auto;
+}
+
+.concentration-box {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 12px 0;
+}
+
+.roll-history {
+  display: grid;
+  gap: 8px;
+}
+
+.roll-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.8fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: #fbfcfc;
+}
+
+.roll-item > * {
+  min-width: 0;
+}
+
+.roll-item span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.money-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(52px, 1fr)) minmax(70px, auto);
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.money-grid strong {
+  padding-bottom: 9px;
+  text-align: right;
+}
+
+.prep-tools {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.prep-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prep-suggestions span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #fbfcfc;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .equipment-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 70px 90px 110px 100px 88px;
+  grid-template-columns: minmax(150px, 1fr) 70px 90px minmax(120px, 0.8fr) 110px 100px 88px;
   gap: 8px;
   align-items: start;
   border: 1px solid var(--line);
@@ -489,7 +570,7 @@ body.split-view .split-panel .class-option-row textarea {
 }
 
 .equipment-row textarea {
-  grid-column: 1 / 6;
+  grid-column: 1 / 7;
 }
 
 .class-option-row {
@@ -1136,6 +1217,14 @@ menu {
     grid-column: 1 / -1;
   }
 
+  .roll-controls,
+  .hit-dice-controls,
+  .concentration-box,
+  .money-grid,
+  .roll-item {
+    grid-template-columns: 1fr;
+  }
+
   .equipment-row,
   .class-option-row {
     grid-template-columns: 1fr 1fr;
@@ -1148,6 +1237,18 @@ menu {
 
   .rules-tools {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 981px) and (max-width: 1100px) {
+  .class-option-row,
+  .equipment-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .class-option-row textarea,
+  .equipment-row textarea {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1203,6 +1304,14 @@ menu {
     grid-column: auto;
   }
 
+  .roll-controls,
+  .hit-dice-controls,
+  .concentration-box,
+  .money-grid,
+  .roll-item {
+    grid-template-columns: 1fr;
+  }
+
   .pdf-import-row {
     grid-template-columns: 1fr;
   }
@@ -1218,5 +1327,37 @@ menu {
   .equipment-row textarea,
   .class-option-row textarea {
     grid-column: auto;
+  }
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .top-actions,
+  .manager-band,
+  .tabs,
+  .split-toolbar,
+  .play-actions,
+  button {
+    display: none !important;
+  }
+
+  .panel,
+  body.split-view .panel.split-panel {
+    display: block !important;
+  }
+
+  .app-shell {
+    width: auto;
+    padding: 0;
+  }
+
+  .block,
+  .summary-band,
+  .topbar {
+    box-shadow: none;
+    break-inside: avoid;
   }
 }

@@ -48,6 +48,16 @@ const CONDITIONS = [
   "Stunned", "Unconscious", "Concentrating"
 ];
 
+const ASI_LEVELS = new Set([4, 8, 12, 16, 19]);
+
+const PREP_SUGGESTIONS = {
+  combat: ["cure-wounds", "faerie-fire", "shield", "web", "fireball", "revivify", "haste"],
+  exploration: ["detect-magic", "identify", "feather-fall", "longstrider", "rope-trick", "water-breathing", "fly"],
+  social: ["disguise-self", "enhance-ability", "detect-magic", "invisibility", "suggestion"],
+  dungeon: ["detect-magic", "identify", "cure-wounds", "darkvision", "lesser-restoration", "web"],
+  boss: ["cure-wounds", "faerie-fire", "web", "haste", "dispel-magic", "revivify"]
+};
+
 const TAB_DEFS = [
   ["sheet", "Sheet"],
   ["play", "Play"],
@@ -323,12 +333,16 @@ function defaultCharacter() {
     inventory: "",
     notes: "",
     noteSections: [],
+    rollHistory: [],
+    currency: { cp: 0, sp: 0, ep: 0, gp: 25, pp: 0 },
+    hitDiceUsed: 0,
+    concentration: "",
     resources: [
       { id: crypto.randomUUID(), name: "Infusions", current: 2, max: 2, reset: "long" }
     ],
     equipment: [
-      { id: crypto.randomUUID(), name: "Scale Mail", quantity: 1, weight: 45, equipped: true, attuned: false, notes: "Armor" },
-      { id: crypto.randomUUID(), name: "Smith's Tools", quantity: 1, weight: 8, equipped: false, attuned: false, notes: "Tool proficiency" }
+      { id: crypto.randomUUID(), name: "Scale Mail", quantity: 1, weight: 45, container: "equipped", equipped: true, attuned: false, notes: "Armor" },
+      { id: crypto.randomUUID(), name: "Smith's Tools", quantity: 1, weight: 8, container: "backpack", equipped: false, attuned: false, notes: "Tool proficiency" }
     ],
     classOptions: [
       { id: crypto.randomUUID(), kind: "infusion", name: "Enhanced Defense", current: 1, max: 1, reset: "long", notes: "Record infused item and bonus here." }
@@ -407,7 +421,8 @@ function bindEvents() {
     "characterName", "classSelect", "subclassName", "levelInput", "speciesInput", "backgroundInput", "alignmentInput",
     "hpInput", "maxHpInput", "acInput", "speedInput", "hitDiceInput", "deathSavesInput", "attacksInput",
     "featuresInput", "inventoryInput", "notesInput", "subclassMode", "officialSubclassSelect",
-    "subclassType", "subclassTemplate", "showAllSpells", "exhaustionInput", "sheetSearch"
+    "subclassType", "subclassTemplate", "showAllSpells", "exhaustionInput", "sheetSearch", "concentrationInput",
+    "coinCp", "coinSp", "coinEp", "coinGp", "coinPp", "prepMode"
   ];
   watched.forEach(id => document.querySelector(`#${id}`).addEventListener("input", handleInput));
 
@@ -438,6 +453,7 @@ function bindEvents() {
   document.querySelector("#deleteCharacterButton").addEventListener("click", deleteCharacter);
   document.querySelector("#characterLibrarySelect").addEventListener("change", switchCharacter);
   document.querySelector("#exportJsonButton").addEventListener("click", exportCharacterJson);
+  document.querySelector("#printSheetButton").addEventListener("click", () => window.print());
   document.querySelector("#importJsonButton").addEventListener("click", () => document.querySelector("#jsonImportInput").click());
   document.querySelector("#jsonImportInput").addEventListener("change", importCharacterJson);
   document.querySelector("#toggleTheme").addEventListener("click", toggleTheme);
@@ -451,6 +467,9 @@ function bindEvents() {
   document.querySelector("#saveClass").addEventListener("click", saveCustomClass);
   document.querySelector("#shortRestButton").addEventListener("click", () => takeRest("short"));
   document.querySelector("#longRestButton").addEventListener("click", () => takeRest("long"));
+  document.querySelector("#spendHitDieButton").addEventListener("click", spendHitDie);
+  document.querySelector("#rollDiceButton").addEventListener("click", () => rollFromInput());
+  document.querySelector("#rollHistory").addEventListener("click", handleRollHistoryClick);
   document.querySelector("#addResourceButton").addEventListener("click", addResource);
   document.querySelector("#resourceRows").addEventListener("input", handleResourceInput);
   document.querySelector("#resourceRows").addEventListener("click", handleResourceClick);
@@ -463,8 +482,10 @@ function bindEvents() {
   document.querySelector("#classOptionRows").addEventListener("click", handleClassOptionClick);
   document.querySelector("#conditionGrid").addEventListener("click", handleConditionClick);
   document.querySelector("#addActionButton").addEventListener("click", addAction);
+  document.querySelector("#generateActionsButton").addEventListener("click", generateActions);
   document.querySelector("#actionRows").addEventListener("input", handleActionInput);
   document.querySelector("#actionRows").addEventListener("click", handleActionClick);
+  document.querySelector("#clearConcentrationButton").addEventListener("click", clearConcentration);
   document.querySelector("#connectSync").addEventListener("click", connectCampaignSync);
   document.querySelector("#disconnectSync").addEventListener("click", disconnectCampaignSync);
   document.querySelector("#copyPlayerLink").addEventListener("click", () => copySyncLink("player"));
@@ -643,6 +664,15 @@ function handleInput(event) {
   }
   if (id === "exhaustionInput") {
     character.exhaustion = clamp(Number(value), 0, 6);
+    persist();
+  }
+  if (id === "concentrationInput") {
+    character.concentration = value;
+    persist();
+  }
+  const coinMap = { coinCp: "cp", coinSp: "sp", coinEp: "ep", coinGp: "gp", coinPp: "pp" };
+  if (coinMap[id]) {
+    character.currency[coinMap[id]] = clamp(Number(value), 0, 999999);
     persist();
   }
   renderAll();
@@ -900,12 +930,73 @@ function toggleTheme() {
 }
 
 function renderPlayTools() {
+  renderDiceRoller();
   renderRestPreview();
   renderResources();
   renderEquipment();
   renderClassOptions();
   renderConditions();
   renderActions();
+}
+
+function renderDiceRoller() {
+  const latest = character.rollHistory?.[0];
+  document.querySelector("#rollSummary").textContent = latest ? `${latest.label}: ${latest.total}` : "No rolls yet";
+  document.querySelector("#rollHistory").innerHTML = (character.rollHistory || []).slice(0, 8).map((roll, index) => `
+    <article class="roll-item">
+      <button type="button" class="ghost reroll" data-roll-index="${index}">Reroll</button>
+      <strong>${escapeHtml(roll.label)}</strong>
+      <span>${escapeHtml(roll.formula)} = ${escapeHtml(roll.parts.join(" + "))}</span>
+      <b>${roll.total}</b>
+    </article>
+  `).join("") || `<p class="empty-state">No roll history yet.</p>`;
+}
+
+function rollFromInput(label = "Custom Roll", formula = document.querySelector("#rollFormula").value, mode = document.querySelector("#rollMode").value) {
+  const result = rollFormula(formula || "1d20", mode);
+  character.rollHistory = [{ label, formula: result.formula, mode, total: result.total, parts: result.parts }, ...(character.rollHistory || [])].slice(0, 25);
+  persistAndRender();
+}
+
+function handleRollHistoryClick(event) {
+  const button = event.target.closest(".reroll");
+  if (!button) return;
+  const roll = character.rollHistory[Number(button.dataset.rollIndex)];
+  if (roll) rollFromInput(roll.label, roll.formula, roll.mode);
+}
+
+function rollFormula(formula, mode = "normal") {
+  const cleaned = String(formula).replace(/\s+/g, "").toLowerCase();
+  const tokens = cleaned.match(/[+-]?[^+-]+/g) || ["1d20"];
+  const parts = [];
+  let total = 0;
+  tokens.forEach(token => {
+    const sign = token.startsWith("-") ? -1 : 1;
+    const body = token.replace(/^[+-]/, "");
+    const dice = body.match(/^(\d*)d(\d+)$/);
+    if (dice) {
+      const count = clamp(Number(dice[1] || 1), 1, 50);
+      const sides = clamp(Number(dice[2]), 2, 1000);
+      const rolls = Array.from({ length: count }, () => rollDie(sides));
+      const used = mode === "advantage" && count === 1 && sides === 20
+        ? [Math.max(rolls[0], rollDie(20))]
+        : mode === "disadvantage" && count === 1 && sides === 20
+          ? [Math.min(rolls[0], rollDie(20))]
+          : rolls;
+      const subtotal = used.reduce((sum, value) => sum + value, 0) * sign;
+      total += subtotal;
+      parts.push(`${sign < 0 ? "-" : ""}${body}[${used.join(",")}]`);
+    } else {
+      const value = Number(body || 0) * sign;
+      total += value;
+      parts.push(String(value));
+    }
+  });
+  return { formula: cleaned || "1d20", parts, total };
+}
+
+function rollDie(sides) {
+  return Math.floor(Math.random() * sides) + 1;
 }
 
 function renderRestPreview() {
@@ -918,10 +1009,21 @@ function renderRestPreview() {
     ...character.classOptions.filter(item => item.reset === "long" || item.reset === "short")
   ].map(item => item.name).filter(Boolean);
   document.querySelector("#restSummary").textContent = character.restLog || "No rest taken yet";
+  document.querySelector("#hitDiceSummary").textContent = `${Math.max(0, character.level - character.hitDiceUsed)} / ${character.level} hit dice available`;
   document.querySelector("#restPreview").innerHTML = `
     <article><strong>Short rest</strong><span>${escapeHtml(shortRefresh.join(", ") || "No short-rest resources tracked.")}</span></article>
     <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, ${escapeHtml(longRefresh.join(", ") || "no tracked resources")}</span></article>
   `;
+}
+
+function spendHitDie() {
+  if (character.hitDiceUsed >= character.level) return;
+  const cls = currentClass();
+  const heal = Math.max(1, rollDie(cls.hitDie) + mod("con"));
+  character.hitDiceUsed += 1;
+  character.hp = Math.min(Number(character.maxHp || character.hp), Number(character.hp || 0) + heal);
+  character.rollHistory = [{ label: "Hit Die Healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`heal ${heal}`] }, ...(character.rollHistory || [])].slice(0, 25);
+  persistAndRender();
 }
 
 function renderResources() {
@@ -982,6 +1084,7 @@ function renderEquipment() {
       node.querySelector(".equipment-name").value = item.name || "";
       node.querySelector(".equipment-qty").value = item.quantity ?? 1;
       node.querySelector(".equipment-weight").value = item.weight ?? 0;
+      node.querySelector(".equipment-container").value = item.container || "carried";
       node.querySelector(".equipment-equipped").checked = Boolean(item.equipped);
       node.querySelector(".equipment-attuned").checked = Boolean(item.attuned);
       node.querySelector(".equipment-notes").value = item.notes || "";
@@ -989,6 +1092,7 @@ function renderEquipment() {
     });
   }
   renderEncumbrance();
+  renderCurrency();
 }
 
 function renderEncumbrance() {
@@ -1001,6 +1105,17 @@ function renderEncumbrance() {
   document.querySelector("#encumbranceSummary").textContent = `${formatWeight(total)} / ${capacity} lb · ${status} · ${attuned}/3 attuned`;
   document.querySelector("#encumbranceFill").style.width = `${percent}%`;
   document.querySelector("#encumbranceFill").dataset.state = total > capacity ? "over" : total >= heavy ? "heavy" : "ok";
+}
+
+function renderCurrency() {
+  const coins = character.currency || {};
+  setValue("coinCp", coins.cp || 0);
+  setValue("coinSp", coins.sp || 0);
+  setValue("coinEp", coins.ep || 0);
+  setValue("coinGp", coins.gp || 0);
+  setValue("coinPp", coins.pp || 0);
+  const gp = (Number(coins.cp || 0) / 100) + (Number(coins.sp || 0) / 10) + (Number(coins.ep || 0) / 2) + Number(coins.gp || 0) + (Number(coins.pp || 0) * 10);
+  document.querySelector("#coinSummary").textContent = `${formatWeight(gp)} gp`;
 }
 
 function addEquipment() {
@@ -1016,7 +1131,11 @@ function handleEquipmentInput(event) {
   if (event.target.classList.contains("equipment-name")) item.name = event.target.value;
   if (event.target.classList.contains("equipment-qty")) item.quantity = clamp(Number(event.target.value), 0, 999);
   if (event.target.classList.contains("equipment-weight")) item.weight = Math.max(0, Number(event.target.value) || 0);
-  if (event.target.classList.contains("equipment-equipped")) item.equipped = event.target.checked;
+  if (event.target.classList.contains("equipment-container")) item.container = event.target.value;
+  if (event.target.classList.contains("equipment-equipped")) {
+    item.equipped = event.target.checked;
+    if (item.equipped) item.container = "equipped";
+  }
   if (event.target.classList.contains("equipment-attuned")) item.attuned = event.target.checked;
   if (event.target.classList.contains("equipment-notes")) item.notes = event.target.value;
   persist();
@@ -1099,7 +1218,7 @@ function handleClassOptionClick(event) {
 function renderConditions() {
   const root = document.querySelector("#conditionGrid");
   const active = new Set(character.conditions || []);
-  root.innerHTML = CONDITIONS.map(condition => `<button type="button" class="condition-chip ${active.has(condition) ? "active" : ""}" data-condition="${condition}">${condition}</button>`).join("");
+  root.innerHTML = CONDITIONS.map(condition => `<button type="button" title="${escapeHtml(conditionRule(condition))}" class="condition-chip ${active.has(condition) ? "active" : ""}" data-condition="${condition}">${condition}</button>`).join("");
 }
 
 function handleConditionClick(event) {
@@ -1152,9 +1271,32 @@ function handleActionInput(event) {
 
 function handleActionClick(event) {
   const button = event.target.closest(".remove-action");
+  const rollButton = event.target.closest(".roll-action");
+  if (rollButton) {
+    const row = rollButton.closest(".action-row");
+    const action = character.actions.find(item => item.id === row.dataset.actionId);
+    if (action) rollFromInput(action.name || "Action", action.damage || action.attack || "1d20", "normal");
+    return;
+  }
   if (!button) return;
   const row = button.closest(".action-row");
   character.actions = character.actions.filter(item => item.id !== row.dataset.actionId);
+  persistAndRender();
+}
+
+function generateActions() {
+  const existing = new Set(character.actions.map(action => action.name.toLowerCase()));
+  const generated = [];
+  if (!existing.has("initiative")) generated.push({ id: crypto.randomUUID(), name: "Initiative", type: "Free", attack: formatMod(mod("dex")), damage: "1d20" + formatMod(mod("dex")), notes: "Roll at start of combat." });
+  (character.equipment || []).filter(item => item.equipped).forEach(item => {
+    const name = item.name || "Equipped Item";
+    if (!existing.has(name.toLowerCase())) generated.push({ id: crypto.randomUUID(), name, type: "Action", attack: formatMod(proficiencyBonus() + Math.max(mod("str"), mod("dex"))), damage: "1d20" + formatMod(proficiencyBonus() + Math.max(mod("str"), mod("dex"))), notes: item.notes || "Generated from equipped item. Edit damage as needed." });
+  });
+  character.spells.filter(row => spellRowHasSpell(row)).slice(0, 5).forEach(row => {
+    const name = spellDisplayName(row);
+    if (!existing.has(name.toLowerCase())) generated.push({ id: crypto.randomUUID(), name, type: spellLevelForRow(row) === 0 ? "Action" : "Spell", attack: document.querySelector("#spellAttack")?.textContent || "", damage: "", notes: `Generated from spell list. Save DC ${document.querySelector("#spellDc")?.textContent || "-"}.` });
+  });
+  character.actions.push(...generated);
   persistAndRender();
 }
 
@@ -1164,6 +1306,8 @@ function takeRest(type) {
     character.spellSlotUsage = {};
     character.conditions = (character.conditions || []).filter(condition => condition === "Exhaustion");
     character.exhaustion = Math.max(0, Number(character.exhaustion || 0) - 1);
+    character.hitDiceUsed = Math.max(0, Number(character.hitDiceUsed || 0) - Math.max(1, Math.floor(character.level / 2)));
+    character.concentration = "";
   }
   character.resources.forEach(resource => {
     if (resource.reset === type || (type === "long" && resource.reset === "short")) resource.current = resource.max;
@@ -1830,6 +1974,8 @@ function renderSpells() {
   document.querySelector("#spellAttack").textContent = ability === "none" ? "-" : formatMod(proficiencyBonus() + spellMod);
   document.querySelector("#preparedCount").textContent = `${preparedUsed} / ${preparedLimit}`;
   document.querySelector("#preparedCount").style.color = preparedUsed > preparedLimit ? "var(--accent)" : "inherit";
+  setValue("concentrationInput", character.concentration || "");
+  renderPrepSuggestions();
   renderSlots(cls);
   renderSpellRows();
 }
@@ -1885,12 +2031,20 @@ function handleSpellCastClick(event) {
   if (!max || used >= max) return;
   character.spellSlotUsage[castLevel] = used + 1;
   row.castLevel = castLevel;
+  const concentration = spellConcentrationLabel(row);
+  if (concentration) character.concentration = concentration;
   persistAndRender();
 }
 
 function spellRowForElement(element) {
   const node = element.closest(".spell-row");
   return node ? character.spells.find(row => row.id === node.dataset.spellId) : null;
+}
+
+function spellConcentrationLabel(row) {
+  if (row.custom?.desc?.toLowerCase().includes("concentration")) return row.custom.name || "Custom spell";
+  const detail = spellDetails[row.index];
+  return detail?.concentration ? detail.name : "";
 }
 
 function renderSpellRows() {
@@ -2077,6 +2231,34 @@ function renderSpellCard(card, rowOrIndex) {
   `;
 }
 
+function clearConcentration() {
+  character.concentration = "";
+  persistAndRender();
+}
+
+function renderPrepSuggestions() {
+  const mode = document.querySelector("#prepMode")?.value || "combat";
+  const cls = currentClass();
+  const limit = preparedLimitFor(cls);
+  const known = allSpells.filter(spell => spellMatchesClass(spell, cls) && spell.level > 0 && spell.level <= maxSpellLevelFor(cls, character.level));
+  const preferred = PREP_SUGGESTIONS[mode] || [];
+  const suggestions = [
+    ...preferred.map(index => known.find(spell => spell.index === index)).filter(Boolean),
+    ...known
+  ];
+  const unique = [];
+  const seen = new Set();
+  suggestions.forEach(spell => {
+    if (!seen.has(spell.index) && unique.length < Math.max(3, limit || 5)) {
+      seen.add(spell.index);
+      unique.push(spell);
+    }
+  });
+  document.querySelector("#prepSuggestions").innerHTML = unique.length
+    ? unique.map(spell => `<span>${escapeHtml(spell.name)}</span>`).join("")
+    : `<span>No suggestions for this class yet.</span>`;
+}
+
 function spellCastControls(row, baseLevel = spellLevelForRow(row)) {
   if (!spellRowHasSpell(row)) return "";
   if (baseLevel === 0) {
@@ -2198,6 +2380,9 @@ function openLevelDialog() {
   const choices = document.querySelector("#levelSpellChoices");
   choices.innerHTML = "";
   const totalChoices = (row.newSpells || 0) + (row.cantrips || 0);
+  document.querySelector("#levelAsiPrompt").innerHTML = ASI_LEVELS.has(nextLevel)
+    ? `<div><strong>ASI / Feat:</strong> Choose +2 to one ability, +1 to two abilities, or record a feat in Features after applying.</div>`
+    : "";
   for (let i = 0; i < totalChoices; i += 1) {
     const newRow = { id: crypto.randomUUID(), index: "", prepared: true };
     pendingLevelChoices.push(newRow);
@@ -2401,8 +2586,13 @@ function carryingCapacity(source = character) {
 
 function equipmentWeight(source = character) {
   return (source.equipment || []).reduce((sum, item) => {
+    if (["bagOfHolding", "mount", "home"].includes(item.container)) return sum;
     return sum + (Number(item.quantity || 0) * Number(item.weight || 0));
   }, 0);
+}
+
+function conditionRule(condition) {
+  return RULES_REFERENCE.find(entry => entry.category === "condition" && entry.title === condition)?.body || "See Rules tab for condition details.";
 }
 
 function formatWeight(value) {
@@ -2492,6 +2682,10 @@ function normalizeCharacter(value) {
       sections: stored.subclass?.sections || base.subclass.sections
     },
     noteSections: stored.noteSections || base.noteSections,
+    rollHistory: stored.rollHistory || base.rollHistory,
+    currency: { ...base.currency, ...(stored.currency || {}) },
+    hitDiceUsed: Number(stored.hitDiceUsed || 0),
+    concentration: stored.concentration || base.concentration,
     resources: stored.resources || base.resources,
     equipment: stored.equipment || base.equipment,
     classOptions: stored.classOptions || base.classOptions,

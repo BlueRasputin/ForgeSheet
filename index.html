@@ -17,6 +17,7 @@
           <button id="toggleTheme" class="ghost">Dark</button>
           <button id="importSheetButton" class="ghost">Import Sheet</button>
           <button id="exportJsonButton" class="ghost">Export</button>
+          <button id="printSheetButton" class="ghost">Print</button>
           <button id="importJsonButton" class="ghost">Import JSON</button>
           <button id="saveCharacter" class="ghost">Save</button>
           <button id="resetCharacter" class="danger">Reset</button>
@@ -209,11 +210,35 @@
             <button id="addActionButton" class="ghost" type="button">+ Action</button>
             <button id="addEquipmentButton" class="ghost" type="button">+ Item</button>
             <button id="addClassOptionButton" class="ghost" type="button">+ Class Option</button>
+            <button id="generateActionsButton" class="ghost" type="button">Generate Actions</button>
           </div>
+          <section class="block">
+            <div class="block-head">
+              <h2>Dice Roller</h2>
+              <span id="rollSummary" class="muted">No rolls yet</span>
+            </div>
+            <div class="roll-controls">
+              <label>Formula <input id="rollFormula" autocomplete="off" placeholder="1d20+5, 2d8+3"></label>
+              <label>
+                Mode
+                <select id="rollMode">
+                  <option value="normal">Normal</option>
+                  <option value="advantage">Advantage</option>
+                  <option value="disadvantage">Disadvantage</option>
+                </select>
+              </label>
+              <button id="rollDiceButton" class="primary" type="button">Roll</button>
+            </div>
+            <div id="rollHistory" class="roll-history"></div>
+          </section>
           <section class="block">
             <div class="block-head">
               <h2>Rest Automation</h2>
               <span id="restSummary" class="muted">Ready</span>
+            </div>
+            <div class="hit-dice-controls">
+              <span id="hitDiceSummary" class="muted">Hit dice ready</span>
+              <button id="spendHitDieButton" class="secondary" type="button">Spend Hit Die</button>
             </div>
             <div id="restPreview" class="rest-preview"></div>
           </section>
@@ -237,6 +262,14 @@
               <div class="block-head">
                 <h2>Equipment & Encumbrance</h2>
                 <span id="encumbranceSummary" class="muted">0 lb</span>
+              </div>
+              <div class="money-grid">
+                <label>CP <input id="coinCp" type="number" min="0"></label>
+                <label>SP <input id="coinSp" type="number" min="0"></label>
+                <label>EP <input id="coinEp" type="number" min="0"></label>
+                <label>GP <input id="coinGp" type="number" min="0"></label>
+                <label>PP <input id="coinPp" type="number" min="0"></label>
+                <strong id="coinSummary">0 gp</strong>
               </div>
               <div class="encumbrance-meter"><span id="encumbranceFill"></span></div>
               <div id="equipmentRows" class="equipment-list"></div>
@@ -275,6 +308,23 @@
                 <div><span>Save DC</span><strong id="spellDc">-</strong></div>
                 <div><span>Attack</span><strong id="spellAttack">-</strong></div>
                 <div><span>Prepared</span><strong id="preparedCount">0 / 0</strong></div>
+              </div>
+              <div class="concentration-box">
+                <label>Concentration <input id="concentrationInput" autocomplete="off" placeholder="No active concentration"></label>
+                <button id="clearConcentrationButton" class="ghost" type="button">Clear</button>
+              </div>
+              <div class="prep-tools">
+                <label>
+                  Prepared Suggestions
+                  <select id="prepMode">
+                    <option value="combat">Combat</option>
+                    <option value="exploration">Exploration</option>
+                    <option value="social">Social</option>
+                    <option value="dungeon">Dungeon</option>
+                    <option value="boss">Boss Fight</option>
+                  </select>
+                </label>
+                <div id="prepSuggestions" class="prep-suggestions"></div>
               </div>
               <div class="slots" id="slotGrid"></div>
               <label class="inline-check">
@@ -450,6 +500,7 @@
           <button value="cancel" class="icon-button" aria-label="Close">x</button>
         </div>
         <div id="levelSummary" class="level-summary"></div>
+        <div id="levelAsiPrompt" class="level-summary"></div>
         <div id="levelSpellChoices" class="spell-rows"></div>
         <menu>
           <button value="cancel" class="ghost">Cancel</button>
@@ -538,6 +589,14 @@
         <input class="equipment-name" placeholder="Item name">
         <input class="equipment-qty" type="number" min="0" step="1" aria-label="Quantity">
         <input class="equipment-weight" type="number" min="0" step="0.01" aria-label="Weight each">
+        <select class="equipment-container" aria-label="Container">
+          <option value="carried">Carried</option>
+          <option value="equipped">Equipped</option>
+          <option value="backpack">Backpack</option>
+          <option value="bagOfHolding">Bag of Holding</option>
+          <option value="mount">Mount / Cart</option>
+          <option value="home">Home Base</option>
+        </select>
         <label class="inline-check"><input type="checkbox" class="equipment-equipped"> Equipped</label>
         <label class="inline-check"><input type="checkbox" class="equipment-attuned"> Attuned</label>
         <textarea class="equipment-notes" rows="2" placeholder="Notes, charges, container, magic item details..."></textarea>
@@ -581,6 +640,7 @@
         <input class="action-attack" placeholder="+7 to hit / DC 15">
         <input class="action-damage" placeholder="1d8+3 lightning">
         <textarea class="action-notes" rows="3" placeholder="Range, save, riders, ammo, charges..."></textarea>
+        <button class="secondary roll-action" type="button">Roll</button>
         <button class="ghost remove-action" type="button">Remove</button>
       </article>
     </template>
