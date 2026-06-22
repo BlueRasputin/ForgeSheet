@@ -415,9 +415,19 @@ function bindEvents() {
   document.querySelectorAll("[data-skill]").forEach(input => input.addEventListener("input", handleSkillInput));
   document.querySelector("#spellRows").addEventListener("click", event => {
     const button = event.target.closest("[data-add-spell-level]");
-    if (!button) return;
-    const level = Number(button.dataset.addSpellLevel);
-    character.spells.push({ id: crypto.randomUUID(), index: "", level, prepared: level > 0 });
+    if (button) {
+      const level = Number(button.dataset.addSpellLevel);
+      character.spells.push({ id: crypto.randomUUID(), index: "", level, prepared: level > 0 });
+      persistAndRender();
+      return;
+    }
+    handleSpellCastClick(event);
+  });
+  document.querySelector("#spellRows").addEventListener("change", event => {
+    if (!event.target.classList.contains("cast-level-select")) return;
+    const row = spellRowForElement(event.target);
+    if (!row) return;
+    row.castLevel = Number(event.target.value);
     persistAndRender();
   });
   document.querySelector("#slotGrid").addEventListener("click", handleSlotUsageClick);
@@ -1859,6 +1869,30 @@ function handleSlotUsageClick(event) {
   persistAndRender();
 }
 
+function handleSpellCastClick(event) {
+  const button = event.target.closest(".cast-spell");
+  if (!button) return;
+  const row = spellRowForElement(button);
+  if (!row || !spellRowHasSpell(row)) return;
+  const baseLevel = spellLevelForRow(row);
+  if (baseLevel === 0) {
+    return;
+  }
+  const castLevel = Number(row.castLevel || button.dataset.castLevel || baseLevel);
+  const slots = spellSlotsFor(currentClass(), character.level);
+  const max = slots[castLevel - 1] || 0;
+  const used = Number(character.spellSlotUsage?.[castLevel] || 0);
+  if (!max || used >= max) return;
+  character.spellSlotUsage[castLevel] = used + 1;
+  row.castLevel = castLevel;
+  persistAndRender();
+}
+
+function spellRowForElement(element) {
+  const node = element.closest(".spell-row");
+  return node ? character.spells.find(row => row.id === node.dataset.spellId) : null;
+}
+
 function renderSpellRows() {
   const root = document.querySelector("#spellRows");
   const template = document.querySelector("#spellRowTemplate");
@@ -1883,6 +1917,7 @@ function renderSpellRows() {
     }
     rows.forEach(row => {
       const node = template.content.firstElementChild.cloneNode(true);
+      node.dataset.spellId = row.id;
       const select = node.querySelector(".spell-select");
       const prepared = node.querySelector(".prepared-toggle");
       const remove = node.querySelector(".remove-spell");
@@ -2006,6 +2041,7 @@ function renderCustomSpellEditor(node, row, level) {
 
 function renderSpellCard(card, rowOrIndex) {
   const row = typeof rowOrIndex === "object" ? rowOrIndex : { index: rowOrIndex };
+  const baseLevel = spellLevelForRow(row);
   if (row.custom) {
     const custom = row.custom;
     card.innerHTML = `
@@ -2014,6 +2050,7 @@ function renderSpellCard(card, rowOrIndex) {
       <br>${escapeHtml(custom.duration || "Duration")}
       <br>${escapeHtml(truncate(custom.desc || "Enter the custom spell details above.", 320))}
       <br><span>Source: Custom / book copy</span>
+      ${spellCastControls(row, baseLevel)}
     `;
     return;
   }
@@ -2036,7 +2073,50 @@ function renderSpellCard(card, rowOrIndex) {
     <br>${detail.concentration ? "Concentration · " : ""}${detail.duration || ""}
     <br>${truncate((detail.desc || []).join(" "), 260)}
     <br><span>API classes: ${classes || "custom/homebrew"}</span>
+    ${spellCastControls(row, detail.level ?? baseLevel)}
   `;
+}
+
+function spellCastControls(row, baseLevel = spellLevelForRow(row)) {
+  if (!spellRowHasSpell(row)) return "";
+  if (baseLevel === 0) {
+    return `
+      <div class="spell-cast-controls">
+        <span>Cantrip</span>
+        <button type="button" class="secondary cast-spell">Cast</button>
+      </div>
+    `;
+  }
+  const slots = spellSlotsFor(currentClass(), character.level);
+  const options = castLevelOptions(baseLevel, slots);
+  const selected = normalizeCastLevel(row, baseLevel, options);
+  const remaining = slotRemaining(selected, slots[selected - 1] || 0);
+  return `
+    <div class="spell-cast-controls">
+      <label>Cast at
+        <select class="cast-level-select">
+          ${options.map(level => `<option value="${level}" ${level === selected ? "selected" : ""}>${spellLevelLabel(level)} (${slotRemaining(level, slots[level - 1] || 0)} left)</option>`).join("")}
+        </select>
+      </label>
+      <button type="button" class="secondary cast-spell" data-cast-level="${selected}" ${remaining <= 0 ? "disabled" : ""}>Cast</button>
+      <em>${remaining > 0 ? `${remaining} slot${remaining === 1 ? "" : "s"} available` : "No slots left"}</em>
+    </div>
+  `;
+}
+
+function castLevelOptions(baseLevel, slots = spellSlotsFor(currentClass(), character.level)) {
+  const options = slots
+    .map((count, index) => ({ level: index + 1, count }))
+    .filter(item => item.level >= baseLevel && item.count > 0)
+    .map(item => item.level);
+  return options.length ? options : [baseLevel];
+}
+
+function normalizeCastLevel(row, baseLevel, options) {
+  const chosen = Number(row.castLevel || baseLevel);
+  const selected = options.includes(chosen) ? chosen : options[0];
+  row.castLevel = selected;
+  return selected;
 }
 
 function renderBuilder() {

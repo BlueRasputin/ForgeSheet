@@ -77,6 +77,7 @@ body[data-theme="dark"] .spell-row,
 body[data-theme="dark"] .spell-section,
 body[data-theme="dark"] .spell-section-head,
 body[data-theme="dark"] .custom-spell-fields,
+body[data-theme="dark"] .spell-cast-controls,
 body[data-theme="dark"] .import-preview {
   background: var(--panel);
   color: var(--ink);
@@ -368,6 +369,7 @@ body.split-view .split-panel .subclass-tools {
 
 body.split-view .split-panel .equipment-row,
 body.split-view .split-panel .class-option-row,
+body.split-view .split-panel .spell-cast-controls,
 body.split-view .split-panel .rules-tools {
   grid-template-columns: 1fr;
 }
@@ -872,6 +874,35 @@ body.split-view .split-panel .class-option-row textarea {
   color: var(--ink);
 }
 
+.spell-cast-controls {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: white;
+}
+
+.spell-cast-controls label {
+  text-transform: none;
+}
+
+.spell-cast-controls > span {
+  align-self: center;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.spell-cast-controls em {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 0.82rem;
+}
+
 .custom-spell-fields {
   display: none;
   grid-column: 1 / -1;
@@ -1157,6 +1188,10 @@ menu {
   }
 
   .spell-row {
+    grid-template-columns: 1fr;
+  }
+
+  .spell-cast-controls {
     grid-template-columns: 1fr;
   }
 
