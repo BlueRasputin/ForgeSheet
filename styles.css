@@ -57,6 +57,7 @@ body[data-theme="dark"] .summary-band,
 body[data-theme="dark"] .manager-band,
 body[data-theme="dark"] .block,
 body[data-theme="dark"] .tabs,
+body[data-theme="dark"] .split-toolbar,
 body[data-theme="dark"] .ability-card,
 body[data-theme="dark"] .stat-strip > div,
 body[data-theme="dark"] .calc-grid > div,
@@ -279,15 +280,51 @@ textarea {
   border-radius: 8px;
 }
 
+.split-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: var(--shadow);
+}
+
+.split-toggle {
+  align-self: center;
+  min-height: 38px;
+}
+
 .tab {
   flex: 1;
   background: transparent;
 }
 
-.tab.active {
+.tab.active,
+.tab.split-active {
   border-color: var(--accent);
   background: var(--accent);
   color: white;
+}
+
+.tab.split-secondary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.panel-deck {
+  display: block;
+}
+
+body.split-view .panel-deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
 
 .panel {
@@ -297,6 +334,31 @@ textarea {
 
 .panel.active {
   display: block;
+}
+
+body.split-view .panel {
+  margin-top: 16px;
+}
+
+body.split-view .panel.split-panel {
+  display: block;
+  min-width: 0;
+}
+
+body.split-view .panel.split-left {
+  grid-column: 1;
+}
+
+body.split-view .panel.split-right {
+  grid-column: 2;
+}
+
+body.split-view .split-panel .two-col,
+body.split-view .split-panel .spell-layout,
+body.split-view .split-panel .class-builder,
+body.split-view .split-panel .sync-layout,
+body.split-view .split-panel .subclass-tools {
+  grid-template-columns: 1fr;
 }
 
 .two-col,
@@ -927,6 +989,16 @@ menu {
   .tabs {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .split-toolbar,
+  body.split-view .panel-deck {
+    grid-template-columns: 1fr;
+  }
+
+  body.split-view .panel.split-left,
+  body.split-view .panel.split-right {
+    grid-column: auto;
   }
 
   .ability-grid,

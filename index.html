@@ -111,6 +111,23 @@
           <button class="tab" data-tab="campaign">Campaign Sync</button>
         </nav>
 
+        <section class="split-toolbar" aria-label="Side-by-side view controls">
+          <label class="inline-check split-toggle">
+            <input type="checkbox" id="splitViewToggle">
+            Side-by-side
+          </label>
+          <label>
+            Left
+            <select id="splitLeftSelect"></select>
+          </label>
+          <label>
+            Right
+            <select id="splitRightSelect"></select>
+          </label>
+          <button id="swapSplitPanels" class="ghost" type="button">Swap</button>
+        </section>
+
+        <div id="panelDeck" class="panel-deck">
         <section id="sheet" class="panel active">
           <div class="two-col">
             <section class="block">
@@ -355,6 +372,7 @@
             <div id="syncActivity" class="activity-feed"></div>
           </section>
         </section>
+        </div>
       </main>
     </div>
 
