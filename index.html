@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ForgeSheet</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">5e character builder</p>
+          <h1>ForgeSheet</h1>
+        </div>
+        <div class="top-actions">
+          <button id="toggleTheme" class="ghost">Dark</button>
+          <button id="importSheetButton" class="ghost">Import Sheet</button>
+          <button id="exportJsonButton" class="ghost">Export</button>
+          <button id="importJsonButton" class="ghost">Import JSON</button>
+          <button id="saveCharacter" class="ghost">Save</button>
+          <button id="resetCharacter" class="danger">Reset</button>
+          <button id="levelUpButton" class="primary">Level Up</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="manager-band">
+          <label>
+            Character Library
+            <select id="characterLibrarySelect"></select>
+          </label>
+          <button id="newCharacterButton" class="secondary" type="button">New</button>
+          <button id="duplicateCharacterButton" class="ghost" type="button">Duplicate</button>
+          <button id="deleteCharacterButton" class="danger" type="button">Delete</button>
+          <label>
+            Search Sheet
+            <input id="sheetSearch" autocomplete="off" placeholder="Search spells, notes, features...">
+          </label>
+          <span id="autosaveStatus" class="muted">Autosaved</span>
+        </section>
+
+        <section id="searchResults" class="search-results"></section>
+
+        <section class="summary-band">
+          <div class="identity-grid">
+            <label>
+              Character
+              <input id="characterName" autocomplete="off" placeholder="Name">
+            </label>
+            <label>
+              Class
+              <select id="classSelect"></select>
+            </label>
+            <label>
+              Subclass
+              <input id="subclassName" autocomplete="off" placeholder="Armorer">
+            </label>
+            <label>
+              Level
+              <input id="levelInput" type="number" min="1" max="20">
+            </label>
+            <label>
+              Species
+              <input id="speciesInput" autocomplete="off" placeholder="Human">
+            </label>
+            <label>
+              Background
+              <input id="backgroundInput" autocomplete="off" placeholder="Sage">
+            </label>
+            <label>
+              Alignment
+              <input id="alignmentInput" autocomplete="off" placeholder="NG">
+            </label>
+          </div>
+          <div class="stat-strip">
+            <div>
+              <span>Proficiency</span>
+              <strong id="profBonus">+2</strong>
+            </div>
+            <div>
+              <span>HP</span>
+              <strong><input id="hpInput" type="number" min="1"></strong>
+            </div>
+            <div>
+              <span>Max HP</span>
+              <strong><input id="maxHpInput" type="number" min="1"></strong>
+            </div>
+            <div>
+              <span>AC</span>
+              <strong><input id="acInput" type="number" min="1"></strong>
+            </div>
+            <div>
+              <span>Initiative</span>
+              <strong id="initiativeValue">+0</strong>
+            </div>
+            <div>
+              <span>Speed</span>
+              <strong><input id="speedInput" type="number" min="0"></strong>
+            </div>
+          </div>
+        </section>
+
+        <nav class="tabs" aria-label="Character sections">
+          <button class="tab active" data-tab="sheet">Sheet</button>
+          <button class="tab" data-tab="play">Play</button>
+          <button class="tab" data-tab="spells">Spells</button>
+          <button class="tab" data-tab="classes">Class Builder</button>
+          <button class="tab" data-tab="notes">Notes</button>
+          <button class="tab" data-tab="party">Party</button>
+          <button class="tab" data-tab="campaign">Campaign Sync</button>
+        </nav>
+
+        <section id="sheet" class="panel active">
+          <div class="two-col">
+            <section class="block">
+              <div class="block-head">
+                <h2>Ability Scores</h2>
+              </div>
+              <div id="abilities" class="ability-grid"></div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Skills</h2>
+                <span id="skillSummary"></span>
+              </div>
+              <div id="skills" class="skill-grid"></div>
+            </section>
+          </div>
+
+          <div class="two-col">
+            <section class="block">
+              <div class="block-head">
+                <h2>Combat</h2>
+              </div>
+              <div class="field-grid compact">
+                <label>Hit Dice <input id="hitDiceInput" autocomplete="off"></label>
+                <label>Death Saves <input id="deathSavesInput" autocomplete="off" placeholder="0 successes / 0 failures"></label>
+                <label>Attacks <textarea id="attacksInput" rows="5"></textarea></label>
+              </div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Features</h2>
+              </div>
+              <textarea id="featuresInput" rows="8" placeholder="Class features, feats, traits, infusions, invocations..."></textarea>
+            </section>
+          </div>
+
+          <section class="block">
+            <div class="block-head">
+              <h2>Subclass</h2>
+              <button id="addSubclassSection" class="secondary" type="button">+ Section</button>
+            </div>
+            <div class="subclass-tools">
+              <label>
+                Source
+                <select id="subclassMode">
+                  <option value="custom">Custom / non-SRD</option>
+                  <option value="official">Official SRD API</option>
+                </select>
+              </label>
+              <label>
+                Official SRD Subclass
+                <select id="officialSubclassSelect"></select>
+              </label>
+              <label>
+                Subclass Type
+                <input id="subclassType" autocomplete="off" placeholder="Specialist, domain, patron, oath...">
+              </label>
+              <label>
+                Add Template
+                <select id="subclassTemplate">
+                  <option value="">Choose template...</option>
+                  <option value="armorer">Armorer armor forms</option>
+                  <option value="choice">Choice-based subclass</option>
+                  <option value="resource">Subclass resource tracker</option>
+                </select>
+              </label>
+            </div>
+            <div id="officialSubclassDetail" class="official-subclass"></div>
+            <div id="subclassSections" class="note-sections"></div>
+          </section>
+        </section>
+
+        <section id="play" class="panel">
+          <div class="play-actions">
+            <button id="shortRestButton" class="secondary" type="button">Short Rest</button>
+            <button id="longRestButton" class="primary" type="button">Long Rest</button>
+            <button id="addResourceButton" class="ghost" type="button">+ Resource</button>
+            <button id="addActionButton" class="ghost" type="button">+ Action</button>
+          </div>
+          <div class="two-col">
+            <section class="block">
+              <div class="block-head">
+                <h2>Resources</h2>
+              </div>
+              <div id="resourceRows" class="tracker-list"></div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Conditions</h2>
+              </div>
+              <div id="conditionGrid" class="condition-grid"></div>
+              <label>Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
+            </section>
+          </div>
+          <section class="block">
+            <div class="block-head">
+              <h2>Actions</h2>
+            </div>
+            <div id="actionRows" class="action-list"></div>
+          </section>
+        </section>
+
+        <section id="spells" class="panel">
+          <div class="spell-layout">
+            <aside class="block spell-control">
+              <div class="block-head">
+                <h2>Spellcasting</h2>
+              </div>
+              <div class="calc-grid">
+                <div><span>Ability</span><strong id="spellAbility">-</strong></div>
+                <div><span>Save DC</span><strong id="spellDc">-</strong></div>
+                <div><span>Attack</span><strong id="spellAttack">-</strong></div>
+                <div><span>Prepared</span><strong id="preparedCount">0 / 0</strong></div>
+              </div>
+              <div class="slots" id="slotGrid"></div>
+              <label class="inline-check">
+                <input type="checkbox" id="showAllSpells">
+                Include off-list API spells
+              </label>
+              <p id="apiStatus" class="muted">Loading SRD spells from the 5e API...</p>
+            </aside>
+
+            <section class="block">
+              <div class="block-head">
+                <h2>Spell List</h2>
+              </div>
+              <div id="spellRows" class="spell-rows"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="classes" class="panel">
+          <div class="class-builder">
+            <section class="block">
+              <div class="block-head">
+                <h2>Create Class</h2>
+                <button id="saveClass" class="secondary">Save Class</button>
+              </div>
+              <div class="field-grid">
+                <label>Name <input id="builderName" placeholder="Inventor"></label>
+                <label>Hit Die <select id="builderHitDie"><option>6</option><option>8</option><option>10</option><option>12</option></select></label>
+                <label>Caster Type <select id="builderCasterType"></select></label>
+                <label>Spell Ability <select id="builderSpellAbility"></select></label>
+                <label>Prepared Formula <select id="builderPreparedFormula"></select></label>
+                <label>Spell Source Classes <input id="builderSpellSources" placeholder="wizard, cleric"></label>
+              </div>
+              <label>
+                Level Table
+                <textarea id="builderTable" rows="10"></textarea>
+              </label>
+              <p class="muted">Rows use: level, feature text, new spells, cantrips. Example: <code>5, Extra Attack, 1, 0</code></p>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Class Table</h2>
+              </div>
+              <div id="classTable" class="class-table"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="notes" class="panel">
+          <div class="two-col">
+            <section class="block">
+              <h2>Inventory</h2>
+              <textarea id="inventoryInput" rows="12"></textarea>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Notes</h2>
+                <button id="addGeneralNoteSection" class="secondary" type="button">+ Section</button>
+              </div>
+              <textarea id="notesInput" rows="12"></textarea>
+              <div id="generalNoteSections" class="note-sections"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="party" class="panel">
+          <section class="block">
+            <div class="block-head">
+              <h2>Party Dashboard</h2>
+              <span id="partyCount" class="muted">0 characters</span>
+            </div>
+            <div id="partyDashboard" class="party-dashboard"></div>
+          </section>
+        </section>
+
+        <section id="campaign" class="panel">
+          <div class="sync-layout">
+            <section class="block">
+              <div class="block-head">
+                <h2>Campaign Sync</h2>
+                <button id="disconnectSync" class="ghost" type="button">Disconnect</button>
+              </div>
+              <div class="field-grid">
+                <label>
+                  Role
+                  <select id="syncRole">
+                    <option value="player">Player</option>
+                    <option value="dm">DM</option>
+                  </select>
+                </label>
+                <label>
+                  Campaign ID
+                  <input id="syncCampaignId" autocomplete="off" placeholder="storm-kings-thunder">
+                </label>
+                <label>
+                  Display Name
+                  <input id="syncPlayerName" autocomplete="off" placeholder="Player or DM name">
+                </label>
+                <label>
+                  Sheet ID
+                  <input id="syncSheetId" autocomplete="off">
+                </label>
+              </div>
+              <label>
+                Firebase Web Config
+                <textarea id="syncFirebaseConfig" rows="7" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
+              </label>
+              <div class="sync-actions">
+                <button id="connectSync" class="primary" type="button">Connect Sync</button>
+                <button id="copyPlayerLink" class="secondary" type="button">Copy Player Link</button>
+                <button id="copyDmLink" class="secondary" type="button">Copy DM Link</button>
+              </div>
+              <p id="syncStatus" class="muted">Not connected.</p>
+            </section>
+
+            <section class="block">
+              <div class="block-head">
+                <h2>DM View</h2>
+                <span id="syncRosterCount" class="muted">0 sheets</span>
+              </div>
+              <div id="dmRoster" class="dm-roster"></div>
+            </section>
+          </div>
+
+          <section class="block">
+            <div class="block-head">
+              <h2>Campaign Activity</h2>
+            </div>
+            <div id="syncActivity" class="activity-feed"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="levelDialog">
+      <form method="dialog" class="modal">
+        <div class="block-head">
+          <h2 id="levelDialogTitle">Level Up</h2>
+          <button value="cancel" class="icon-button" aria-label="Close">x</button>
+        </div>
+        <div id="levelSummary" class="level-summary"></div>
+        <div id="levelSpellChoices" class="spell-rows"></div>
+        <menu>
+          <button value="cancel" class="ghost">Cancel</button>
+          <button id="confirmLevelUp" value="default" class="primary">Apply Level</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="importDialog">
+      <form method="dialog" class="modal import-modal">
+        <div class="block-head">
+          <h2>Import Character Sheet</h2>
+          <button value="cancel" class="icon-button" aria-label="Close">x</button>
+        </div>
+        <div class="pdf-import-row">
+          <label>
+            PDF Character Sheet
+            <input id="sheetImportPdf" type="file" accept="application/pdf,.pdf">
+          </label>
+          <p id="pdfImportStatus" class="muted">PDF text extraction works best with fillable or text-based PDFs.</p>
+        </div>
+        <label>
+          Pasted Sheet Text
+          <textarea id="sheetImportText" rows="12" placeholder="Paste a character sheet, export text, or copied summary here."></textarea>
+        </label>
+        <label class="inline-check">
+          <input type="checkbox" id="importSkillProficiencies">
+          Import detected skill proficiencies
+        </label>
+        <div class="import-actions">
+          <button id="parseSheetImport" class="secondary" type="button">Parse Sheet</button>
+          <button id="applySheetImport" class="primary" type="button" disabled>Apply Detected Fields</button>
+        </div>
+        <div id="importPreview" class="import-preview">
+          <p class="muted">Detected fields will appear here before anything is applied.</p>
+        </div>
+      </form>
+    </dialog>
+
+    <input id="jsonImportInput" type="file" accept="application/json,.json" hidden>
+
+    <template id="spellRowTemplate">
+      <div class="spell-row">
+        <select class="spell-select"></select>
+        <label class="prepare-toggle"><input type="checkbox" class="prepared-toggle"> Prepared</label>
+        <button class="ghost remove-spell" type="button">Remove</button>
+        <div class="custom-spell-fields">
+          <label>Name <input class="custom-spell-name" autocomplete="off" placeholder="Spell name"></label>
+          <label>Casting Time <input class="custom-spell-casting" autocomplete="off" placeholder="1 action"></label>
+          <label>Range <input class="custom-spell-range" autocomplete="off" placeholder="60 feet"></label>
+          <label>Duration <input class="custom-spell-duration" autocomplete="off" placeholder="Instantaneous"></label>
+          <label>Components <input class="custom-spell-components" autocomplete="off" placeholder="V, S, M"></label>
+          <label>Description <textarea class="custom-spell-desc" rows="4" placeholder="Paste or summarize the spell text here."></textarea></label>
+        </div>
+        <article class="spell-card"></article>
+      </div>
+    </template>
+
+    <template id="noteSectionTemplate">
+      <article class="note-section">
+        <div class="note-section-head">
+          <input class="note-title" autocomplete="off" aria-label="Section name">
+          <button class="ghost remove-note-section" type="button">Remove</button>
+        </div>
+        <textarea class="note-body" rows="5" aria-label="Section notes"></textarea>
+      </article>
+    </template>
+
+    <template id="resourceRowTemplate">
+      <article class="tracker-row">
+        <input class="resource-name" placeholder="Resource name">
+        <input class="resource-current" type="number" min="0" aria-label="Current uses">
+        <span>/</span>
+        <input class="resource-max" type="number" min="0" aria-label="Maximum uses">
+        <select class="resource-reset">
+          <option value="manual">Manual</option>
+          <option value="short">Short rest</option>
+          <option value="long">Long rest</option>
+        </select>
+        <button class="ghost remove-resource" type="button">Remove</button>
+      </article>
+    </template>
+
+    <template id="actionRowTemplate">
+      <article class="action-row">
+        <input class="action-name" placeholder="Action name">
+        <select class="action-type">
+          <option>Action</option>
+          <option>Bonus Action</option>
+          <option>Reaction</option>
+          <option>Free</option>
+        </select>
+        <input class="action-attack" placeholder="+7 to hit / DC 15">
+        <input class="action-damage" placeholder="1d8+3 lightning">
+        <textarea class="action-notes" rows="3" placeholder="Range, save, riders, ammo, charges..."></textarea>
+        <button class="ghost remove-action" type="button">Remove</button>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
