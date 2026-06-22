@@ -55,7 +55,41 @@ const TAB_DEFS = [
   ["classes", "Class Builder"],
   ["notes", "Notes"],
   ["party", "Party"],
-  ["campaign", "Campaign Sync"]
+  ["campaign", "Campaign Sync"],
+  ["rules", "Rules"]
+];
+
+const RULES_REFERENCE = [
+  rule("core", "Ability Checks", "Roll d20 + ability modifier + proficiency if a relevant proficiency applies. The DM sets the DC."),
+  rule("core", "Saving Throws", "Roll d20 + ability modifier + proficiency if proficient in that saving throw."),
+  rule("core", "Concentration", "Taking damage while concentrating requires a Constitution save. DC is 10 or half the damage taken, whichever is higher."),
+  rule("action", "Attack", "Make one melee or ranged attack. Extra Attack and similar features can add attacks to this action."),
+  rule("action", "Cast a Spell", "Cast a spell with a casting time of 1 action. Bonus action spell limits may apply."),
+  rule("action", "Dash", "Gain extra movement equal to your speed for the current turn."),
+  rule("action", "Disengage", "Your movement does not provoke opportunity attacks for the rest of the turn."),
+  rule("action", "Dodge", "Attack rolls against you have disadvantage until your next turn if you can see the attacker, and you have advantage on Dexterity saves."),
+  rule("action", "Help", "Give an ally advantage on an ability check, or help with an attack against a creature within 5 feet of you."),
+  rule("action", "Hide", "Make a Dexterity (Stealth) check when conditions allow hiding."),
+  rule("action", "Ready", "Choose a trigger and action. Use your reaction when the trigger occurs."),
+  rule("rest", "Short Rest", "At least 1 hour. You can spend Hit Dice to heal. Short-rest resources refresh."),
+  rule("rest", "Long Rest", "At least 8 hours. Restores HP, spell slots, many resources, and reduces exhaustion by 1 if conditions are met."),
+  rule("equipment", "Carrying Capacity", "Your carrying capacity is Strength score x 15 pounds. This app flags heavy load at two-thirds capacity."),
+  rule("equipment", "Attunement", "Most characters can attune to up to 3 magic items at a time."),
+  rule("condition", "Blinded", "A blinded creature cannot see and automatically fails ability checks requiring sight. Attacks against it have advantage, and its attacks have disadvantage."),
+  rule("condition", "Charmed", "A charmed creature cannot attack the charmer or target it with harmful abilities, and the charmer has advantage on social checks against it."),
+  rule("condition", "Frightened", "A frightened creature has disadvantage on ability checks and attacks while the source of fear is in line of sight, and cannot willingly move closer."),
+  rule("condition", "Grappled", "A grappled creature's speed becomes 0. The condition ends if the grappler is incapacitated or moved away."),
+  rule("condition", "Incapacitated", "An incapacitated creature cannot take actions or reactions."),
+  rule("condition", "Invisible", "An invisible creature is impossible to see without special senses. Its attacks have advantage, and attacks against it have disadvantage."),
+  rule("condition", "Paralyzed", "A paralyzed creature is incapacitated, cannot move or speak, fails Strength and Dexterity saves, and nearby hits are critical hits."),
+  rule("condition", "Poisoned", "A poisoned creature has disadvantage on attack rolls and ability checks."),
+  rule("condition", "Prone", "A prone creature's only movement option is crawling unless it stands. Melee attacks within 5 feet have advantage; ranged attacks have disadvantage."),
+  rule("condition", "Restrained", "Speed becomes 0, attacks against the creature have advantage, its attacks have disadvantage, and it has disadvantage on Dexterity saves."),
+  rule("condition", "Stunned", "A stunned creature is incapacitated, cannot move, speaks falteringly, fails Strength and Dexterity saves, and attacks against it have advantage."),
+  rule("class", "Artificer Infusions", "Track known infusions, infused items, active items, and whether an infusion is replaced on level-up."),
+  rule("class", "Warlock Invocations", "Track chosen invocations, prerequisites, passive benefits, and limited-use invocations."),
+  rule("class", "Metamagic", "Track sorcery point costs and which spells or situations pair well with each option."),
+  rule("class", "Wild Shape", "Track uses, CR limits, movement restrictions, beast forms, and form HP notes.")
 ];
 
 const FULL_CASTER_SLOTS = {
@@ -250,6 +284,10 @@ function spell(index, name, level, classes) {
   return { index, name, level, classes };
 }
 
+function rule(category, title, body) {
+  return { category, title, body };
+}
+
 function officialSubclass(index, name, classIndex, className, flavor, desc = []) {
   return { index, name, classIndex, className, flavor, desc };
 }
@@ -288,6 +326,14 @@ function defaultCharacter() {
     resources: [
       { id: crypto.randomUUID(), name: "Infusions", current: 2, max: 2, reset: "long" }
     ],
+    equipment: [
+      { id: crypto.randomUUID(), name: "Scale Mail", quantity: 1, weight: 45, equipped: true, attuned: false, notes: "Armor" },
+      { id: crypto.randomUUID(), name: "Smith's Tools", quantity: 1, weight: 8, equipped: false, attuned: false, notes: "Tool proficiency" }
+    ],
+    classOptions: [
+      { id: crypto.randomUUID(), kind: "infusion", name: "Enhanced Defense", current: 1, max: 1, reset: "long", notes: "Record infused item and bonus here." }
+    ],
+    restLog: "",
     conditions: [],
     exhaustion: 0,
     actions: [],
@@ -398,6 +444,13 @@ function bindEvents() {
   document.querySelector("#addResourceButton").addEventListener("click", addResource);
   document.querySelector("#resourceRows").addEventListener("input", handleResourceInput);
   document.querySelector("#resourceRows").addEventListener("click", handleResourceClick);
+  document.querySelector("#addEquipmentButton").addEventListener("click", addEquipment);
+  document.querySelector("#equipmentRows").addEventListener("input", handleEquipmentInput);
+  document.querySelector("#equipmentRows").addEventListener("click", handleEquipmentClick);
+  document.querySelector("#addClassOptionButton").addEventListener("click", () => addClassOption());
+  document.querySelector("#classOptionPreset").addEventListener("input", handleClassOptionPreset);
+  document.querySelector("#classOptionRows").addEventListener("input", handleClassOptionInput);
+  document.querySelector("#classOptionRows").addEventListener("click", handleClassOptionClick);
   document.querySelector("#conditionGrid").addEventListener("click", handleConditionClick);
   document.querySelector("#addActionButton").addEventListener("click", addAction);
   document.querySelector("#actionRows").addEventListener("input", handleActionInput);
@@ -408,6 +461,9 @@ function bindEvents() {
   document.querySelector("#copyDmLink").addEventListener("click", () => copySyncLink("dm"));
   ["syncRole", "syncCampaignId", "syncPlayerName", "syncSheetId", "syncFirebaseConfig"].forEach(id => {
     document.querySelector(`#${id}`).addEventListener("input", handleSyncSettingsInput);
+  });
+  ["rulesSearch", "rulesCategory"].forEach(id => {
+    document.querySelector(`#${id}`).addEventListener("input", renderRulesReference);
   });
   document.querySelector("#addSubclassSection").addEventListener("click", () => addNoteSection("subclass"));
   document.querySelector("#addGeneralNoteSection").addEventListener("click", () => addNoteSection("general"));
@@ -608,6 +664,7 @@ function renderAll() {
   renderPartyDashboard();
   renderSearchResults();
   renderSyncPanel();
+  renderRulesReference();
 }
 
 function renderHeader() {
@@ -833,9 +890,28 @@ function toggleTheme() {
 }
 
 function renderPlayTools() {
+  renderRestPreview();
   renderResources();
+  renderEquipment();
+  renderClassOptions();
   renderConditions();
   renderActions();
+}
+
+function renderRestPreview() {
+  const shortRefresh = [
+    ...character.resources.filter(item => item.reset === "short"),
+    ...character.classOptions.filter(item => item.reset === "short")
+  ].map(item => item.name).filter(Boolean);
+  const longRefresh = [
+    ...character.resources.filter(item => item.reset === "long" || item.reset === "short"),
+    ...character.classOptions.filter(item => item.reset === "long" || item.reset === "short")
+  ].map(item => item.name).filter(Boolean);
+  document.querySelector("#restSummary").textContent = character.restLog || "No rest taken yet";
+  document.querySelector("#restPreview").innerHTML = `
+    <article><strong>Short rest</strong><span>${escapeHtml(shortRefresh.join(", ") || "No short-rest resources tracked.")}</span></article>
+    <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, ${escapeHtml(longRefresh.join(", ") || "no tracked resources")}</span></article>
+  `;
 }
 
 function renderResources() {
@@ -879,6 +955,134 @@ function handleResourceClick(event) {
   if (!button) return;
   const row = button.closest(".tracker-row");
   character.resources = character.resources.filter(item => item.id !== row.dataset.resourceId);
+  persistAndRender();
+}
+
+function renderEquipment() {
+  const root = document.querySelector("#equipmentRows");
+  const template = document.querySelector("#equipmentRowTemplate");
+  root.innerHTML = "";
+  const items = character.equipment || [];
+  if (!items.length) {
+    root.innerHTML = `<p class="empty-state">No equipment tracked yet.</p>`;
+  } else {
+    items.forEach(item => {
+      const node = template.content.firstElementChild.cloneNode(true);
+      node.dataset.equipmentId = item.id;
+      node.querySelector(".equipment-name").value = item.name || "";
+      node.querySelector(".equipment-qty").value = item.quantity ?? 1;
+      node.querySelector(".equipment-weight").value = item.weight ?? 0;
+      node.querySelector(".equipment-equipped").checked = Boolean(item.equipped);
+      node.querySelector(".equipment-attuned").checked = Boolean(item.attuned);
+      node.querySelector(".equipment-notes").value = item.notes || "";
+      root.appendChild(node);
+    });
+  }
+  renderEncumbrance();
+}
+
+function renderEncumbrance() {
+  const total = equipmentWeight();
+  const capacity = carryingCapacity();
+  const heavy = Math.round(capacity * 0.67);
+  const attuned = (character.equipment || []).filter(item => item.attuned).length;
+  const percent = capacity ? Math.min(100, Math.round((total / capacity) * 100)) : 0;
+  const status = total > capacity ? "Over capacity" : total >= heavy ? "Heavy load" : "Comfortable";
+  document.querySelector("#encumbranceSummary").textContent = `${formatWeight(total)} / ${capacity} lb · ${status} · ${attuned}/3 attuned`;
+  document.querySelector("#encumbranceFill").style.width = `${percent}%`;
+  document.querySelector("#encumbranceFill").dataset.state = total > capacity ? "over" : total >= heavy ? "heavy" : "ok";
+}
+
+function addEquipment() {
+  character.equipment.push({ id: crypto.randomUUID(), name: "New Item", quantity: 1, weight: 0, equipped: false, attuned: false, notes: "" });
+  persistAndRender();
+}
+
+function handleEquipmentInput(event) {
+  const row = event.target.closest(".equipment-row");
+  if (!row) return;
+  const item = character.equipment.find(entry => entry.id === row.dataset.equipmentId);
+  if (!item) return;
+  if (event.target.classList.contains("equipment-name")) item.name = event.target.value;
+  if (event.target.classList.contains("equipment-qty")) item.quantity = clamp(Number(event.target.value), 0, 999);
+  if (event.target.classList.contains("equipment-weight")) item.weight = Math.max(0, Number(event.target.value) || 0);
+  if (event.target.classList.contains("equipment-equipped")) item.equipped = event.target.checked;
+  if (event.target.classList.contains("equipment-attuned")) item.attuned = event.target.checked;
+  if (event.target.classList.contains("equipment-notes")) item.notes = event.target.value;
+  persist();
+  renderEncumbrance();
+}
+
+function handleEquipmentClick(event) {
+  const button = event.target.closest(".remove-equipment");
+  if (!button) return;
+  const row = button.closest(".equipment-row");
+  character.equipment = character.equipment.filter(item => item.id !== row.dataset.equipmentId);
+  persistAndRender();
+}
+
+function renderClassOptions() {
+  const root = document.querySelector("#classOptionRows");
+  const template = document.querySelector("#classOptionTemplate");
+  root.innerHTML = "";
+  setValue("classOptionPreset", "");
+  const options = character.classOptions || [];
+  if (!options.length) {
+    root.innerHTML = `<p class="empty-state">No class option modules yet.</p>`;
+    return;
+  }
+  options.forEach(option => {
+    const node = template.content.firstElementChild.cloneNode(true);
+    node.dataset.classOptionId = option.id;
+    node.querySelector(".class-option-name").value = option.name || "";
+    node.querySelector(".class-option-kind").value = option.kind || "custom";
+    node.querySelector(".class-option-current").value = option.current ?? 0;
+    node.querySelector(".class-option-max").value = option.max ?? 0;
+    node.querySelector(".class-option-reset").value = option.reset || "manual";
+    node.querySelector(".class-option-notes").value = option.notes || "";
+    root.appendChild(node);
+  });
+}
+
+function handleClassOptionPreset(event) {
+  if (!event.target.value) return;
+  addClassOption(event.target.value);
+  event.target.value = "";
+}
+
+function addClassOption(kind = "custom") {
+  const presets = {
+    infusion: ["Infused Item", 1, 1, "long", "Record infusion, item, bonus, and whether it is currently active."],
+    invocation: ["Eldritch Invocation", 1, 1, "manual", "Record passive benefit, prerequisite, or limited-use rule."],
+    metamagic: ["Metamagic Option", 0, 0, "long", "Record sorcery point cost and best spell pairings."],
+    wildShape: ["Wild Shape Form", 2, 2, "short", "Record form, CR, HP, AC, speed, senses, and attacks."],
+    maneuver: ["Battle Maneuver", 0, 0, "short", "Record superiority die, trigger, save, and rider."]
+  };
+  const [name, current, max, reset, notes] = presets[kind] || ["Custom Option", 1, 1, "manual", ""];
+  character.classOptions.push({ id: crypto.randomUUID(), kind, name, current, max, reset, notes });
+  persistAndRender();
+}
+
+function handleClassOptionInput(event) {
+  const row = event.target.closest(".class-option-row");
+  if (!row) return;
+  const option = character.classOptions.find(item => item.id === row.dataset.classOptionId);
+  if (!option) return;
+  if (event.target.classList.contains("class-option-name")) option.name = event.target.value;
+  if (event.target.classList.contains("class-option-kind")) option.kind = event.target.value;
+  if (event.target.classList.contains("class-option-current")) option.current = clamp(Number(event.target.value), 0, 999);
+  if (event.target.classList.contains("class-option-max")) option.max = clamp(Number(event.target.value), 0, 999);
+  if (event.target.classList.contains("class-option-reset")) option.reset = event.target.value;
+  if (event.target.classList.contains("class-option-notes")) option.notes = event.target.value;
+  persist();
+  renderRestPreview();
+}
+
+function handleClassOptionClick(event) {
+  const button = event.target.closest(".remove-class-option");
+  if (!button) return;
+  const row = button.closest(".class-option-row");
+  character.classOptions = character.classOptions.filter(item => item.id !== row.dataset.classOptionId);
   persistAndRender();
 }
 
@@ -954,18 +1158,39 @@ function takeRest(type) {
   character.resources.forEach(resource => {
     if (resource.reset === type || (type === "long" && resource.reset === "short")) resource.current = resource.max;
   });
+  character.classOptions.forEach(option => {
+    if (option.reset === type || (type === "long" && option.reset === "short")) option.current = option.max;
+  });
+  character.restLog = `${type === "long" ? "Long" : "Short"} rest taken ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   persistAndRender();
 }
 
 function renderPartyDashboard() {
   const characters = Object.values(characterLibrary).map(normalizeCharacter).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   document.querySelector("#partyCount").textContent = `${characters.length} character${characters.length === 1 ? "" : "s"}`;
+  renderPartySummary(characters);
   const root = document.querySelector("#partyDashboard");
   root.innerHTML = characters.map(item => {
     const cls = getClasses()[item.classId]?.name || "Class";
-    const passive = 10 + Math.floor(((item.abilities?.wis || 10) - 10) / 2) + (item.proficientSkills?.includes("perception") ? proficiencyBonus(item.level) : 0);
-    return `<article class="party-card"><strong>${escapeHtml(item.name || "Unnamed")}</strong><span>${escapeHtml(cls)} ${item.level || 1}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span><div><b>AC</b> ${item.ac || "-"} <b>HP</b> ${item.hp || "-"} / ${item.maxHp || item.hp || "-"} <b>Passive</b> ${passive}</div><p>${escapeHtml((item.conditions || []).join(", ") || "No conditions")}</p></article>`;
+    const passive = passivePerception(item);
+    const equipment = equipmentWeight(item);
+    const capacity = carryingCapacity(item);
+    const modules = (item.classOptions || []).filter(option => option.name).slice(0, 3).map(option => option.name).join(", ");
+    return `<article class="party-card"><strong>${escapeHtml(item.name || "Unnamed")}</strong><span>${escapeHtml(cls)} ${item.level || 1}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span><div><b>AC</b> ${item.ac || "-"} <b>HP</b> ${item.hp || "-"} / ${item.maxHp || item.hp || "-"} <b>Passive</b> ${passive}</div><div><b>Load</b> ${formatWeight(equipment)} / ${capacity} lb <b>Options</b> ${escapeHtml(modules || "-")}</div><p>${escapeHtml((item.conditions || []).join(", ") || "No conditions")}</p></article>`;
   }).join("");
+}
+
+function renderPartySummary(characters) {
+  const totalHp = characters.reduce((sum, item) => sum + Number(item.hp || 0), 0);
+  const maxHp = characters.reduce((sum, item) => sum + Number(item.maxHp || item.hp || 0), 0);
+  const avgAc = characters.length ? Math.round(characters.reduce((sum, item) => sum + Number(item.ac || 0), 0) / characters.length) : 0;
+  const conditions = characters.reduce((sum, item) => sum + (item.conditions || []).length, 0);
+  document.querySelector("#partySummary").innerHTML = `
+    <article><span>Total HP</span><strong>${totalHp} / ${maxHp || "-"}</strong></article>
+    <article><span>Average AC</span><strong>${avgAc || "-"}</strong></article>
+    <article><span>Active Conditions</span><strong>${conditions}</strong></article>
+    <article><span>Highest Passive</span><strong>${characters.length ? Math.max(...characters.map(passivePerception)) : "-"}</strong></article>
+  `;
 }
 
 function renderSearchResults() {
@@ -980,8 +1205,10 @@ function renderSearchResults() {
     ["Features", character.features],
     ["Attacks", character.attacks],
     ["Inventory", character.inventory],
+    ["Equipment", character.equipment.map(item => `${item.name}: ${item.notes}`).join("\n")],
     ["Notes", character.notes],
     ["Subclass", character.subclass.sections.map(section => `${section.title}: ${section.body}`).join("\n")],
+    ["Class Options", character.classOptions.map(option => `${option.name}: ${option.notes}`).join("\n")],
     ["Actions", character.actions.map(action => `${action.name}: ${action.notes}`).join("\n")],
     ["Spells", character.spells.map(spellDisplayName).join(", ")]
   ];
@@ -1146,7 +1373,19 @@ function syncCharacterSummary() {
     subclassName: character.subclassName,
     level: character.level,
     hp: character.hp,
+    maxHp: character.maxHp,
     ac: character.ac,
+    passivePerception: passivePerception(character),
+    conditions: character.conditions || [],
+    equipmentWeight: equipmentWeight(character),
+    carryingCapacity: carryingCapacity(character),
+    classOptions: (character.classOptions || []).map(option => ({
+      kind: option.kind,
+      name: option.name,
+      current: option.current,
+      max: option.max,
+      reset: option.reset
+    })),
     preparedSpells: prepared,
     preparedSignature: prepared.join("|")
   };
@@ -1167,8 +1406,11 @@ function renderDmRoster(sheets) {
       </div>
       <div class="dm-sheet-stats">
         <span>AC ${escapeHtml(sheet.ac ?? "-")}</span>
-        <span>HP ${escapeHtml(sheet.hp ?? "-")}</span>
+        <span>HP ${escapeHtml(sheet.hp ?? "-")} / ${escapeHtml(sheet.maxHp ?? "-")}</span>
+        <span>PP ${escapeHtml(sheet.passivePerception ?? "-")}</span>
       </div>
+      <p>${escapeHtml((sheet.conditions || []).join(", ") || "No conditions")}</p>
+      <p>${escapeHtml(`Load ${formatWeight(sheet.equipmentWeight || 0)} / ${sheet.carryingCapacity || "-"} lb · ${(sheet.classOptions || []).map(item => `${item.name} ${item.max ? `${item.current}/${item.max}` : ""}`.trim()).join(", ") || "No class modules"}`)}</p>
       <p>${escapeHtml((sheet.preparedSpells || []).join(", ") || "No prepared spells listed.")}</p>
     </article>
   `).join("");
@@ -1186,6 +1428,47 @@ function renderActivity(items) {
       <span>${escapeHtml(item.playerName || "")}</span>
     </article>
   `).join("");
+}
+
+function renderRulesReference() {
+  const query = document.querySelector("#rulesSearch")?.value.trim().toLowerCase() || "";
+  const category = document.querySelector("#rulesCategory")?.value || "all";
+  const spellRules = character.spells
+    .filter(spellRowHasSpell)
+    .map(row => {
+      const name = spellDisplayName(row);
+      const details = row.custom ? row.custom.desc : spellDetails[row.index]?.desc?.join(" ");
+      return rule("spell", name, details || "Known or prepared spell. Open the Spells tab for full editable details.");
+    });
+  const moduleRules = (character.classOptions || [])
+    .filter(option => option.name || option.notes)
+    .map(option => rule("class", option.name || "Class option", `${option.kind || "custom"} · ${option.notes || "No notes yet."}`));
+  const entries = [...RULES_REFERENCE, ...spellRules, ...moduleRules];
+  const filtered = entries
+    .filter(entry => category === "all" || entry.category === category)
+    .filter(entry => !query || `${entry.title} ${entry.body} ${entry.category}`.toLowerCase().includes(query));
+  document.querySelector("#rulesCount").textContent = `${filtered.length} entr${filtered.length === 1 ? "y" : "ies"}`;
+  document.querySelector("#rulesResults").innerHTML = filtered.length
+    ? filtered.map(entry => `
+      <article class="rule-card">
+        <span>${escapeHtml(ruleCategoryLabel(entry.category))}</span>
+        <strong>${escapeHtml(entry.title)}</strong>
+        <p>${escapeHtml(entry.body)}</p>
+      </article>
+    `).join("")
+    : `<p class="empty-state">No matching rules.</p>`;
+}
+
+function ruleCategoryLabel(category) {
+  return {
+    core: "Core",
+    condition: "Condition",
+    action: "Action",
+    rest: "Rest",
+    equipment: "Equipment",
+    class: "Class",
+    spell: "Spell"
+  }[category] || category;
 }
 
 async function copySyncLink(role) {
@@ -2026,6 +2309,27 @@ function formatMod(value) {
   return value >= 0 ? `+${value}` : String(value);
 }
 
+function passivePerception(source = character) {
+  const wisdom = source.abilities?.wis ?? 10;
+  const wisMod = Math.floor((wisdom - 10) / 2);
+  return 10 + wisMod + (source.proficientSkills?.includes("perception") ? proficiencyBonus(source.level) : 0);
+}
+
+function carryingCapacity(source = character) {
+  return Math.max(0, Number(source.abilities?.str || 10) * 15);
+}
+
+function equipmentWeight(source = character) {
+  return (source.equipment || []).reduce((sum, item) => {
+    return sum + (Number(item.quantity || 0) * Number(item.weight || 0));
+  }, 0);
+}
+
+function formatWeight(value) {
+  const rounded = Math.round(Number(value || 0) * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0$/, "");
+}
+
 function ordinal(number) {
   const names = ["", "1st", "2nd", "3rd"];
   return names[number] || `${number}th`;
@@ -2109,6 +2413,9 @@ function normalizeCharacter(value) {
     },
     noteSections: stored.noteSections || base.noteSections,
     resources: stored.resources || base.resources,
+    equipment: stored.equipment || base.equipment,
+    classOptions: stored.classOptions || base.classOptions,
+    restLog: stored.restLog || base.restLog,
     conditions: stored.conditions || base.conditions,
     exhaustion: Number(stored.exhaustion || 0),
     actions: stored.actions || base.actions,

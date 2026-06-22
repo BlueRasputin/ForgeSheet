@@ -109,6 +109,7 @@
           <button class="tab" data-tab="notes">Notes</button>
           <button class="tab" data-tab="party">Party</button>
           <button class="tab" data-tab="campaign">Campaign Sync</button>
+          <button class="tab" data-tab="rules">Rules</button>
         </nav>
 
         <section class="split-toolbar" aria-label="Side-by-side view controls">
@@ -206,7 +207,16 @@
             <button id="longRestButton" class="primary" type="button">Long Rest</button>
             <button id="addResourceButton" class="ghost" type="button">+ Resource</button>
             <button id="addActionButton" class="ghost" type="button">+ Action</button>
+            <button id="addEquipmentButton" class="ghost" type="button">+ Item</button>
+            <button id="addClassOptionButton" class="ghost" type="button">+ Class Option</button>
           </div>
+          <section class="block">
+            <div class="block-head">
+              <h2>Rest Automation</h2>
+              <span id="restSummary" class="muted">Ready</span>
+            </div>
+            <div id="restPreview" class="rest-preview"></div>
+          </section>
           <div class="two-col">
             <section class="block">
               <div class="block-head">
@@ -220,6 +230,30 @@
               </div>
               <div id="conditionGrid" class="condition-grid"></div>
               <label>Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
+            </section>
+          </div>
+          <div class="two-col">
+            <section class="block">
+              <div class="block-head">
+                <h2>Equipment & Encumbrance</h2>
+                <span id="encumbranceSummary" class="muted">0 lb</span>
+              </div>
+              <div class="encumbrance-meter"><span id="encumbranceFill"></span></div>
+              <div id="equipmentRows" class="equipment-list"></div>
+            </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Class Option Modules</h2>
+                <select id="classOptionPreset" class="small-select">
+                  <option value="">Add preset...</option>
+                  <option value="infusion">Artificer infusion</option>
+                  <option value="invocation">Warlock invocation</option>
+                  <option value="metamagic">Sorcerer metamagic</option>
+                  <option value="wildShape">Druid wild shape</option>
+                  <option value="maneuver">Battle maneuver</option>
+                </select>
+              </div>
+              <div id="classOptionRows" class="class-option-list"></div>
             </section>
           </div>
           <section class="block">
@@ -315,6 +349,7 @@
               <h2>Party Dashboard</h2>
               <span id="partyCount" class="muted">0 characters</span>
             </div>
+            <div id="partySummary" class="party-summary"></div>
             <div id="partyDashboard" class="party-dashboard"></div>
           </section>
         </section>
@@ -373,6 +408,35 @@
               <h2>Campaign Activity</h2>
             </div>
             <div id="syncActivity" class="activity-feed"></div>
+          </section>
+        </section>
+
+        <section id="rules" class="panel">
+          <section class="block">
+            <div class="block-head">
+              <h2>Rules Reference</h2>
+              <span id="rulesCount" class="muted">0 entries</span>
+            </div>
+            <div class="rules-tools">
+              <label>
+                Search
+                <input id="rulesSearch" autocomplete="off" placeholder="condition, rest, action, spell, equipment...">
+              </label>
+              <label>
+                Category
+                <select id="rulesCategory">
+                  <option value="all">All</option>
+                  <option value="core">Core Rules</option>
+                  <option value="condition">Conditions</option>
+                  <option value="action">Actions</option>
+                  <option value="rest">Rests</option>
+                  <option value="equipment">Equipment</option>
+                  <option value="class">Class Options</option>
+                  <option value="spell">Known Spells</option>
+                </select>
+              </label>
+            </div>
+            <div id="rulesResults" class="rules-results"></div>
           </section>
         </section>
         </div>
@@ -466,6 +530,42 @@
           <option value="long">Long rest</option>
         </select>
         <button class="ghost remove-resource" type="button">Remove</button>
+      </article>
+    </template>
+
+    <template id="equipmentRowTemplate">
+      <article class="equipment-row">
+        <input class="equipment-name" placeholder="Item name">
+        <input class="equipment-qty" type="number" min="0" step="1" aria-label="Quantity">
+        <input class="equipment-weight" type="number" min="0" step="0.01" aria-label="Weight each">
+        <label class="inline-check"><input type="checkbox" class="equipment-equipped"> Equipped</label>
+        <label class="inline-check"><input type="checkbox" class="equipment-attuned"> Attuned</label>
+        <textarea class="equipment-notes" rows="2" placeholder="Notes, charges, container, magic item details..."></textarea>
+        <button class="ghost remove-equipment" type="button">Remove</button>
+      </article>
+    </template>
+
+    <template id="classOptionTemplate">
+      <article class="class-option-row">
+        <input class="class-option-name" placeholder="Feature name">
+        <select class="class-option-kind">
+          <option value="infusion">Infusion</option>
+          <option value="invocation">Invocation</option>
+          <option value="metamagic">Metamagic</option>
+          <option value="wildShape">Wild Shape</option>
+          <option value="maneuver">Maneuver</option>
+          <option value="custom">Custom</option>
+        </select>
+        <input class="class-option-current" type="number" min="0" aria-label="Current uses">
+        <span>/</span>
+        <input class="class-option-max" type="number" min="0" aria-label="Maximum uses">
+        <select class="class-option-reset">
+          <option value="manual">Manual</option>
+          <option value="short">Short rest</option>
+          <option value="long">Long rest</option>
+        </select>
+        <textarea class="class-option-notes" rows="3" placeholder="Rules, trigger, action economy, selected form, prerequisites..."></textarea>
+        <button class="ghost remove-class-option" type="button">Remove</button>
       </article>
     </template>
 
