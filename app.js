@@ -6,6 +6,7 @@ const SYNC_CONFIG_KEY = "forgesheet.sync.v1";
 const THEME_KEY = "forgesheet.theme.v1";
 const VIEW_LAYOUT_KEY = "forgesheet.viewLayout.v1";
 const CUSTOM_SPELL_VALUE = "__custom_spell__";
+const CUSTOM_CLASS_VALUE = "__custom_class__";
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -202,6 +203,7 @@ let pendingLevelChoices = [];
 let pendingImport = null;
 let syncSettings = loadSyncSettings();
 let viewLayout = loadViewLayout();
+let classBuilderDraft = null;
 let syncState = {
   connected: false,
   db: null,
@@ -389,6 +391,7 @@ function bindEvents() {
   document.querySelector("#applySheetImport").addEventListener("click", applyPendingImport);
   document.querySelector("#levelUpButton").addEventListener("click", openLevelDialog);
   document.querySelector("#confirmLevelUp").addEventListener("click", applyLevelUp);
+  document.querySelector("#newCustomClass").addEventListener("click", startCustomClassDraft);
   document.querySelector("#saveClass").addEventListener("click", saveCustomClass);
   document.querySelector("#shortRestButton").addEventListener("click", () => takeRest("short"));
   document.querySelector("#longRestButton").addEventListener("click", () => takeRest("long"));
@@ -506,9 +509,36 @@ function nextDifferentTab(tab) {
   return TAB_DEFS.find(([id]) => id !== tab)?.[0] || "sheet";
 }
 
+function startCustomClassDraft() {
+  classBuilderDraft = {
+    id: "",
+    name: "",
+    hitDie: 8,
+    casterType: "none",
+    spellAbility: "int",
+    preparedFormula: "none",
+    spellSources: [],
+    table: makeTable({
+      1: ["Starting features", 0, 0],
+      4: ["Ability score improvement", 0, 0],
+      8: ["Ability score improvement", 0, 0],
+      12: ["Ability score improvement", 0, 0],
+      16: ["Ability score improvement", 0, 0],
+      19: ["Ability score improvement", 0, 0]
+    })
+  };
+  activateTab("classes");
+  renderBuilder();
+  renderClassTable();
+}
+
 function handleInput(event) {
   const id = event.target.id;
   const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+  if (id === "classSelect" && value === CUSTOM_CLASS_VALUE) {
+    startCustomClassDraft();
+    return;
+  }
   const map = {
     characterName: "name", classSelect: "classId", subclassName: "subclassName", levelInput: "level", speciesInput: "species",
     backgroundInput: "background", alignmentInput: "alignment", hpInput: "hp", acInput: "ac",
@@ -518,6 +548,7 @@ function handleInput(event) {
   if (map[id]) {
     character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), 1, map[id] === "level" ? 20 : 999) : value;
     if (id === "classSelect") {
+      classBuilderDraft = null;
       const cls = currentClass();
       character.hitDice = `${character.level}d${cls.hitDie}`;
       const official = officialSubclasses.find(item => item.index === character.subclass.officialIndex);
@@ -580,7 +611,10 @@ function renderAll() {
 }
 
 function renderHeader() {
-  fillSelect(document.querySelector("#classSelect"), Object.values(getClasses()).map(cls => [cls.id, cls.name]));
+  fillSelect(document.querySelector("#classSelect"), [
+    ...Object.values(getClasses()).map(cls => [cls.id, cls.name]),
+    [CUSTOM_CLASS_VALUE, "Custom class..."]
+  ]);
   setValue("characterName", character.name);
   setValue("classSelect", character.classId);
   setValue("subclassName", character.subclassName);
@@ -1723,7 +1757,7 @@ function renderSpellCard(card, rowOrIndex) {
 }
 
 function renderBuilder() {
-  const cls = currentClass();
+  const cls = classBuilderDraft || currentClass();
   setValue("builderName", cls.name);
   setValue("builderHitDie", String(cls.hitDie));
   setValue("builderCasterType", cls.casterType);
@@ -1734,7 +1768,7 @@ function renderBuilder() {
 }
 
 function renderClassTable() {
-  const cls = currentClass();
+  const cls = classBuilderDraft || currentClass();
   const rows = cls.table.map(row => {
     const slots = spellSlotsFor(cls, row.level);
     return `<tr class="${row.level === character.level ? "current" : ""}">
@@ -1770,6 +1804,7 @@ function saveCustomClass() {
   };
   localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
   character.classId = id;
+  classBuilderDraft = null;
   persistAndRender();
 }
 

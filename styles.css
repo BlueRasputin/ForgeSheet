@@ -503,6 +503,13 @@ body.split-view .split-panel .subclass-tools {
   margin-bottom: 14px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .ability-grid {
   grid-template-columns: repeat(3, minmax(120px, 1fr));
 }
