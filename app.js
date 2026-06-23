@@ -58,6 +58,23 @@ const PREP_SUGGESTIONS = {
   boss: ["cure-wounds", "faerie-fire", "web", "haste", "dispel-magic", "revivify"]
 };
 
+const ITEM_CATALOG = [
+  itemCard("longsword", "Longsword", "Weapon", 3, "Martial melee weapon", "1d8 slashing, versatile 1d10."),
+  itemCard("dagger", "Dagger", "Weapon", 1, "Simple melee weapon", "1d4 piercing, finesse, light, thrown 20/60."),
+  itemCard("light-crossbow", "Light Crossbow", "Weapon", 5, "Simple ranged weapon", "1d8 piercing, ammunition, loading, two-handed."),
+  itemCard("shield", "Shield", "Armor", 6, "Adventuring gear", "+2 AC while wielded."),
+  itemCard("leather-armor", "Leather Armor", "Armor", 10, "Light armor", "AC 11 + Dexterity modifier."),
+  itemCard("scale-mail", "Scale Mail", "Armor", 45, "Medium armor", "AC 14 + Dex modifier, max 2. Disadvantage on Stealth."),
+  itemCard("plate", "Plate", "Armor", 65, "Heavy armor", "AC 18. Requires Strength 15. Disadvantage on Stealth."),
+  itemCard("backpack", "Backpack", "Adventuring Gear", 5, "Container", "Holds gear and supplies."),
+  itemCard("rope-hempen", "Rope, Hempen", "Adventuring Gear", 10, "Gear", "50 feet of rope."),
+  itemCard("healers-kit", "Healer's Kit", "Adventuring Gear", 3, "Gear", "10 uses. Stabilize a creature without a Medicine check."),
+  itemCard("potion-of-healing", "Potion of Healing", "Potion", 0.5, "Common magic item", "Regain 2d4 + 2 hit points."),
+  itemCard("bag-of-holding", "Bag of Holding", "Wondrous Item", 15, "Uncommon magic item", "Extradimensional storage. Contents usually do not count against carried weight here."),
+  itemCard("wand-of-magic-missiles", "Wand of Magic Missiles", "Wand", 1, "Uncommon magic item", "7 charges. Cast magic missile; regains charges daily."),
+  itemCard("cloak-of-protection", "Cloak of Protection", "Wondrous Item", 1, "Uncommon magic item", "+1 AC and saving throws. Requires attunement.")
+];
+
 const TAB_DEFS = [
   ["sheet", "Sheet"],
   ["play", "Play"],
@@ -255,7 +272,8 @@ let syncState = {
   unsubscribers: [],
   uploadTimer: null,
   lastSummary: null,
-  applyingRemote: false
+  applyingRemote: false,
+  dmSheets: []
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -296,6 +314,10 @@ function spell(index, name, level, classes) {
 
 function rule(category, title, body) {
   return { category, title, body };
+}
+
+function itemCard(index, name, type, weight, rarity, notes) {
+  return { index, name, type, weight, rarity, notes };
 }
 
 function officialSubclass(index, name, classIndex, className, flavor, desc = []) {
@@ -490,6 +512,13 @@ function bindEvents() {
   document.querySelector("#disconnectSync").addEventListener("click", disconnectCampaignSync);
   document.querySelector("#copyPlayerLink").addEventListener("click", () => copySyncLink("player"));
   document.querySelector("#copyDmLink").addEventListener("click", () => copySyncLink("dm"));
+  document.querySelector("#sendCatalogItem").addEventListener("click", () => sendDmItem("catalog"));
+  document.querySelector("#sendCustomItem").addEventListener("click", () => sendDmItem("custom"));
+  document.querySelector("#dmItemCatalog").addEventListener("input", renderDmItemPreview);
+  document.querySelector("#dmItemTarget").addEventListener("input", renderDmItemPreview);
+  ["customItemName", "customItemType", "customItemWeight", "customItemQuantity", "customItemRarity", "customItemContainer", "customItemNotes"].forEach(id => {
+    document.querySelector(`#${id}`).addEventListener("input", renderDmItemPreview);
+  });
   ["syncRole", "syncCampaignId", "syncPlayerName", "syncSheetId", "syncFirebaseConfig"].forEach(id => {
     document.querySelector(`#${id}`).addEventListener("input", handleSyncSettingsInput);
   });
@@ -704,6 +733,7 @@ function renderAll() {
   renderPartyDashboard();
   renderSearchResults();
   renderSyncPanel();
+  renderDmItemTools();
   renderRulesReference();
 }
 
@@ -1384,6 +1414,7 @@ function renderSyncPanel() {
     document.querySelector("#dmRoster").innerHTML = `<p class="empty-state">Connect as DM to watch player sheets.</p>`;
     document.querySelector("#syncActivity").innerHTML = `<p class="empty-state">Connect to a campaign to see level-up and prepared-spell changes.</p>`;
     document.querySelector("#syncRosterCount").textContent = "0 sheets";
+    syncState.dmSheets = [];
   }
 }
 
@@ -1458,7 +1489,17 @@ function subscribeCampaign() {
     const sheetsRef = fs.collection(syncState.db, `${campaignPath}/sheets`);
     syncState.unsubscribers.push(fs.onSnapshot(sheetsRef, snapshot => {
       const sheets = snapshot.docs.map(doc => doc.data()).sort((a, b) => (a.characterName || "").localeCompare(b.characterName || ""));
+      syncState.dmSheets = sheets;
       renderDmRoster(sheets);
+      renderDmItemTools();
+    }));
+  } else if (syncSettings.sheetId) {
+    const sheetRef = fs.doc(syncState.db, `${campaignPath}/sheets/${syncSettings.sheetId}`);
+    syncState.unsubscribers.push(fs.onSnapshot(sheetRef, snapshot => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      if (!data?.character || syncState.applyingRemote) return;
+      applyRemoteCharacter(data.character);
     }));
   }
   const activityRef = fs.query(
@@ -1469,6 +1510,20 @@ function subscribeCampaign() {
   syncState.unsubscribers.push(fs.onSnapshot(activityRef, snapshot => {
     renderActivity(snapshot.docs.map(doc => doc.data()));
   }));
+}
+
+function applyRemoteCharacter(remoteCharacter) {
+  const incoming = normalizeCharacter(remoteCharacter);
+  if (JSON.stringify(incoming) === JSON.stringify(character)) return;
+  syncState.applyingRemote = true;
+  try {
+    character = incoming;
+    persist();
+    syncState.lastSummary = syncCharacterSummary();
+    renderAll();
+  } finally {
+    syncState.applyingRemote = false;
+  }
 }
 
 function queueSyncUpload() {
@@ -1568,6 +1623,142 @@ function renderDmRoster(sheets) {
       <p>${escapeHtml((sheet.preparedSpells || []).join(", ") || "No prepared spells listed.")}</p>
     </article>
   `).join("");
+}
+
+function renderDmItemTools() {
+  const target = document.querySelector("#dmItemTarget");
+  const catalog = document.querySelector("#dmItemCatalog");
+  if (!target || !catalog) return;
+  const targets = dmItemTargets();
+  const currentTarget = target.value;
+  target.innerHTML = targets.length
+    ? targets.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")
+    : `<option value="">No players available</option>`;
+  if (targets.some(item => item.id === currentTarget)) target.value = currentTarget;
+  catalog.innerHTML = ITEM_CATALOG.map(item => `<option value="${item.index}">${escapeHtml(item.name)} (${escapeHtml(item.type)})</option>`).join("");
+  renderDmItemPreview();
+}
+
+function dmItemTargets() {
+  if (syncSettings.role === "dm" && syncState.dmSheets.length) {
+    return syncState.dmSheets.map(sheet => ({
+      id: `remote:${sheet.sheetId}`,
+      label: `${sheet.characterName || "Unnamed"} - ${sheet.playerName || "Player"}`,
+      sheet
+    }));
+  }
+  return Object.values(characterLibrary).map(item => ({
+    id: `local:${item.sheetId}`,
+    label: `${item.name || "Unnamed"} - local`,
+    sheet: item
+  }));
+}
+
+function renderDmItemPreview() {
+  const root = document.querySelector("#dmItemPreview");
+  if (!root) return;
+  const selected = ITEM_CATALOG.find(item => item.index === document.querySelector("#dmItemCatalog")?.value) || ITEM_CATALOG[0];
+  const custom = customItemFromFields();
+  root.innerHTML = [selected, custom].map(item => item ? itemCardHtml(item) : "").join("");
+}
+
+function itemCardHtml(item) {
+  return `
+    <article class="item-card">
+      <span>${escapeHtml(item.type || "Item")} · ${escapeHtml(item.rarity || "Custom")}</span>
+      <strong>${escapeHtml(item.name || "Unnamed item")}</strong>
+      <p>${escapeHtml(item.notes || "No notes.")}</p>
+      <em>${formatWeight(item.weight || 0)} lb</em>
+    </article>
+  `;
+}
+
+function customItemFromFields() {
+  const name = document.querySelector("#customItemName")?.value.trim();
+  if (!name) return null;
+  return {
+    index: `custom-${slug(name)}`,
+    name,
+    type: document.querySelector("#customItemType").value.trim() || "Custom Item",
+    weight: Number(document.querySelector("#customItemWeight").value || 0),
+    quantity: clamp(Number(document.querySelector("#customItemQuantity").value || 1), 1, 999),
+    rarity: document.querySelector("#customItemRarity").value.trim() || "Custom",
+    container: document.querySelector("#customItemContainer").value || "carried",
+    notes: document.querySelector("#customItemNotes").value.trim()
+  };
+}
+
+async function sendDmItem(kind) {
+  const status = document.querySelector("#dmItemStatus");
+  const targetId = document.querySelector("#dmItemTarget").value;
+  const target = dmItemTargets().find(item => item.id === targetId);
+  if (!target) {
+    status.textContent = "Choose a player first.";
+    return;
+  }
+  const item = kind === "custom"
+    ? customItemFromFields()
+    : ITEM_CATALOG.find(entry => entry.index === document.querySelector("#dmItemCatalog").value);
+  if (!item?.name) {
+    status.textContent = "Choose or create an item first.";
+    return;
+  }
+  const equipmentItem = equipmentFromItemCard(item);
+  if (targetId.startsWith("remote:")) {
+    await sendRemoteItem(target.sheet, equipmentItem);
+  } else {
+    sendLocalItem(target.sheet.sheetId, equipmentItem);
+  }
+  status.textContent = `${item.name} sent to ${target.label}.`;
+  renderDmItemPreview();
+}
+
+function equipmentFromItemCard(item) {
+  return {
+    id: crypto.randomUUID(),
+    name: item.name,
+    quantity: item.quantity || 1,
+    weight: Number(item.weight || 0),
+    container: item.container || (item.index === "bag-of-holding" ? "bagOfHolding" : "carried"),
+    equipped: item.container === "equipped",
+    attuned: /attunement/i.test(item.notes || ""),
+    notes: [item.type, item.rarity, item.notes].filter(Boolean).join(" - ")
+  };
+}
+
+function sendLocalItem(sheetId, equipmentItem) {
+  const target = characterLibrary[sheetId];
+  if (!target) return;
+  target.equipment = [...(target.equipment || []), equipmentItem];
+  characterLibrary[sheetId] = normalizeCharacter(target);
+  if (character.sheetId === sheetId) character = normalizeCharacter(characterLibrary[sheetId]);
+  saveCharacterLibrary();
+  persistAndRender();
+}
+
+async function sendRemoteItem(sheet, equipmentItem) {
+  if (!syncState.connected || syncSettings.role !== "dm") {
+    sendLocalItem(sheet.sheetId, equipmentItem);
+    return;
+  }
+  const fs = syncState.firestore;
+  const nextCharacter = normalizeCharacter({
+    ...(sheet.character || {}),
+    equipment: [...(sheet.character?.equipment || []), equipmentItem]
+  });
+  const sheetRef = fs.doc(syncState.db, `campaigns/${syncSettings.campaignId}/sheets/${sheet.sheetId}`);
+  await fs.setDoc(sheetRef, {
+    character: nextCharacter,
+    equipmentWeight: equipmentWeight(nextCharacter),
+    updatedAt: fs.serverTimestamp()
+  }, { merge: true });
+  await fs.addDoc(fs.collection(syncState.db, `campaigns/${syncSettings.campaignId}/activity`), {
+    sheetId: sheet.sheetId,
+    characterName: sheet.characterName,
+    playerName: syncSettings.playerName || "DM",
+    message: `DM sent ${equipmentItem.name} to ${sheet.characterName || "a player"}.`,
+    createdAt: fs.serverTimestamp()
+  });
 }
 
 function renderActivity(items) {

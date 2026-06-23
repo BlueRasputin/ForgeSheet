@@ -72,6 +72,7 @@ body[data-theme="dark"] .rest-preview article,
 body[data-theme="dark"] .rule-card,
 body[data-theme="dark"] .roll-item,
 body[data-theme="dark"] .prep-suggestions span,
+body[data-theme="dark"] .item-card,
 body[data-theme="dark"] .dm-sheet,
 body[data-theme="dark"] .activity-item,
 body[data-theme="dark"] .note-section,
@@ -665,6 +666,53 @@ body.split-view .split-panel .class-option-row textarea {
   margin-bottom: 12px;
 }
 
+.dm-item-tools {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.dm-item-editor {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.custom-item-notes {
+  grid-column: 1 / 4;
+}
+
+.item-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.item-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fbfcfc;
+}
+
+.item-card span,
+.item-card p,
+.item-card em {
+  margin: 0;
+  color: var(--muted);
+}
+
+.item-card em {
+  font-style: normal;
+  font-size: 0.82rem;
+}
+
 .party-card {
   display: grid;
   gap: 6px;
@@ -1237,6 +1285,15 @@ menu {
 
   .rules-tools {
     grid-template-columns: 1fr;
+  }
+
+  .dm-item-tools,
+  .dm-item-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-item-notes {
+    grid-column: auto;
   }
 }
 
