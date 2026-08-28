@@ -40,5 +40,5 @@ function ruleCategoryLabel(category) {
 }
 
 function conditionRule(condition) {
-  return RULES_REFERENCE.find(entry => entry.category === "condition" && entry.title === condition)?.body || "See Rules tab for condition details.";
+  return RULES_REFERENCE.find(entry => entry.category === "condition" && entry.title === condition)?.body || "Open Rules in the top bar for condition details.";
 }

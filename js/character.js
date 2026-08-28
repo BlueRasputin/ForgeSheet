@@ -34,7 +34,7 @@ function defaultCharacter() {
     ac: 15,
     speed: 30,
     inspiration: 0,
-    abilitiesLocked: false,
+    identityLocked: true,
     asiAcknowledgedLevel: 0,
     autoSpells: [],
     hitDice: "1d8",
@@ -98,7 +98,7 @@ function normalizeCharacter(value) {
     maxHp: stored.maxHp || stored.hp || base.maxHp,
     tempHp: clamp(Number(stored.tempHp || 0), 0, 999),
     inspiration: clamp(Number(stored.inspiration || 0), 0, 99),
-    abilitiesLocked: Boolean(stored.abilitiesLocked),
+    identityLocked: stored.identityLocked !== false,
     asiAcknowledgedLevel: Number(stored.asiAcknowledgedLevel || 0),
     autoSpells: stored.autoSpells || base.autoSpells,
     deathSaveSuccesses: clamp(Number(stored.deathSaveSuccesses || 0), 0, 3),
@@ -162,11 +162,6 @@ function persist() {
 function persistAndRender() {
   persist();
   renderAll();
-}
-
-function createNewCharacter() {
-  character = defaultCharacter();
-  persistAndRender();
 }
 
 function duplicateCharacter() {

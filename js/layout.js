@@ -102,6 +102,28 @@ function swapSplitPanels() {
   renderViewLayout();
 }
 
+function preparePrintLayout() {
+  document.body.classList.add("print-compact");
+  // Printable area at 96dpi with a safety margin so rounding never spills to page 2.
+  const printableWidth = 7.8 * 96;
+  const printableHeight = 10 * 96;
+  const shell = document.querySelector(".app-shell");
+  let zoom = 1;
+  // Widen the layout to reclaim the width the zoom-out frees up; 3 passes converge.
+  for (let pass = 0; pass < 3; pass += 1) {
+    const height = document.body.scrollHeight;
+    zoom = Math.min(1, printableHeight / height);
+    shell.style.width = `${Math.round(printableWidth / zoom)}px`;
+  }
+  document.body.style.zoom = zoom < 1 ? String(zoom) : "";
+}
+
+function resetPrintLayout() {
+  document.body.classList.remove("print-compact");
+  document.body.style.zoom = "";
+  document.querySelector(".app-shell").style.width = "";
+}
+
 function validTab(tab, fallback) {
   return TAB_DEFS.some(([id]) => id === tab) ? tab : fallback;
 }

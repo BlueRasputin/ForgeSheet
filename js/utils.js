@@ -36,7 +36,8 @@ function fillSelect(select, options) {
 
 function setValue(idOrSelector, value) {
   const element = idOrSelector.startsWith?.("[") ? document.querySelector(idOrSelector) : document.querySelector(`#${idOrSelector}`);
-  if (element && element.value !== String(value ?? "")) element.value = value ?? "";
+  if (!element || element === document.activeElement) return;
+  if (element.value !== String(value ?? "")) element.value = value ?? "";
 }
 
 function truncate(text, length) {

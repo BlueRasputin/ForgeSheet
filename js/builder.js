@@ -44,7 +44,7 @@ function builderStepHint(id) {
 function builderStepTab(id) {
   return {
     identity: "background",
-    class: "classes",
+    class: "features",
     abilities: "actions",
     proficiencies: "actions",
     equipment: "inventory",
@@ -70,8 +70,8 @@ function renderBackgroundTools() {
   setValue("weaponTrainingInput", character.backgroundDetails?.weapons || "");
 }
 
-function applyBackgroundPreset() {
-  const preset = BACKGROUND_PRESETS.find(([name]) => name === document.querySelector("#backgroundPreset").value);
+function applyBackgroundPresetNamed(presetName) {
+  const preset = BACKGROUND_PRESETS.find(([name]) => name === presetName);
   if (!preset) return;
   const [name, skills, tools, feature] = preset;
   character.background = name;
@@ -82,6 +82,10 @@ function applyBackgroundPreset() {
     const skill = SKILLS.find(([, label]) => label.toLowerCase() === skillName.toLowerCase())?.[0];
     if (skill && !character.proficientSkills.includes(skill)) character.proficientSkills.push(skill);
   });
+}
+
+function applyBackgroundPreset() {
+  applyBackgroundPresetNamed(document.querySelector("#backgroundPreset").value);
   persistAndRender();
 }
 
@@ -200,6 +204,7 @@ function multiclassRequirements(classId) {
   const reqs = {
     artificer: [["int", 13]],
     barbarian: [["str", 13]],
+    bloodhunter: [["dex", 13], ["int", 13]],
     bard: [["cha", 13]],
     cleric: [["wis", 13]],
     druid: [["wis", 13]],
@@ -272,6 +277,308 @@ function spellChoicesForLevelChoice(kind) {
     .filter(item => spellMatchesClass(item, currentClass()))
     .filter(item => kind === 0 ? item.level === 0 : item.level > 0 && item.level <= maximum)
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+}
+
+let creationDraft = null;
+const CREATE_STEP_LABELS = ["Identity", "Class", "Background", "Abilities", "Review"];
+
+function openCreateDialog() {
+  ensureCharacterInLibrary();
+  creationDraft = {
+    step: 0,
+    name: "",
+    species: "",
+    classId: currentClass().id,
+    background: "",
+    level: 1,
+    abilities: Object.fromEntries(ABILITIES.map(([id]) => [id, 10]))
+  };
+  renderCreateStep();
+  document.querySelector("#createDialog").showModal();
+}
+
+function renderCreateStep() {
+  const draft = creationDraft;
+  document.querySelector("#createSteps").innerHTML = CREATE_STEP_LABELS.map((label, index) => `
+    <button type="button" class="create-rail-step ${index === draft.step ? "is-active" : ""}${index < draft.step ? " is-complete" : ""}" data-create-step="${index}">
+      <span>${index + 1}</span>${label}
+    </button>
+  `).join("");
+  document.querySelector("#createBack").disabled = draft.step === 0;
+  document.querySelector("#createNext").textContent = draft.step === CREATE_STEP_LABELS.length - 1 ? "Create Character" : "Next";
+  const renderers = [renderCreateIdentity, renderCreateClass, renderCreateBackground, renderCreateAbilities, renderCreateReview];
+  document.querySelector("#createStepBody").innerHTML = renderers[draft.step]();
+}
+
+function renderCreateIdentity() {
+  const species = SPECIES_PRESETS.find(([name]) => name === creationDraft.species);
+  return `
+    <h3 class="create-screen-title">Who are you?</h3>
+    <label class="create-name">Character Name
+      <input data-create-field="name" value="${escapeHtml(creationDraft.name)}" autocomplete="off" placeholder="Name your hero...">
+    </label>
+    <div class="create-option-grid">
+      ${SPECIES_PRESETS.map(([name, speed, , glyph]) => `
+        <button type="button" class="create-option-card ${name === creationDraft.species ? "is-selected" : ""}" data-create-option="species:${name}">
+          <span class="create-glyph">${glyph}</span>
+          <strong>${name}</strong>
+          <span>${speed} ft speed</span>
+        </button>
+      `).join("")}
+    </div>
+    <p class="create-detail">${species ? `<strong>${species[0]}</strong> — ${species[2]}` : "Choose a species, or skip this screen and type a homebrew species on the sheet later."}</p>
+  `;
+}
+
+function renderCreateClass() {
+  const cls = getClasses()[creationDraft.classId] || currentClass();
+  const saves = CLASS_SAVES[cls.id];
+  const casting = cls.casterType === "none" ? "Martial — no spell slots" : `${(cls.spellAbility || "").toUpperCase()} spellcasting`;
+  return `
+    <h3 class="create-screen-title">Choose your class</h3>
+    <div class="create-option-grid">
+      ${Object.values(getClasses()).map(item => `
+        <button type="button" class="create-option-card ${item.id === creationDraft.classId ? "is-selected" : ""}" data-create-option="classId:${item.id}">
+          <span class="create-glyph">${CLASS_GLYPHS[item.id] || "✨"}</span>
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>d${item.hitDie} · ${item.casterType === "none" ? "Martial" : "Caster"}</span>
+        </button>
+      `).join("")}
+      <button type="button" class="create-option-card" data-create-forge>
+        <span class="create-glyph">🛠️</span>
+        <strong>Custom Class</strong>
+        <span>Forge your own</span>
+      </button>
+    </div>
+    <p class="create-detail"><strong>${escapeHtml(cls.name)}</strong> — d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}</p>
+    <label class="create-name">Starting Level
+      <input type="number" min="1" max="20" data-create-field="level" value="${creationDraft.level}">
+    </label>
+    <p class="create-detail">${creationDraft.level > 1 ? "Starting above level 1 — after creation a checklist will show everything to fill in for your level." : "Most campaigns start at level 1."}</p>
+  `;
+}
+
+function renderCreateBackground() {
+  const preset = BACKGROUND_PRESETS.find(([name]) => name === creationDraft.background);
+  return `
+    <h3 class="create-screen-title">Where do you come from?</h3>
+    <div class="create-option-grid">
+      ${BACKGROUND_PRESETS.map(([name, skills, , , glyph]) => `
+        <button type="button" class="create-option-card ${name === creationDraft.background ? "is-selected" : ""}" data-create-option="background:${name}">
+          <span class="create-glyph">${glyph}</span>
+          <strong>${name}</strong>
+          <span>${skills}</span>
+        </button>
+      `).join("")}
+      <button type="button" class="create-option-card ${creationDraft.background === "" ? "is-selected" : ""}" data-create-option="background:">
+        <span class="create-glyph">❔</span>
+        <strong>Skip for now</strong>
+        <span>Decide later</span>
+      </button>
+    </div>
+    <p class="create-detail">${preset ? `<strong>${preset[0]}</strong> — Skills: ${preset[1]} · ${preset[2]} · Feature: ${preset[3]}` : "A preset grants its skill proficiencies and background feature automatically."}</p>
+  `;
+}
+
+function renderCreateAbilities() {
+  return `
+    <h3 class="create-screen-title">Assign ability scores</h3>
+    <div class="create-ability-grid">
+      ${ABILITIES.map(([id, label]) => `
+        <div class="create-ability-card">
+          <strong>${label}</strong>
+          <input type="number" min="1" max="30" data-create-ability="${id}" value="${creationDraft.abilities[id]}">
+          <span class="ability-mod">${formatMod(Math.floor((creationDraft.abilities[id] - 10) / 2))}</span>
+        </div>
+      `).join("")}
+    </div>
+    <button type="button" class="secondary" data-create-standard>Use Standard Array (15, 14, 13, 12, 10, 8)</button>
+    <p class="create-detail">The array fills scores in the order listed — swap numbers between abilities to suit your class.</p>
+  `;
+}
+
+function renderCreateReview() {
+  const cls = getClasses()[creationDraft.classId] || currentClass();
+  const speciesRow = SPECIES_PRESETS.find(([name]) => name === creationDraft.species);
+  const conMod = Math.floor((Number(creationDraft.abilities.con || 10) - 10) / 2);
+  const hp = averageHpFor(cls, creationDraft.level, conMod);
+  return `
+    <h3 class="create-screen-title">Ready for adventure</h3>
+    <div class="create-review-hero">
+      <span class="create-glyph">${speciesRow ? speciesRow[3] : ""}${CLASS_GLYPHS[cls.id] || "✨"}</span>
+      <strong>${escapeHtml(creationDraft.name.trim() || "New Character")}</strong>
+      <span>${escapeHtml([creationDraft.species, cls.name].filter(Boolean).join(" "))} · ${escapeHtml(creationDraft.background || "No background")} · Level ${creationDraft.level}</span>
+    </div>
+    <div class="create-review-stats">
+      ${ABILITIES.map(([id, label]) => `<span><strong>${id.toUpperCase()}</strong> ${creationDraft.abilities[id]} (${formatMod(Math.floor((creationDraft.abilities[id] - 10) / 2))})</span>`).join("")}
+      <span><strong>HP</strong> ${hp}</span>
+      <span><strong>Hit Dice</strong> ${creationDraft.level}d${cls.hitDie}</span>
+    </div>
+    <p class="create-detail">Your current sheet stays saved in the Character Library. Creating starts a fresh blank sheet.</p>
+  `;
+}
+
+function handleCreateFieldInput(event) {
+  if (!creationDraft) return;
+  const field = event.target.dataset.createField;
+  if (field === "level") {
+    creationDraft.level = clamp(Number(event.target.value || 1), 1, 20);
+  } else if (field) {
+    creationDraft[field] = event.target.value;
+  }
+  const ability = event.target.dataset.createAbility;
+  if (ability) {
+    creationDraft.abilities[ability] = clamp(Number(event.target.value || 10), 1, 30);
+    const modLabel = event.target.closest(".create-ability-card")?.querySelector(".ability-mod");
+    if (modLabel) modLabel.textContent = formatMod(Math.floor((creationDraft.abilities[ability] - 10) / 2));
+  }
+}
+
+function handleCreateStepClick(event) {
+  if (!creationDraft) return;
+  const stepButton = event.target.closest("[data-create-step]");
+  if (stepButton) {
+    creationDraft.step = Number(stepButton.dataset.createStep);
+    renderCreateStep();
+    return;
+  }
+  if (event.target.closest("[data-create-forge]")) {
+    startCustomClassDraft();
+    return;
+  }
+  const option = event.target.closest("[data-create-option]");
+  if (option) {
+    const [field, ...value] = option.dataset.createOption.split(":");
+    creationDraft[field] = value.join(":");
+    renderCreateStep();
+    return;
+  }
+  if (event.target.closest("[data-create-standard]")) {
+    const array = [15, 14, 13, 12, 10, 8];
+    ABILITIES.forEach(([id], index) => {
+      creationDraft.abilities[id] = array[index];
+    });
+    renderCreateStep();
+  }
+}
+
+function createStepBack() {
+  if (!creationDraft || creationDraft.step === 0) return;
+  creationDraft.step -= 1;
+  renderCreateStep();
+}
+
+function createStepNext() {
+  if (!creationDraft) return;
+  if (creationDraft.step < CREATE_STEP_LABELS.length - 1) {
+    creationDraft.step += 1;
+    renderCreateStep();
+    return;
+  }
+  finishCreation();
+}
+
+function averageHpFor(cls, level, conMod) {
+  return Math.max(level, cls.hitDie + conMod + (level - 1) * (Math.ceil(cls.hitDie / 2) + 1 + conMod));
+}
+
+function finishCreation() {
+  const draft = creationDraft;
+  const cls = getClasses()[draft.classId] || currentClass();
+  const speciesRow = SPECIES_PRESETS.find(([name]) => name === draft.species);
+  const abilities = Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10), 1, 30)]));
+  const level = clamp(Number(draft.level || 1), 1, 20);
+  const hp = averageHpFor(cls, level, Math.floor((abilities.con - 10) / 2));
+  character = {
+    ...defaultCharacter(),
+    name: draft.name.trim() || "New Character",
+    classId: cls.id,
+    subclassName: "",
+    subclass: { mode: "custom", officialIndex: "", type: "Subclass", sections: [] },
+    level,
+    species: draft.species,
+    background: "",
+    abilities,
+    hp,
+    maxHp: hp,
+    ac: 10 + Math.floor((abilities.dex - 10) / 2),
+    speed: speciesRow ? speciesRow[1] : 30,
+    hitDice: `${level}d${cls.hitDie}`,
+    saveProficiencies: CLASS_SAVES[cls.id] || [],
+    proficientSkills: [],
+    spells: [],
+    equipment: [],
+    resources: [],
+    classOptions: [],
+    actions: [],
+    autoSpells: [],
+    features: speciesRow ? `Species: ${draft.species} — ${speciesRow[2]}` : "",
+    attacks: "",
+    inventory: "",
+    notes: ""
+  };
+  applyBackgroundPresetNamed(draft.background);
+  creationDraft = null;
+  document.querySelector("#createDialog").close();
+  persistAndRender();
+  if (levelChecklist().some(item => !item.done)) document.querySelector("#checklistDialog").showModal();
+}
+
+function levelChecklist() {
+  const cls = currentClass();
+  const level = character.level;
+  const conMod = mod("con");
+  const asiCount = [...asiLevelsFor(cls)].filter(asiLevel => asiLevel <= level).length;
+  const featCount = (character.planner?.feats || []).length;
+  const minHp = cls.hitDie + conMod + (level - 1); // ponytail: rules-minimum HP check (max first die + 1s after); can't validate rolled HP more tightly
+  const caster = cls.casterType !== "none";
+  const expectedSlots = caster ? spellSlotsFor(cls, level).some(Boolean) : false;
+  const items = [
+    ["Identity", "Name, species, and background chosen.", Boolean(character.name && character.species && character.background), "background"],
+    // ponytail: subclass required at level 3 for everyone; some classes pick at 1-2, refine per-class if it matters
+    ["Subclass", level >= 3 ? "Choose and record your subclass." : "Chosen at level 3 for most classes.", level < 3 || Boolean(character.subclassName), "features"],
+    ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "actions"],
+    ["Skills", "Pick your skill proficiencies.", (character.proficientSkills || []).length > 0, "actions"],
+    ["Hit Dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
+    ["Hit Points", `Max HP looks low for level ${level} — expect at least ${minHp}.`, Number(character.maxHp) >= minHp, null],
+    ["ASI / Feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level} — record each in the Builder planner.`, featCount >= asiCount, "builder"],
+    ["Equipment", "Add starting gear or catalog items.", (character.equipment || []).length > 0 || Boolean(character.inventory), "inventory"]
+  ];
+  if (caster) {
+    items.push(["Spells", "Choose your class spells.", !expectedSlots || character.spells.some(spellRowHasSpell), "spells"]);
+    const limit = preparedLimitFor(cls);
+    if (cls.preparedFormula !== "none" && cls.preparedFormula !== "known") {
+      items.push(["Prepared Spells", `${preparedSpellCount()} prepared of ${limit} allowed.`, preparedSpellCount() > 0 && preparedSpellCount() <= limit, "spells"]);
+    }
+  }
+  return items.map(([label, detail, done, tab]) => ({ label, detail, done, tab }));
+}
+
+function renderChecklist() {
+  const items = levelChecklist();
+  const remaining = items.filter(item => !item.done);
+  const button = document.querySelector("#checklistButton");
+  button.textContent = remaining.length ? `Checklist (${remaining.length})` : "Checklist";
+  button.classList.toggle("needs-attention", remaining.length > 0);
+  button.title = remaining.length ? `To do: ${remaining.map(item => item.label).join(", ")}` : "Everything is up to date for your level.";
+  document.querySelector("#checklistSummary").textContent = remaining.length
+    ? `${items.length - remaining.length} of ${items.length} done for level ${character.level}`
+    : `All set for level ${character.level}!`;
+  document.querySelector("#checklistBody").innerHTML = items.map(item => `
+    <article class="checklist-item ${item.done ? "is-complete" : ""}">
+      <span class="checklist-mark">${item.done ? "✓" : "○"}</span>
+      <div>
+        <strong>${escapeHtml(item.label)}</strong>
+        <span>${item.done ? "Done" : escapeHtml(item.detail)}</span>
+      </div>
+      ${!item.done && item.tab ? `<button type="button" class="ghost" data-checklist-tab="${item.tab}">Go</button>` : ""}
+    </article>
+  `).join("");
+  document.querySelectorAll(".tab").forEach(tabButton => {
+    const todos = remaining.filter(item => item.tab === tabButton.dataset.tab);
+    tabButton.classList.toggle("needs-attention", todos.length > 0);
+    tabButton.title = todos.length ? `To do: ${todos.map(item => item.label).join(", ")}` : "";
+  });
 }
 
 function applyLevelUp(event) {

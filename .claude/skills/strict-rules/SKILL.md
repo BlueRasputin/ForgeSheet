@@ -1,36 +1,56 @@
 ---
 name: strict-rules
-description: Strict coding rules for this repo. Use when writing, editing, or reviewing any code in this project, or when the user invokes /strict-rules.
+description: Behavioral guidelines to reduce common LLM coding mistakes.
 ---
 
-Enforce these rules on every code change. If a requested change would violate one, say which rule and propose a compliant alternative instead of writing the violation.
+1. Think Before Coding
+   Don't assume. Don't hide confusion. Surface tradeoffs.
 
-## Stack
+LLMs often pick an interpretation silently and run with it. This principle forces explicit reasoning:
 
-- Vanilla JavaScript, HTML, and CSS only. No frameworks, no build step, no npm dependencies.
-- JavaScript lives in domain modules under `js/`, loaded as plain `<script>` tags in dependency order in `index.html` (no `import`/`export` — the app must work over `file://`). Each file owns one domain: `utils`, `data`, `classes`, `character`, `layout`, `spells`, `sheet`, `builder`, `play`, `equipment`, `party`, `rules`, `import`, `sync`, `main`.
-- New code goes in the module whose domain it belongs to. Only create a new module for a genuinely new domain (e.g. a new tab), and add its script tag in dependency order.
-- Load-order rule: code that runs at file load (top-level `let x = loadX()` initializers, constant tables built by factories) may only call functions defined in its own file or an earlier-loaded one. Runtime calls can go in any direction.
-- External scripts only via the existing CDN-pinned pattern (versioned URL constants in `js/data.js`), and only with the user's explicit approval.
+State assumptions explicitly — If uncertain, ask rather than guess
+Present multiple interpretations — Don't pick silently when ambiguity exists
+Push back when warranted — If a simpler approach exists, say so
+Stop when confused — Name what's unclear and ask for clarification 2. Simplicity First
+Minimum code that solves the problem. Nothing speculative.
 
-## JavaScript
+Combat the tendency toward overengineering:
 
-- Match the existing style: `const`/`let` (never `var`), template literals, arrow functions for callbacks, named `function` declarations for top-level functions.
-- All user-provided or character-data strings rendered into HTML go through `escapeHtml()`. No exceptions.
-- State lives in the `character` object (`js/character.js`) and persists through `persist()` / `persistAndRender()`. Never write to `localStorage` directly outside the established helpers.
-- New character fields must be added in BOTH `defaultCharacter()` and `normalizeCharacter()` in `js/character.js` so old saved characters don't break.
-- DOM lookups use `document.querySelector`. Event listeners are bound once in `bindEvents()`; dynamic rows use event delegation on the container, not per-row listeners.
-- Rendering is one-way: `render*()` functions read state and write DOM. Never read state back out of the DOM.
+No features beyond what was asked
+No abstractions for single-use code
+No "flexibility" or "configurability" that wasn't requested
+No error handling for impossible scenarios
+If 200 lines could be 50, rewrite it
+The test: Would a senior engineer say this is overcomplicated? If yes, simplify.
 
-## CSS
+3. Surgical Changes
+   Touch only what you must. Clean up only your own mess.
 
-- Use the existing CSS custom properties (`--ink`, `--panel`, `--accent`, ...) — never hardcode colors that a theme should control.
-- Every visual addition must work in all three themes: `light`, `dark`, `retro`. Check each before calling it done.
-- Match existing values: `border-radius: 2px`, `var(--panel-soft)` backgrounds, `1px solid var(--line)` borders.
+When editing existing code:
 
-## General
+Don't "improve" adjacent code, comments, or formatting
+Don't refactor things that aren't broken
+Match existing style, even if you'd do it differently
+If you notice unrelated dead code, mention it — don't delete it
+When your changes create orphans:
 
-- No dead code, no commented-out code, no speculative abstractions. If it has one caller, inline it.
-- No comments that restate the code. Comments only for non-obvious constraints.
-- Keep diffs minimal: don't reformat, rename, or "clean up" lines the change doesn't require.
-- If a change touches saved-character shape, theme handling, or persistence, state the migration/compat impact explicitly in the summary.
+Remove imports/variables/functions that YOUR changes made unused
+Don't remove pre-existing dead code unless asked
+The test: Every changed line should trace directly to the user's request.
+
+4. Goal-Driven Execution
+   Define success criteria. Loop until verified.
+
+Transform imperative tasks into verifiable goals:
+
+Instead of... Transform to...
+"Add validation" "Write tests for invalid inputs, then make them pass"
+"Fix the bug" "Write a test that reproduces it, then make it pass"
+"Refactor X" "Ensure tests pass before and after"
+For multi-step tasks, state a brief plan:
+
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+   Strong success criteria let the LLM loop independently. Weak criteria ("make it work") require constant clarification.
+ 

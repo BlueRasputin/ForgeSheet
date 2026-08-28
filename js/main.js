@@ -56,7 +56,7 @@ function buildStaticControls() {
   saves.innerHTML = ABILITIES.map(([id, name]) => `
     <label class="skill-row">
       <input data-save="${id}" type="checkbox">
-      <span class="skill-name">${name}</span>
+      <span class="skill-name">${id.toUpperCase()}</span>
       <button type="button" class="mod-chip" id="${id}Save" data-roll-save="${id}" title="Roll ${name} save">+0</button>
     </label>
   `).join("");
@@ -81,6 +81,9 @@ function bindEvents() {
     "armorTrainingInput", "weaponTrainingInput"
   ];
   watched.forEach(id => document.querySelector(`#${id}`).addEventListener("input", handleInput));
+  document.addEventListener("focusout", event => {
+    if (event.target.matches?.('input[type="number"]')) renderAll();
+  });
 
   document.querySelectorAll("[data-ability]").forEach(input => input.addEventListener("input", handleAbilityInput));
   document.querySelectorAll("[data-skill]").forEach(input => input.addEventListener("input", handleSkillInput));
@@ -107,7 +110,15 @@ function bindEvents() {
   document.querySelector("#rollInitiative").addEventListener("click", rollInitiativeCheck);
   document.querySelector("#inspirationAdd").addEventListener("click", gainInspiration);
   document.querySelector("#inspirationSpend").addEventListener("click", spendInspiration);
-  document.querySelector("#abilityLock").addEventListener("click", toggleAbilityLock);
+  document.querySelector("#rulesButton").addEventListener("click", () => document.querySelector("#rulesDialog").showModal());
+  document.querySelector("#closeRulesDialog").addEventListener("click", () => document.querySelector("#rulesDialog").close());
+  document.querySelector("#closeClassBuilder").addEventListener("click", () => document.querySelector("#classBuilderDialog").close());
+  document.querySelector("#classBuilderDialog").addEventListener("close", () => {
+    classBuilderDraft = null;
+    renderAll();
+  });
+  document.querySelector("#identityLock").addEventListener("click", toggleIdentityLock);
+  document.querySelector("#identityDisplay").addEventListener("dblclick", toggleIdentityLock);
   document.querySelector("#backgroundUpload").addEventListener("click", handleBackgroundButton);
   document.querySelector("#backgroundFile").addEventListener("change", handleBackgroundFile);
   document.querySelector("#applyDamageButton").addEventListener("click", applyDamage);
@@ -133,12 +144,24 @@ function bindEvents() {
   document.querySelector("#slotGrid").addEventListener("click", handleSlotUsageClick);
   document.querySelector("#saveCharacter").addEventListener("click", persistAndRender);
   document.querySelector("#resetCharacter").addEventListener("click", resetCharacter);
-  document.querySelector("#newCharacterButton").addEventListener("click", createNewCharacter);
+  document.querySelector("#newCharacterButton").addEventListener("click", openCreateDialog);
+  document.querySelector("#createBack").addEventListener("click", createStepBack);
+  document.querySelector("#createNext").addEventListener("click", createStepNext);
+  document.querySelector("#createStepBody").addEventListener("input", handleCreateFieldInput);
+  document.querySelector("#createDialog").addEventListener("click", handleCreateStepClick);
+  document.querySelector("#createDialog").addEventListener("keydown", event => {
+    if (event.key === "Enter" && event.target.tagName === "INPUT") {
+      event.preventDefault();
+      createStepNext();
+    }
+  });
   document.querySelector("#duplicateCharacterButton").addEventListener("click", duplicateCharacter);
   document.querySelector("#deleteCharacterButton").addEventListener("click", deleteCharacter);
   document.querySelector("#characterLibrarySelect").addEventListener("change", switchCharacter);
   document.querySelector("#exportJsonButton").addEventListener("click", exportCharacterJson);
   document.querySelector("#printSheetButton").addEventListener("click", () => window.print());
+  window.addEventListener("beforeprint", preparePrintLayout);
+  window.addEventListener("afterprint", resetPrintLayout);
   document.querySelector("#importJsonButton").addEventListener("click", () => document.querySelector("#jsonImportInput").click());
   document.querySelector("#jsonImportInput").addEventListener("change", importCharacterJson);
   document.querySelector("#themeSelect").addEventListener("input", handleThemeSelect);
@@ -155,6 +178,13 @@ function bindEvents() {
   document.querySelector("#parseSheetImport").addEventListener("click", parseImportDialogText);
   document.querySelector("#applySheetImport").addEventListener("click", applyPendingImport);
   document.querySelector("#levelUpButton").addEventListener("click", openLevelDialog);
+  document.querySelector("#checklistButton").addEventListener("click", () => document.querySelector("#checklistDialog").showModal());
+  document.querySelector("#checklistBody").addEventListener("click", event => {
+    const button = event.target.closest("[data-checklist-tab]");
+    if (!button) return;
+    document.querySelector("#checklistDialog").close();
+    activateTab(button.dataset.checklistTab);
+  });
   document.querySelector("#confirmLevelUp").addEventListener("click", applyLevelUp);
   document.querySelector("#newCustomClass").addEventListener("click", startCustomClassDraft);
   document.querySelector("#saveClass").addEventListener("click", saveCustomClass);
@@ -228,4 +258,5 @@ function renderAll() {
   renderSyncPanel();
   renderDmItemTools();
   renderRulesReference();
+  renderChecklist();
 }

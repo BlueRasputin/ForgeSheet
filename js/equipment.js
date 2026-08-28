@@ -17,6 +17,12 @@ function renderEquipment() {
       node.querySelector(".equipment-equipped").checked = Boolean(item.equipped);
       node.querySelector(".equipment-attuned").checked = Boolean(item.attuned);
       node.querySelector(".equipment-notes").value = item.notes || "";
+      const grantSelect = node.querySelector(".equipment-grant-spell");
+      grantSelect.innerHTML = `<option value="">No spell</option>` + allSpells
+        .slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
+        .map(spell => `<option value="${spell.index}">${escapeHtml(spell.name)} (${spell.level === 0 ? "Cantrip" : ordinal(spell.level)})</option>`).join("");
+      grantSelect.value = item.grantSpell || "";
+      node.querySelector(".equipment-grant-uses").value = item.grantUses || "";
       root.appendChild(node);
     });
   }
@@ -82,6 +88,17 @@ function handleEquipmentInput(event) {
   }
   if (event.target.classList.contains("equipment-attuned")) item.attuned = event.target.checked;
   if (event.target.classList.contains("equipment-notes")) item.notes = event.target.value;
+  if (event.target.classList.contains("equipment-grant-spell")) {
+    item.grantSpell = event.target.value;
+    item.grantUsed = 0;
+    persistAndRender();
+    return;
+  }
+  if (event.target.classList.contains("equipment-grant-uses")) {
+    item.grantUses = clamp(Number(event.target.value), 0, 99);
+    persistAndRender();
+    return;
+  }
   persist();
   renderEncumbrance();
 }

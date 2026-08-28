@@ -1,11 +1,38 @@
-function classDef(id, name, hitDie, casterType, spellAbility, preparedFormula, spellSources, learnedPerLevel, startingSpells) {
+// Cumulative spells/cantrips known per class level, straight from the PHB tables.
+const KNOWN_SPELLS = {
+  bard: [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22],
+  sorcerer: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15],
+  warlock: [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15],
+  ranger: [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11],
+  wizard: Array.from({ length: 20 }, (_, index) => 6 + 2 * index)
+};
+
+function cantripProgression(start) {
+  return Array.from({ length: 20 }, (_, index) => {
+    const level = index + 1;
+    return level >= 10 ? start + 2 : level >= 4 ? start + 1 : start;
+  });
+}
+
+const CANTRIPS_KNOWN = {
+  bard: cantripProgression(2),
+  cleric: cantripProgression(3),
+  druid: cantripProgression(2),
+  sorcerer: cantripProgression(4),
+  warlock: cantripProgression(2),
+  wizard: cantripProgression(3)
+};
+
+function classDef(id, name, hitDie, casterType, spellAbility, preparedFormula, spellSources) {
+  const known = KNOWN_SPELLS[id] || [];
+  const cantrips = CANTRIPS_KNOWN[id] || [];
+  const delta = (list, level) => Math.max(0, (list[level - 1] || 0) - (list[level - 2] || 0));
   return {
     id, name, hitDie, casterType, spellAbility, preparedFormula, spellSources,
     table: makeTable(Object.fromEntries(Array.from({ length: 20 }, (_, index) => {
       const level = index + 1;
-      const features = level % 4 === 0 ? "Ability score improvement" : level === 1 ? "Spellcasting" : "";
-      const newSpells = level === 1 ? startingSpells : learnedPerLevel;
-      return [level, [features, newSpells, level === 1 ? 3 : 0]];
+      const features = ASI_LEVELS.has(level) ? "Ability score improvement" : level === 1 ? "Spellcasting" : "";
+      return [level, [features, delta(known, level), delta(cantrips, level)]];
     })))
   };
 }
@@ -52,7 +79,7 @@ const BUILT_IN_CLASSES = {
       11: ["Spell-storing item", 0, 0],
       12: ["Ability score improvement", 0, 0],
       13: ["Feature improvement", 0, 0],
-      14: ["Magic item savant", 0, 0],
+      14: ["Magic item savant", 0, 1],
       15: ["Specialist feature", 0, 0],
       16: ["Ability score improvement", 0, 0],
       17: ["Feature improvement", 0, 0],
@@ -61,14 +88,14 @@ const BUILT_IN_CLASSES = {
       20: ["Capstone feature", 0, 0]
     })
   },
-  wizard: classDef("wizard", "Wizard", 6, "full", "int", "levelPlusMod", ["wizard"], 2, 3),
-  cleric: classDef("cleric", "Cleric", 8, "full", "wis", "levelPlusMod", ["cleric"], 0, 0),
-  druid: classDef("druid", "Druid", 8, "full", "wis", "levelPlusMod", ["druid"], 0, 0),
-  bard: classDef("bard", "Bard", 8, "full", "cha", "known", ["bard"], 1, 4),
-  sorcerer: classDef("sorcerer", "Sorcerer", 6, "full", "cha", "known", ["sorcerer"], 1, 2),
-  warlock: classDef("warlock", "Warlock", 8, "warlock", "cha", "known", ["warlock"], 1, 2),
-  paladin: classDef("paladin", "Paladin", 10, "halfRoundDown", "cha", "halfLevelPlusMod", ["paladin"], 0, 0),
-  ranger: classDef("ranger", "Ranger", 10, "halfRoundDown", "wis", "known", ["ranger"], 1, 0),
+  wizard: classDef("wizard", "Wizard", 6, "full", "int", "levelPlusMod", ["wizard"]),
+  cleric: classDef("cleric", "Cleric", 8, "full", "wis", "levelPlusMod", ["cleric"]),
+  druid: classDef("druid", "Druid", 8, "full", "wis", "levelPlusMod", ["druid"]),
+  bard: classDef("bard", "Bard", 8, "full", "cha", "known", ["bard"]),
+  sorcerer: classDef("sorcerer", "Sorcerer", 6, "full", "cha", "known", ["sorcerer"]),
+  warlock: classDef("warlock", "Warlock", 8, "warlock", "cha", "known", ["warlock"]),
+  paladin: classDef("paladin", "Paladin", 10, "halfRoundDown", "cha", "halfLevelPlusMod", ["paladin"]),
+  ranger: classDef("ranger", "Ranger", 10, "halfRoundDown", "wis", "known", ["ranger"]),
   barbarian: martialDef("barbarian", "Barbarian", 12, {
     1: "Rage, unarmored defense",
     2: "Reckless attack, danger sense",
@@ -135,6 +162,28 @@ const BUILT_IN_CLASSES = {
     19: "Ability score improvement",
     20: "Perfect self"
   }),
+  bloodhunter: martialDef("bloodhunter", "Blood Hunter", 10, {
+    1: "Hunter's bane, blood maledict",
+    2: "Fighting style, crimson rite (d4 hemocraft die)",
+    3: "Blood hunter order",
+    4: "Ability score improvement",
+    5: "Extra attack, hemocraft die d6",
+    6: "Brand of castigation, blood maledict (2 uses)",
+    7: "Order feature, additional crimson rite",
+    8: "Ability score improvement",
+    9: "Grim psychometry",
+    10: "Dark augmentation",
+    11: "Order feature, hemocraft die d8",
+    12: "Ability score improvement",
+    13: "Blood maledict (3 uses)",
+    14: "Hardened soul, additional crimson rite",
+    15: "Order feature",
+    16: "Ability score improvement",
+    17: "Blood maledict (4 uses), hemocraft die d10",
+    18: "Order feature",
+    19: "Ability score improvement",
+    20: "Sanguine mastery"
+  }),
   rogue: martialDef("rogue", "Rogue", 8, {
     1: "Expertise, sneak attack, thieves' cant",
     2: "Cunning action",
@@ -186,10 +235,12 @@ function spellSlotsFor(cls, level = character.level) {
     const pact = WARLOCK_SLOTS[level];
     return pact ? Array.from({ length: pact.level }, (_, index) => index + 1 === pact.level ? pact.slots : 0) : [];
   }
+  // PHB half/third casters match the full-caster table at ceil(level/2) / ceil(level/3),
+  // except they get no slots before level 2 / level 3. "halfRoundUp" (artificer) has slots from level 1.
   let casterLevel = level;
-  if (cls.casterType === "halfRoundDown") casterLevel = Math.floor(level / 2);
+  if (cls.casterType === "halfRoundDown") casterLevel = level === 1 ? 0 : Math.ceil(level / 2);
   if (cls.casterType === "halfRoundUp") casterLevel = Math.ceil(level / 2);
-  if (cls.casterType === "third") casterLevel = Math.floor(level / 3);
+  if (cls.casterType === "third") casterLevel = level < 3 ? 0 : Math.ceil(level / 3);
   return FULL_CASTER_SLOTS[Math.max(0, casterLevel)] || [];
 }
 
@@ -227,9 +278,9 @@ function startCustomClassDraft() {
       19: ["Ability score improvement", 0, 0]
     })
   };
-  activateTab("classes");
   renderBuilder();
   renderClassTable();
+  document.querySelector("#classBuilderDialog").showModal();
 }
 
 function renderBuilder() {
@@ -280,8 +331,15 @@ function saveCustomClass() {
   };
   localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
   saveClassToCloud(customClasses[id]);
-  character.classId = id;
+  if (creationDraft) {
+    creationDraft.classId = id;
+  } else {
+    character.classId = id;
+  }
   classBuilderDraft = null;
+  const dialog = document.querySelector("#classBuilderDialog");
+  if (dialog.open) dialog.close();
+  if (creationDraft) renderCreateStep();
   persistAndRender();
 }
 

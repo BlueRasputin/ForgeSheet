@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ForgeSheet</title>
-    <link rel="stylesheet" href="./styles.css?v=20">
+    <link rel="stylesheet" href="./styles.css?v=21">
   </head>
   <body>
     <div class="app-shell">
@@ -23,6 +23,7 @@
               <option value="retro">Retro Basement</option>
             </select>
           </label>
+          <button id="rulesButton" class="ghost" type="button">Rules</button>
           <button id="backgroundUpload" class="ghost" type="button">Backdrop</button>
           <input id="backgroundFile" type="file" accept="image/*" hidden>
           <button id="importSheetButton" class="ghost">Import Sheet</button>
@@ -33,6 +34,7 @@
           <button id="resetCharacter" class="danger">Reset</button>
           <button id="shortRestButton" class="secondary" type="button">Short Rest</button>
           <button id="longRestButton" class="secondary" type="button">Long Rest</button>
+          <button id="checklistButton" class="secondary" type="button">Checklist</button>
           <button id="levelUpButton" class="primary">Level Up</button>
         </div>
       </header>
@@ -52,13 +54,34 @@
             Search Sheet
             <input id="sheetSearch" autocomplete="off" placeholder="Search spells, notes, features...">
           </label>
+          <section class="split-toolbar" aria-label="Side-by-side view controls">
+            <label class="inline-check split-toggle">
+              <input type="checkbox" id="splitViewToggle">
+              Side-by-side
+            </label>
+            <label>
+              Left
+              <select id="splitLeftSelect"></select>
+            </label>
+            <label>
+              Right
+              <select id="splitRightSelect"></select>
+            </label>
+            <button id="swapSplitPanels" class="ghost" type="button">Swap</button>
+          </section>
           <span id="autosaveStatus" class="muted">Autosaved</span>
         </section>
 
         <section id="searchResults" class="search-results"></section>
 
         <section class="summary-band">
-          <div class="identity-grid">
+          <div id="identityBlock" class="identity-block">
+            <button type="button" id="identityLock" class="ability-lock identity-lock" title="Edit character details">
+              <svg class="icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.9 3.5a2 2 0 0 1 2.8 0l.8.8a2 2 0 0 1 0 2.8l-1.2 1.2-3.6-3.6zM14.3 6.1l3.6 3.6-8.8 8.8-4.1 1.1a0.5 0.5 0 0 1-.6-.6l1.1-4.1z"/></svg>
+              <svg class="icon-done" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.55 17.6 4.4 12.45l1.7-1.7 3.45 3.44 8.35-8.34 1.7 1.7z"/></svg>
+            </button>
+            <div id="identityDisplay" class="identity-display"></div>
+            <div class="identity-grid">
             <label>
               Character
               <input id="characterName" autocomplete="off" placeholder="Name">
@@ -87,13 +110,10 @@
               Alignment
               <input id="alignmentInput" autocomplete="off" placeholder="NG">
             </label>
+            </div>
           </div>
           <div class="vitals">
             <div id="abilities" class="ability-grid"></div>
-            <button type="button" id="abilityLock" class="ability-lock" title="Lock ability scores">
-              <svg class="icon-unlocked" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 0 1 4 4h-2a2 2 0 0 0-4 0v3h7.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H8V7a4 4 0 0 1 4-4z"/></svg>
-              <svg class="icon-locked" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 0 1 4 4v3h1.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H8V7a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v3h4V7a2 2 0 0 0-2-2z"/></svg>
-            </button>
             <div class="stat-tile-group">
               <div class="stat-tile">
                 <span>Proficiency</span>
@@ -110,6 +130,18 @@
                   <button id="inspirationSpend" type="button" title="Spend inspiration">−</button>
                   <button id="inspirationAdd" type="button" title="Gain inspiration">+</button>
                 </div>
+              </div>
+              <button type="button" id="rollInitiative" class="stat-tile" title="Roll initiative">
+                <span>Initiative</span>
+                <strong id="initiativeValue">+0</strong>
+              </button>
+              <div class="stat-tile">
+                <span>Armor Class</span>
+                <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
+              </div>
+              <div class="stat-tile conditions-tile">
+                <span>Conditions</span>
+                <p id="conditionsMini">None</p>
               </div>
             </div>
             <div class="hp-box">
@@ -135,7 +167,7 @@
               <div class="block-head">
                 <h2>Saving Throws</h2>
               </div>
-              <div id="savingThrows" class="skill-grid single"></div>
+              <div id="savingThrows" class="skill-grid saves"></div>
             </section>
             <section class="block rail-block">
               <div class="block-head">
@@ -165,22 +197,6 @@
           </section>
 
           <div class="sheet-main">
-            <div class="defense-row">
-              <button type="button" id="rollInitiative" class="stat-tile" title="Roll initiative">
-                <span>Initiative</span>
-                <strong id="initiativeValue">+0</strong>
-              </button>
-              <div class="ac-shield">
-                <span>Armor</span>
-                <input id="acInput" type="number" min="1" aria-label="Armor class">
-                <span>Class</span>
-              </div>
-              <div class="conditions-mini">
-                <span>Conditions</span>
-                <p id="conditionsMini">None</p>
-              </div>
-            </div>
-
             <nav class="tabs" aria-label="Character sections">
               <button class="tab active" data-tab="actions">Actions</button>
               <button class="tab" data-tab="spells">Spells</button>
@@ -189,27 +205,9 @@
               <button class="tab" data-tab="background">Background</button>
               <button class="tab" data-tab="notes">Notes</button>
               <button class="tab" data-tab="builder">Builder</button>
-              <button class="tab" data-tab="classes">Classes</button>
               <button class="tab" data-tab="party">Party</button>
               <button class="tab" data-tab="campaign">Campaign</button>
-              <button class="tab" data-tab="rules">Rules</button>
             </nav>
-
-            <section class="split-toolbar" aria-label="Side-by-side view controls">
-              <label class="inline-check split-toggle">
-                <input type="checkbox" id="splitViewToggle">
-                Side-by-side
-              </label>
-              <label>
-                Left
-                <select id="splitLeftSelect"></select>
-              </label>
-              <label>
-                Right
-                <select id="splitRightSelect"></select>
-              </label>
-              <button id="swapSplitPanels" class="ghost" type="button">Swap</button>
-            </section>
 
             <div class="deck-shell">
             <div id="panelDeck" class="panel-deck">
@@ -511,45 +509,6 @@
           </div>
         </section>
 
-        <section id="classes" class="panel">
-          <div class="class-builder">
-            <section class="block">
-              <div class="block-head">
-                <h2>Create Class</h2>
-                <div class="button-row">
-                  <button id="newCustomClass" class="ghost" type="button">New Custom</button>
-                  <button id="saveClass" class="secondary" type="button">Save Class</button>
-                </div>
-              </div>
-              <div class="field-grid">
-                <label>Name <input id="builderName" placeholder="Inventor"></label>
-                <label>Hit Die <select id="builderHitDie"><option>6</option><option>8</option><option>10</option><option>12</option></select></label>
-                <label>Caster Type <select id="builderCasterType"></select></label>
-                <label>Spell Ability <select id="builderSpellAbility"></select></label>
-                <label>Prepared Formula <select id="builderPreparedFormula"></select></label>
-                <label>Spell Source Classes <input id="builderSpellSources" placeholder="wizard, cleric"></label>
-              </div>
-              <label>
-                Level Table
-                <textarea id="builderTable" rows="10"></textarea>
-              </label>
-              <p class="muted">Rows use: level, feature text, new spells, cantrips. Example: <code>5, Extra Attack, 1, 0</code></p>
-              <div class="class-share">
-                <button id="shareClassButton" class="ghost" type="button">Share Current Class</button>
-                <input id="importClassCode" autocomplete="off" placeholder="Enter share code">
-                <button id="importClassButton" class="secondary" type="button">Import</button>
-              </div>
-              <p id="classShareStatus" class="muted">Sign in to sync custom classes to your account and share them with a code.</p>
-            </section>
-            <section class="block">
-              <div class="block-head">
-                <h2>Class Table</h2>
-              </div>
-              <div id="classTable" class="class-table"></div>
-            </section>
-          </div>
-        </section>
-
         <section id="notes" class="panel">
           <section class="block">
             <div class="block-head">
@@ -682,34 +641,6 @@
           </section>
         </section>
 
-        <section id="rules" class="panel">
-          <section class="block">
-            <div class="block-head">
-              <h2>Rules Reference</h2>
-              <span id="rulesCount" class="muted">0 entries</span>
-            </div>
-            <div class="rules-tools">
-              <label>
-                Search
-                <input id="rulesSearch" autocomplete="off" placeholder="condition, rest, action, spell, equipment...">
-              </label>
-              <label>
-                Category
-                <select id="rulesCategory">
-                  <option value="all">All</option>
-                  <option value="core">Core Rules</option>
-                  <option value="condition">Conditions</option>
-                  <option value="action">Actions</option>
-                  <option value="rest">Rests</option>
-                  <option value="equipment">Equipment</option>
-                  <option value="class">Class Options</option>
-                  <option value="spell">Known Spells</option>
-                </select>
-              </label>
-            </div>
-            <div id="rulesResults" class="rules-results"></div>
-          </section>
-        </section>
             </div>
             </div>
           </div>
@@ -729,6 +660,20 @@
         <menu>
           <button value="cancel" class="ghost">Cancel</button>
           <button id="confirmLevelUp" value="default" class="primary">Apply Level</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="checklistDialog">
+      <form method="dialog" class="modal">
+        <div class="block-head">
+          <h2>Level-Up Checklist</h2>
+          <button value="cancel" class="icon-button" aria-label="Close">x</button>
+        </div>
+        <p id="checklistSummary" class="muted"></p>
+        <div id="checklistBody" class="checklist-body"></div>
+        <menu>
+          <button value="cancel" class="primary">Close</button>
         </menu>
       </form>
     </dialog>
@@ -764,11 +709,105 @@
       </form>
     </dialog>
 
+    <dialog id="createDialog" class="create-dialog">
+      <form method="dialog" class="create-shell">
+        <aside class="create-rail">
+          <h2>Create a<br>Character</h2>
+          <div id="createSteps" class="create-rail-steps"></div>
+        </aside>
+        <div class="create-main">
+          <button value="cancel" class="icon-button create-close" aria-label="Close">x</button>
+          <div id="createStepBody" class="create-step-body"></div>
+        </div>
+        <menu class="create-footer">
+          <button id="createBack" class="ghost" type="button">Back</button>
+          <button id="createNext" class="primary" type="button">Next</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="rulesDialog" class="rules-dialog">
+      <div class="modal rules-modal">
+        <div class="block-head">
+          <h2>Rules Reference</h2>
+          <span id="rulesCount" class="muted">0 entries</span>
+          <button id="closeRulesDialog" class="icon-button" type="button" aria-label="Close">x</button>
+        </div>
+        <div class="rules-tools">
+          <label>
+            Search
+            <input id="rulesSearch" autocomplete="off" placeholder="condition, rest, action, spell, equipment...">
+          </label>
+          <label>
+            Category
+            <select id="rulesCategory">
+              <option value="all">All</option>
+              <option value="core">Core Rules</option>
+              <option value="condition">Conditions</option>
+              <option value="action">Actions</option>
+              <option value="rest">Rests</option>
+              <option value="equipment">Equipment</option>
+              <option value="class">Class Options</option>
+              <option value="spell">Known Spells</option>
+            </select>
+          </label>
+        </div>
+        <div id="rulesResults" class="rules-results"></div>
+      </div>
+    </dialog>
+
+    <dialog id="classBuilderDialog" class="class-dialog">
+      <div class="modal class-modal">
+        <div class="block-head">
+          <h2>Class Builder</h2>
+          <button id="closeClassBuilder" class="icon-button" type="button" aria-label="Close">x</button>
+        </div>
+        <div class="class-builder">
+          <section class="block">
+            <div class="block-head">
+              <h2>Create Class</h2>
+              <div class="button-row">
+                <button id="newCustomClass" class="ghost" type="button">New Custom</button>
+                <button id="saveClass" class="secondary" type="button">Save Class</button>
+              </div>
+            </div>
+            <div class="field-grid">
+              <label>Name <input id="builderName" placeholder="Inventor"></label>
+              <label>Hit Die <select id="builderHitDie"><option>6</option><option>8</option><option>10</option><option>12</option></select></label>
+              <label>Caster Type <select id="builderCasterType"></select></label>
+              <label>Spell Ability <select id="builderSpellAbility"></select></label>
+              <label>Prepared Formula <select id="builderPreparedFormula"></select></label>
+              <label>Spell Source Classes <input id="builderSpellSources" placeholder="wizard, cleric"></label>
+            </div>
+            <label>
+              Level Table
+              <textarea id="builderTable" rows="10"></textarea>
+            </label>
+            <p class="muted">Rows use: level, feature text, new spells, cantrips. Example: <code>5, Extra Attack, 1, 0</code></p>
+            <div class="class-share">
+              <button id="shareClassButton" class="ghost" type="button">Share Current Class</button>
+              <input id="importClassCode" autocomplete="off" placeholder="Enter share code">
+              <button id="importClassButton" class="secondary" type="button">Import</button>
+            </div>
+            <p id="classShareStatus" class="muted">Sign in to sync custom classes to your account and share them with a code.</p>
+          </section>
+          <section class="block">
+            <div class="block-head">
+              <h2>Class Table</h2>
+            </div>
+            <div id="classTable" class="class-table"></div>
+          </section>
+        </div>
+      </div>
+    </dialog>
+
     <input id="jsonImportInput" type="file" accept="application/json,.json" hidden>
 
     <template id="spellRowTemplate">
       <div class="spell-row">
+        <button class="spell-expand" type="button" aria-label="Toggle spell details">▸</button>
         <select class="spell-select"></select>
+        <span class="spell-summary"></span>
         <label class="prepare-toggle"><input type="checkbox" class="prepared-toggle"> Prepared</label>
         <button class="ghost remove-spell" type="button">Remove</button>
         <div class="custom-spell-fields">
@@ -825,6 +864,14 @@
         <label class="inline-check"><input type="checkbox" class="equipment-attuned"> Attuned</label>
         <textarea class="equipment-notes" rows="2" placeholder="Notes, charges, container, magic item details..."></textarea>
         <button class="ghost remove-equipment" type="button">Remove</button>
+        <div class="equipment-spell">
+          <label>Grants spell
+            <select class="equipment-grant-spell"></select>
+          </label>
+          <label>Uses per long rest
+            <input class="equipment-grant-uses" type="number" min="0" step="1" placeholder="At will">
+          </label>
+        </div>
       </article>
     </template>
 

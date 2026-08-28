@@ -17,7 +17,7 @@ function renderCombatDashboard() {
   document.querySelector("#combatSummary").textContent = `${character.hp}/${character.maxHp} HP${temp ? ` +${temp} temp` : ""} · AC ${character.ac} · ${character.conditions.length || 0} conditions`;
   document.querySelector("#conditionsMini").textContent = character.conditions.length
     ? character.conditions.join(", ")
-    : "None — manage in Actions";
+    : "None";
   renderConcentrationPrompt();
   document.querySelector("#combatDashboard").innerHTML = `
     ${actions.map(action => `<article><strong>${action}</strong><span>${combatActionHint(action)}</span></article>`).join("")}
@@ -261,6 +261,9 @@ function takeRest(type) {
     character.exhaustion = Math.max(0, Number(character.exhaustion || 0) - 1);
     character.hitDiceUsed = Math.max(0, Number(character.hitDiceUsed || 0) - Math.max(1, Math.floor(character.level / 2)));
     character.concentration = "";
+    (character.equipment || []).forEach(item => {
+      item.grantUsed = 0;
+    });
   }
   character.resources.forEach(resource => {
     if (resource.reset === type || (type === "long" && resource.reset === "short")) resource.current = resource.max;

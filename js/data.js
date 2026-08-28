@@ -84,13 +84,39 @@ const ITEM_CATALOG = [
   itemCard("cloak-of-protection", "Cloak of Protection", "Wondrous Item", 1, "Uncommon magic item", "+1 AC and saving throws. Requires attunement.")
 ];
 
+const SPECIES_PRESETS = [
+  ["Dragonborn", 30, "Draconic ancestry grants a breath weapon and resistance to its damage type.", "🐲"],
+  ["Dwarf", 25, "Darkvision, advantage against poison, and tool proficiency.", "⚒️"],
+  ["Elf", 30, "Darkvision, keen senses, fey ancestry, and trance instead of sleep.", "🌙"],
+  ["Gnome", 25, "Darkvision and advantage on mental saves against magic.", "⚙️"],
+  ["Half-Elf", 30, "Darkvision, fey ancestry, and two extra skill proficiencies.", "🌓"],
+  ["Half-Orc", 30, "Darkvision, relentless endurance, and savage critical hits.", "💪"],
+  ["Halfling", 25, "Lucky rerolls on 1s, brave, and nimble through larger creatures' spaces.", "🍀"],
+  ["Human", 30, "+1 to every ability score.", "⭐"],
+  ["Tiefling", 30, "Darkvision, fire resistance, and infernal legacy spells.", "🔥"]
+];
+
+const CLASS_GLYPHS = {
+  artificer: "🔧", barbarian: "🪓", bard: "🎻", bloodhunter: "🩸", cleric: "🙏", druid: "🌿",
+  fighter: "⚔️", monk: "🥋", paladin: "🛡️", ranger: "🏹", rogue: "🗡️",
+  sorcerer: "🔮", warlock: "👁️", wizard: "📖"
+};
+
+const CLASS_SAVES = {
+  artificer: ["con", "int"], barbarian: ["str", "con"], bard: ["dex", "cha"], bloodhunter: ["dex", "int"],
+  cleric: ["wis", "cha"], druid: ["int", "wis"], fighter: ["str", "con"],
+  monk: ["str", "dex"], paladin: ["wis", "cha"], ranger: ["str", "dex"],
+  rogue: ["dex", "int"], sorcerer: ["con", "cha"], warlock: ["wis", "cha"],
+  wizard: ["int", "wis"]
+};
+
 const BACKGROUND_PRESETS = [
-  ["Acolyte", "Insight, Religion", "Two languages", "Shelter of the Faithful"],
-  ["Criminal", "Deception, Stealth", "Gaming set, thieves' tools", "Criminal Contact"],
-  ["Folk Hero", "Animal Handling, Survival", "Artisan's tools, vehicles", "Rustic Hospitality"],
-  ["Noble", "History, Persuasion", "Gaming set, one language", "Position of Privilege"],
-  ["Sage", "Arcana, History", "Two languages", "Researcher"],
-  ["Soldier", "Athletics, Intimidation", "Gaming set, vehicles", "Military Rank"]
+  ["Acolyte", "Insight, Religion", "Two languages", "Shelter of the Faithful", "🕯️"],
+  ["Criminal", "Deception, Stealth", "Gaming set, thieves' tools", "Criminal Contact", "🗝️"],
+  ["Folk Hero", "Animal Handling, Survival", "Artisan's tools, vehicles", "Rustic Hospitality", "🌾"],
+  ["Noble", "History, Persuasion", "Gaming set, one language", "Position of Privilege", "👑"],
+  ["Sage", "Arcana, History", "Two languages", "Researcher", "📜"],
+  ["Soldier", "Athletics, Intimidation", "Gaming set, vehicles", "Military Rank", "🎖️"]
 ];
 
 const PERSONALITY_PROMPTS = {
@@ -130,10 +156,8 @@ const TAB_DEFS = [
   ["background", "Background"],
   ["notes", "Notes"],
   ["builder", "Builder"],
-  ["classes", "Classes"],
   ["party", "Party"],
-  ["campaign", "Campaign"],
-  ["rules", "Rules"]
+  ["campaign", "Campaign"]
 ];
 
 function rule(category, title, body) {
@@ -220,7 +244,21 @@ const SUBCLASS_SPELLS = {
   "battle-smith": { 3: ["heroism", "shield"], 5: ["branding-smite", "warding-bond"], 9: ["aura-of-vitality", "conjure-barrage"], 13: ["aura-of-purity", "fire-shield"], 17: ["banishing-smite", "mass-cure-wounds"] },
   life: { 1: ["bless", "cure-wounds"], 3: ["lesser-restoration", "spiritual-weapon"], 5: ["beacon-of-hope", "revivify"], 7: ["death-ward", "guardian-of-faith"], 9: ["mass-cure-wounds", "raise-dead"] },
   devotion: { 3: ["protection-from-evil-and-good", "sanctuary"], 5: ["lesser-restoration", "zone-of-truth"], 9: ["beacon-of-hope", "dispel-magic"], 13: ["freedom-of-movement", "guardian-of-faith"], 17: ["commune", "flame-strike"] },
-  fiend: { 1: ["burning-hands", "command"], 3: ["blindness-deafness", "scorching-ray"], 5: ["fireball", "stinking-cloud"], 7: ["fire-shield", "wall-of-fire"], 9: ["flame-strike", "hallow"] }
+  ancients: { 3: ["ensnaring-strike", "speak-with-animals"], 5: ["misty-step", "moonbeam"], 9: ["plant-growth", "protection-from-energy"], 13: ["ice-storm", "stoneskin"], 17: ["commune-with-nature", "tree-stride"] },
+  vengeance: { 3: ["bane", "hunters-mark"], 5: ["hold-person", "misty-step"], 9: ["haste", "protection-from-energy"], 13: ["banishment", "dimension-door"], 17: ["hold-monster", "scrying"] },
+  tempest: { 1: ["fog-cloud", "thunderwave"], 3: ["gust-of-wind", "shatter"], 5: ["call-lightning", "sleet-storm"], 7: ["control-water", "ice-storm"], 9: ["destructive-wave", "insect-plague"] },
+  light: { 1: ["burning-hands", "faerie-fire"], 3: ["flaming-sphere", "scorching-ray"], 5: ["daylight", "fireball"], 7: ["guardian-of-faith", "wall-of-fire"], 9: ["flame-strike", "scrying"] },
+  war: { 1: ["divine-favor", "shield-of-faith"], 3: ["magic-weapon", "spiritual-weapon"], 5: ["crusaders-mantle", "spirit-guardians"], 7: ["freedom-of-movement", "stoneskin"], 9: ["flame-strike", "hold-monster"] },
+  trickery: { 1: ["charm-person", "disguise-self"], 3: ["mirror-image", "pass-without-trace"], 5: ["blink", "dispel-magic"], 7: ["dimension-door", "polymorph"], 9: ["dominate-person", "modify-memory"] },
+  knowledge: { 1: ["command", "identify"], 3: ["augury", "suggestion"], 5: ["nondetection", "speak-with-dead"], 7: ["arcane-eye", "confusion"], 9: ["legend-lore", "scrying"] },
+  nature: { 1: ["animal-friendship", "speak-with-animals"], 3: ["barkskin", "spike-growth"], 5: ["plant-growth", "wind-wall"], 7: ["dominate-beast", "grasping-vine"], 9: ["insect-plague", "tree-stride"] }
+};
+
+// Warlock patron lists expand the spells a warlock MAY learn — they are not auto-known like domain/oath/specialist spells.
+const EXPANDED_SUBCLASS_SPELLS = {
+  fiend: ["burning-hands", "command", "blindness-deafness", "scorching-ray", "fireball", "stinking-cloud", "fire-shield", "wall-of-fire", "flame-strike", "hallow"],
+  archfey: ["faerie-fire", "sleep", "calm-emotions", "phantasmal-force", "blink", "plant-growth", "dominate-beast", "greater-invisibility", "dominate-person", "seeming"],
+  "great-old-one": ["dissonant-whispers", "tashas-hideous-laughter", "detect-thoughts", "phantasmal-force", "clairvoyance", "sending", "dominate-beast", "evards-black-tentacles", "dominate-person", "telekinesis"]
 };
 
 function spell(index, name, level, classes) {
@@ -289,7 +327,123 @@ const LOCAL_SPELLS = [
   localSpell("aura-of-purity", "Aura of Purity", 4, ["paladin"], "1 action", "Self (30-foot radius)", ["V"], "Concentration, up to 10 minutes", true,
     "A purifying aura moves with you. Creatures you choose in it can't become diseased, have resistance to poison damage, and have advantage on saves against being blinded, charmed, deafened, frightened, paralyzed, poisoned, or stunned."),
   localSpell("banishing-smite", "Banishing Smite", 5, ["paladin"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
-    "Your next weapon hit deals +5d10 force damage. If that hit leaves the target at 50 hit points or fewer, it is banished — returned to its home plane, or held incapacitated in a harmless demiplane — until the spell ends.")
+    "Your next weapon hit deals +5d10 force damage. If that hit leaves the target at 50 hit points or fewer, it is banished — returned to its home plane, or held incapacitated in a harmless demiplane — until the spell ends."),
+  localSpell("toll-the-dead", "Toll the Dead", 0, ["cleric", "warlock", "wizard"], "1 action", "60 feet", ["V", "S"], "Instantaneous", false,
+    "A dolorous bell tolls around one creature: Wisdom save or take 1d8 necrotic damage — 1d12 instead if the target is missing any hit points (scales at 5th/11th/17th)."),
+  localSpell("mind-sliver", "Mind Sliver", 0, ["sorcerer", "warlock", "wizard"], "1 action", "60 feet", ["V"], "1 round", false,
+    "A psychic spike: Intelligence save or take 1d6 psychic damage and subtract 1d4 from the next saving throw the target makes before the end of your next turn (damage scales at 5th/11th/17th)."),
+  localSpell("blade-ward", "Blade Ward", 0, ["bard", "sorcerer", "warlock", "wizard"], "1 action", "Self", ["V", "S"], "1 round", false,
+    "Trace a sigil of warding: until the end of your next turn you have resistance to bludgeoning, piercing, and slashing damage from weapon attacks."),
+  localSpell("friends", "Friends", 0, ["bard", "sorcerer", "warlock", "wizard"], "1 action", "Self", ["S", "M"], "Concentration, up to 1 minute", true,
+    "Gain advantage on all Charisma checks against one non-hostile creature. When the spell ends, it realizes you used magic on it and may become hostile."),
+  localSpell("word-of-radiance", "Word of Radiance", 0, ["cleric"], "1 action", "5 feet", ["V", "M"], "Instantaneous", false,
+    "Burning radiance erupts from you: each creature of your choice within 5 feet makes a Constitution save or takes 1d6 radiant damage (scales at 5th/11th/17th)."),
+  localSpell("primal-savagery", "Primal Savagery", 0, ["druid"], "1 action", "Self", ["S"], "Instantaneous", false,
+    "Your teeth or nails sharpen into acid-dripping points: make a melee spell attack for 1d10 acid damage (scales at 5th/11th/17th)."),
+  localSpell("control-flames", "Control Flames", 0, ["druid", "sorcerer", "wizard"], "1 action", "60 feet", ["S"], "Instantaneous or 1 hour", false,
+    "Manipulate nonmagical flame in a 5-foot cube: expand it, extinguish it, double or halve its light, or shape crude moving images in it. No damage."),
+  localSpell("gust", "Gust", 0, ["druid", "sorcerer", "wizard"], "1 action", "30 feet", ["V", "S"], "Instantaneous", false,
+    "Command a puff of wind: push a Medium or smaller creature 5 feet away (Strength save negates), push an unattended object up to 10 pounds 10 feet, or create a harmless sensory breeze."),
+  localSpell("mold-earth", "Mold Earth", 0, ["druid", "sorcerer", "wizard"], "1 action", "30 feet", ["S"], "Instantaneous or 1 hour", false,
+    "Shape loose earth in a 5-foot cube: excavate and deposit it, draw shapes and colors on it, or make it difficult or normal terrain. Up to two non-instantaneous effects active at once."),
+  localSpell("shape-water", "Shape Water", 0, ["druid", "sorcerer", "wizard"], "1 action", "30 feet", ["S"], "Instantaneous or 1 hour", false,
+    "Shape water in a 5-foot cube: move or form it into simple shapes, change its color or opacity, or freeze it (if no creature is in it). Up to two non-instantaneous effects active at once."),
+  localSpell("infestation", "Infestation", 0, ["druid", "sorcerer", "warlock", "wizard"], "1 action", "30 feet", ["V", "S", "M"], "Instantaneous", false,
+    "A swarm of biting mites erupts on one creature: Constitution save or take 1d6 poison damage and move 5 feet in a random direction (damage scales at 5th/11th/17th)."),
+  localSpell("hex", "Hex", 1, ["warlock"], "1 bonus action", "90 feet", ["V", "S", "M"], "Concentration, up to 1 hour", true,
+    "Curse one creature: your attacks deal it +1d6 necrotic damage, and it has disadvantage on ability checks with one ability you choose. If it drops to 0 HP, a bonus action moves the curse to a new target. Higher slots extend duration (3rd: 8 hours, 5th: 24 hours)."),
+  localSpell("armor-of-agathys", "Armor of Agathys", 1, ["warlock"], "1 action", "Self", ["V", "S", "M"], "1 hour", false,
+    "Icy armor grants 5 temporary hit points. While any remain, a creature that hits you with a melee attack takes 5 cold damage. Both numbers increase by 5 per slot level above 1st."),
+  localSpell("arms-of-hadar", "Arms of Hadar", 1, ["warlock"], "1 action", "Self (10-foot radius)", ["V", "S"], "Instantaneous", false,
+    "Dark tendrils lash out: each creature within 10 feet makes a Strength save or takes 2d6 necrotic damage and can't take reactions until its next turn; half damage on a success (+1d6 per slot level above 1st)."),
+  localSpell("chromatic-orb", "Chromatic Orb", 1, ["sorcerer", "wizard"], "1 action", "90 feet", ["V", "S", "M"], "Instantaneous", false,
+    "Hurl a sphere of energy: ranged spell attack for 3d8 acid, cold, fire, lightning, poison, or thunder damage — your choice each cast (+1d8 per slot level above 1st)."),
+  localSpell("witch-bolt", "Witch Bolt", 1, ["sorcerer", "warlock", "wizard"], "1 action", "30 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "Ranged spell attack for 1d12 lightning damage; on a hit a crackling arc locks on, and on later turns your action deals 1d12 lightning automatically. Ends if the target leaves range or gains total cover. Initial damage +1d12 per slot level above 1st."),
+  localSpell("dissonant-whispers", "Dissonant Whispers", 1, ["bard"], "1 action", "60 feet", ["V"], "Instantaneous", false,
+    "A discordant melody only the target hears: Wisdom save or take 3d6 psychic damage and immediately use its reaction to move its full speed away from you; half damage and no move on a success (+1d6 per slot level above 1st)."),
+  localSpell("ice-knife", "Ice Knife", 1, ["druid", "sorcerer", "wizard"], "1 action", "60 feet", ["S", "M"], "Instantaneous", false,
+    "Throw an ice shard: ranged spell attack for 1d10 piercing damage. Hit or miss, it then explodes — the target and each creature within 5 feet makes a Dexterity save or takes 2d6 cold damage (cold +1d6 per slot level above 1st)."),
+  localSpell("earth-tremor", "Earth Tremor", 1, ["bard", "druid", "sorcerer", "wizard"], "1 action", "Self (10-foot radius)", ["V", "S"], "Instantaneous", false,
+    "The ground shakes: each other creature within 10 feet makes a Dexterity save or takes 1d6 bludgeoning damage and falls prone; loose ground in the area becomes difficult terrain (+1d6 per slot level above 1st)."),
+  localSpell("ensnaring-strike", "Ensnaring Strike", 1, ["ranger"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Your next weapon hit sprouts grasping vines: Strength save or the target is restrained and takes 1d6 piercing damage at the start of each of its turns; it or an ally can break free with a Strength check (+1d6 per slot level above 1st)."),
+  localSpell("hail-of-thorns", "Hail of Thorns", 1, ["ranger"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Your next ranged weapon hit bursts into thorns: the target and each creature within 5 feet of it makes a Dexterity save, taking 1d10 piercing damage on a failure, half on a success (+1d10 per slot level above 1st, max 6d10)."),
+  localSpell("searing-smite", "Searing Smite", 1, ["paladin"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Your next melee weapon hit deals +1d6 fire damage and ignites the target: 1d6 fire at the start of each of its turns until it ends the flames with a successful Constitution save or someone douses them (initial damage +1d6 per slot level above 1st)."),
+  localSpell("thunderous-smite", "Thunderous Smite", 1, ["paladin"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Your next melee weapon hit cracks with thunder audible 300 feet away, dealing +2d6 thunder damage; the target makes a Strength save or is pushed 10 feet away and knocked prone."),
+  localSpell("wrathful-smite", "Wrathful Smite", 1, ["paladin"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Your next melee weapon hit deals +1d6 psychic damage; the target makes a Wisdom save or is frightened of you until the spell ends (it can spend an action on a Wisdom check to end it)."),
+  localSpell("silvery-barbs", "Silvery Barbs", 1, ["bard", "sorcerer", "wizard"], "1 reaction", "60 feet", ["V"], "Instantaneous", false,
+    "Reaction when a creature within 60 feet succeeds on an attack, check, or save: force it to reroll and use the lower result, then grant another creature advantage on its next attack, check, or save within 1 minute."),
+  localSpell("tashas-caustic-brew", "Tasha's Caustic Brew", 1, ["artificer", "sorcerer", "wizard"], "1 action", "Self (30-foot line)", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "Spray acid in a 30-foot, 5-foot-wide line: each creature in it makes a Dexterity save or is covered in acid, taking 2d4 acid damage at the start of each of its turns until a creature uses an action to scrape it off (+2d4 per slot level above 1st)."),
+  localSpell("cloud-of-daggers", "Cloud of Daggers", 2, ["bard", "sorcerer", "warlock", "wizard"], "1 action", "60 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "Fill a 5-foot cube with spinning daggers: a creature takes 4d4 slashing damage when it enters the cube for the first time on a turn or starts its turn there (+2d4 per slot level above 2nd)."),
+  localSpell("crown-of-madness", "Crown of Madness", 2, ["bard", "sorcerer", "warlock", "wizard"], "1 action", "120 feet", ["V", "S"], "Concentration, up to 1 minute", true,
+    "One humanoid makes a Wisdom save or is charmed: it must use its action each turn to attack a creature you choose before moving. It repeats the save at the end of each of its turns, and you must use your action each turn to maintain control."),
+  localSpell("phantasmal-force", "Phantasmal Force", 2, ["bard", "sorcerer", "wizard"], "1 action", "60 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "Intelligence save or you craft an illusion in the target's mind that it believes completely, rationalizing any contradiction. The phantasm can deal it 1d6 psychic damage each round; an action and an Intelligence (Investigation) check against your DC ends it."),
+  localSpell("shadow-blade", "Shadow Blade", 2, ["sorcerer", "warlock", "wizard"], "1 bonus action", "Self", ["V", "S"], "Concentration, up to 1 minute", true,
+    "Weave a sword of solid shadow: finesse, light, thrown (20/60), 2d8 psychic damage, and advantage on attacks made in dim light or darkness. Damage rises with slot level (3rd-4th: 3d8, 5th-6th: 4d8, 7th+: 5d8)."),
+  localSpell("dragons-breath", "Dragon's Breath", 2, ["sorcerer", "wizard"], "1 bonus action", "Touch", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "A willing creature you touch can use its action to exhale a 15-foot cone of acid, cold, fire, lightning, or poison: each creature in the cone makes a Dexterity save, taking 3d6 damage on a failure, half on a success (+1d6 per slot level above 2nd)."),
+  localSpell("mind-spike", "Mind Spike", 2, ["sorcerer", "warlock", "wizard"], "1 action", "60 feet", ["S"], "Concentration, up to 1 hour", true,
+    "Wisdom save or take 3d8 psychic damage, half on a success. On a failure you also always know the target's location while the spell lasts, and it can't hide from you (+1d8 per slot level above 2nd)."),
+  localSpell("tashas-mind-whip", "Tasha's Mind Whip", 2, ["sorcerer", "wizard"], "1 action", "90 feet", ["V"], "1 round", false,
+    "Lash one creature's mind: Intelligence save or take 3d6 psychic damage, lose its reaction, and on its next turn choose only one of move, action, or bonus action; half damage only on a success (+1 target per slot level above 2nd)."),
+  localSpell("aganazzars-scorcher", "Aganazzar's Scorcher", 2, ["sorcerer", "wizard"], "1 action", "30 feet", ["V", "S", "M"], "Instantaneous", false,
+    "A 30-foot line of roaring flame 5 feet wide: each creature in it makes a Dexterity save, taking 3d8 fire damage on a failure, half on a success (+1d8 per slot level above 2nd)."),
+  localSpell("snillocs-snowball-swarm", "Snilloc's Snowball Swarm", 2, ["sorcerer", "wizard"], "1 action", "90 feet", ["V", "S", "M"], "Instantaneous", false,
+    "A flurry of magic snowballs bursts in a 5-foot-radius sphere: each creature there makes a Dexterity save, taking 3d6 cold damage on a failure, half on a success (+1d6 per slot level above 2nd)."),
+  localSpell("warding-wind", "Warding Wind", 2, ["bard", "druid", "sorcerer", "wizard"], "1 action", "Self", ["V"], "Concentration, up to 10 minutes", true,
+    "Deafening wind whirls in a 10-foot radius around you: it deafens creatures inside, extinguishes unprotected flames, disperses fog and gas, makes the area difficult terrain for others, and gives ranged weapon attacks through it disadvantage."),
+  localSpell("healing-spirit", "Healing Spirit", 2, ["druid", "ranger"], "1 bonus action", "60 feet", ["V", "S"], "Concentration, up to 1 minute", true,
+    "Summon a nature spirit in a 5-foot cube. When a creature you can see enters the cube or starts its turn there, you can have it regain 1d6 hit points; the spirit can heal a total of 1 + your spellcasting modifier times. A bonus action moves it 30 feet (+1d6 healing per slot level above 2nd)."),
+  localSpell("thunder-step", "Thunder Step", 3, ["sorcerer", "warlock", "wizard"], "1 action", "90 feet", ["V"], "Instantaneous", false,
+    "Teleport up to 90 feet with a thunderous crack: each creature within 10 feet of the space you left makes a Constitution save, taking 3d10 thunder damage on a failure, half on a success. You can bring one willing creature within 5 feet (+1d10 per slot level above 3rd)."),
+  localSpell("tidal-wave", "Tidal Wave", 3, ["druid", "sorcerer", "wizard"], "1 action", "120 feet", ["V", "S", "M"], "Instantaneous", false,
+    "A wave 30 feet long, 10 feet wide, and 10 feet tall crashes down: each creature in the area makes a Dexterity save, taking 4d8 bludgeoning damage and falling prone on a failure, half damage and no prone on a success. The water then spreads out, dousing unprotected flames."),
+  localSpell("erupting-earth", "Erupting Earth", 3, ["druid", "sorcerer", "wizard"], "1 action", "120 feet", ["V", "S", "M"], "Instantaneous", false,
+    "A 20-foot cube of ground churns and erupts: each creature in it makes a Dexterity save, taking 3d12 bludgeoning damage on a failure, half on a success; the area becomes difficult terrain until cleared (+1d12 per slot level above 3rd)."),
+  localSpell("intellect-fortress", "Intellect Fortress", 3, ["artificer", "bard", "sorcerer", "warlock", "wizard"], "1 action", "30 feet", ["V"], "Concentration, up to 1 hour", true,
+    "One willing creature gains resistance to psychic damage and advantage on Intelligence, Wisdom, and Charisma saving throws for the duration (+1 target per slot level above 3rd)."),
+  localSpell("spirit-shroud", "Spirit Shroud", 3, ["cleric", "paladin", "warlock", "wizard"], "1 bonus action", "Self", ["V", "S"], "Concentration, up to 1 minute", true,
+    "Spirits cloak you: your attacks against creatures within 10 feet deal +1d8 radiant, necrotic, or cold damage (your choice at cast), and a creature you hit can't regain hit points until the start of your next turn. Each turn one creature of your choice within 10 feet has its speed reduced by 10 feet. Bonus die increases by 1d8 per two slot levels above 3rd."),
+  localSpell("melfs-minute-meteors", "Melf's Minute Meteors", 3, ["sorcerer", "wizard"], "1 action", "Self", ["V", "S", "M"], "Concentration, up to 10 minutes", true,
+    "Create six tiny orbiting meteors. When you cast the spell and as a bonus action on later turns, fling one or two at points within 120 feet: each bursts in a 5-foot radius — Dexterity save or 2d6 fire damage, half on a success (+2 meteors per slot level above 3rd)."),
+  localSpell("life-transference", "Life Transference", 3, ["cleric", "wizard"], "1 action", "30 feet", ["V", "S"], "Instantaneous", false,
+    "Sacrifice vitality: you take 4d8 necrotic damage that can't be reduced, and one creature you can see regains hit points equal to twice the damage you took (+1d8 per slot level above 3rd)."),
+  localSpell("storm-sphere", "Storm Sphere", 4, ["sorcerer", "wizard"], "1 action", "150 feet", ["V", "S"], "Concentration, up to 1 minute", true,
+    "A 20-foot-radius sphere of whirling air: a creature that enters it or starts its turn there makes a Strength save or takes 2d6 bludgeoning damage, and as a bonus action each turn you can hurl a bolt from its center — ranged spell attack against a creature within 60 feet of the sphere for 4d6 lightning damage (lightning +1d6 per slot level above 4th)."),
+  localSpell("vitriolic-sphere", "Vitriolic Sphere", 4, ["sorcerer", "wizard"], "1 action", "150 feet", ["V", "S", "M"], "Instantaneous", false,
+    "A 20-foot-radius sphere of acid: Dexterity save — on a failure a creature takes 10d4 acid damage now and 5d4 more at the end of its next turn; on a success, half the initial damage and nothing later (initial damage +2d4 per slot level above 4th)."),
+  localSpell("shadow-of-moil", "Shadow of Moil", 4, ["warlock"], "1 action", "Self", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "Flame-like shadows wreathe you: you are heavily obscured to others, dim light within 10 feet of you becomes darkness, you have resistance to radiant damage, and a creature that hits you from within 10 feet takes 2d8 necrotic damage."),
+  localSpell("sickening-radiance", "Sickening Radiance", 4, ["sorcerer", "warlock", "wizard"], "1 action", "120 feet", ["V", "S"], "Concentration, up to 10 minutes", true,
+    "Dim greenish light fills a 30-foot-radius sphere: a creature that enters it or ends its turn there makes a Constitution save or takes 4d10 radiant damage, gains one level of exhaustion (removed when the spell ends), and emits a ghostly glow that negates invisibility."),
+  localSpell("guardian-of-nature", "Guardian of Nature", 4, ["druid", "ranger"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Transform into a nature spirit: Primal Beast (speed +10 feet, 120-foot darkvision, advantage on Strength-based attacks, melee hits deal +1d6 force) or Great Tree (10 temporary HP, advantage on Constitution saves and on Dexterity- and Wisdom-based attacks, ground within 15 feet is difficult terrain for enemies)."),
+  localSpell("steel-wind-strike", "Steel Wind Strike", 5, ["ranger", "wizard"], "1 action", "30 feet", ["S", "M"], "Instantaneous", false,
+    "Flash like the wind between up to five creatures within 30 feet: make a melee spell attack against each, dealing 6d10 force damage on a hit, then teleport to an unoccupied space within 5 feet of any one of the targets."),
+  localSpell("synaptic-static", "Synaptic Static", 5, ["bard", "sorcerer", "warlock", "wizard"], "1 action", "120 feet", ["V", "S"], "Instantaneous", false,
+    "A 20-foot-radius burst of psychic static: Intelligence save or take 8d6 psychic damage, half on a success. On a failure the creature also subtracts 1d6 from its attack rolls, ability checks, and concentration saves for 1 minute (Intelligence save at the end of each of its turns to end it)."),
+  localSpell("far-step", "Far Step", 5, ["sorcerer", "warlock", "wizard"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Teleport up to 60 feet to a space you can see, and do so again as a bonus action on each of your turns while the spell lasts."),
+  localSpell("holy-weapon", "Holy Weapon", 5, ["cleric", "paladin"], "1 bonus action", "Touch", ["V", "S"], "Concentration, up to 1 hour", true,
+    "A weapon you touch glows with bright light and deals +2d8 radiant damage on hits. As a bonus action you can end the spell in a radiant burst: each creature of your choice within 30 feet makes a Constitution save or takes 4d8 radiant damage and is blinded for 1 minute; half damage and no blindness on a success."),
+  localSpell("destructive-wave", "Destructive Wave", 5, ["paladin"], "1 action", "Self (30-foot radius)", ["V"], "Instantaneous", false,
+    "Divine power slams the ground: each creature you choose within 30 feet makes a Constitution save or takes 5d6 thunder damage plus 5d6 radiant or necrotic damage (your choice) and is knocked prone; half damage and no prone on a success."),
+  localSpell("mental-prison", "Mental Prison", 6, ["sorcerer", "warlock", "wizard"], "1 action", "60 feet", ["S"], "Concentration, up to 1 minute", true,
+    "Bind one creature in an illusory cell only it perceives: on a successful Intelligence save it takes 5d10 psychic damage and the spell ends; on a failure it takes the damage and is trapped — it can't see or hear beyond the illusion, and passing through it deals 10d10 psychic damage and ends the spell."),
+  localSpell("crown-of-stars", "Crown of Stars", 7, ["sorcerer", "warlock", "wizard"], "1 action", "Self", ["V", "S"], "1 hour", false,
+    "Seven star-like motes orbit your head. As a bonus action, fling one at a creature or object within 120 feet: ranged spell attack for 4d12 radiant damage. While four or more remain you shed bright light in a 30-foot radius (+2 motes per slot level above 7th)."),
+  localSpell("abi-dalzims-horrid-wilting", "Abi-Dalzim's Horrid Wilting", 8, ["sorcerer", "wizard"], "1 action", "150 feet", ["V", "S", "M"], "Instantaneous", false,
+    "Draw the moisture from a 30-foot cube: each creature in it makes a Constitution save, taking 12d8 necrotic damage on a failure, half on a success. Constructs and undead are immune, water elementals and plant creatures save with disadvantage, and nonmagical plants in the area wither."),
+  localSpell("psychic-scream", "Psychic Scream", 9, ["bard", "sorcerer", "warlock", "wizard"], "1 action", "90 feet", ["S"], "Instantaneous", false,
+    "Assault the minds of up to ten creatures: Intelligence save or take 14d6 psychic damage and be stunned, half damage and no stun on a success. A stunned target repeats the save at the end of each of its turns to end the effect.")
 ];
 
 const LOCAL_SPELL_INDEX = LOCAL_SPELLS.map(detail => ({

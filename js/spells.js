@@ -1,39 +1,105 @@
 let allSpells = mergeSpellLists(FALLBACK_SPELLS, LOCAL_SPELL_INDEX);
 let spellDetails = Object.fromEntries(LOCAL_SPELLS.map(detail => [detail.index, detail]));
+const expandedSpellRows = new Set();
+
+function spellSummaryHtml(row) {
+  if (!spellRowHasSpell(row)) return `<span class="muted">Pick a spell to see its summary.</span>`;
+  const level = spellLevelForRow(row);
+  const detail = row.custom || spellDetails[row.index] || {};
+  const text = [detail.desc].flat().filter(Boolean).join(" ");
+  // ponytail: save type and damage dice scraped from the description with regexes; matches SRD phrasing, misses exotic wording
+  const save = text.match(/(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav/i)?.[1];
+  const attack = /spell attack/i.test(text);
+  const dice = text.match(/\b\d+d\d+\b/)?.[0];
+  const cast = castingShorthand(row.custom ? row.custom.castingTime : detail.casting_time);
+  const parts = [
+    level === 0 ? "Cantrip" : ordinal(level),
+    cast,
+    save ? `${save.slice(0, 3).toUpperCase()} save` : attack ? "Spell attack" : "No save",
+    dice || ""
+  ].filter(Boolean);
+  return parts.map(part => `<span title="${escapeHtml(CAST_SHORTHAND_TITLES[part] || "")}">${escapeHtml(part)}</span>`).join("");
+}
+
+const CAST_SHORTHAND_TITLES = { A: "Action", B: "Bonus action", R: "Reaction" };
+
+function castingShorthand(time) {
+  const text = String(time || "").toLowerCase();
+  if (!text) return "";
+  if (text.includes("bonus")) return "B";
+  if (text.includes("reaction")) return "R";
+  if (text.includes("action")) return "A";
+  return text.replace(/(\d+)\s*minutes?/, "$1 min").replace(/(\d+)\s*hours?/, "$1 hr");
+}
 
 function ensureSubclassSpells() {
-  const grants = SUBCLASS_SPELLS[slug(character.subclassName || "")];
-  if (!grants) return;
-  const known = new Set(character.spells.map(row => row.index).filter(Boolean));
-  const granted = new Set(character.autoSpells || []);
-  let added = false;
+  const grants = SUBCLASS_SPELLS[slug(character.subclassName || "")] || {};
+  const entitled = new Set();
   Object.entries(grants).forEach(([grantLevel, indexes]) => {
-    if (character.level < Number(grantLevel)) return;
-    indexes.forEach(index => {
-      if (granted.has(index)) return;
-      const spellInfo = allSpells.find(item => item.index === index);
-      if (!spellInfo) return;
-      granted.add(index);
-      added = true;
-      if (!known.has(index)) {
-        character.spells.push({ id: crypto.randomUUID(), index, level: spellInfo.level, prepared: spellInfo.level > 0 });
-        known.add(index);
-      }
-    });
+    if (character.level >= Number(grantLevel)) indexes.forEach(index => entitled.add(index));
   });
-  if (added) {
+  const granted = new Set(character.autoSpells || []);
+  let changed = false;
+  granted.forEach(index => {
+    if (entitled.has(index)) return;
+    granted.delete(index);
+    character.spells = character.spells.filter(row => row.index !== index);
+    changed = true;
+  });
+  const known = new Set(character.spells.map(row => row.index).filter(Boolean));
+  entitled.forEach(index => {
+    if (granted.has(index)) return;
+    const spellInfo = allSpells.find(item => item.index === index);
+    if (!spellInfo) return;
+    granted.add(index);
+    changed = true;
+    if (!known.has(index)) {
+      character.spells.push({ id: crypto.randomUUID(), index, level: spellInfo.level, prepared: spellInfo.level > 0 });
+      known.add(index);
+    }
+  });
+  if (changed) {
     character.autoSpells = Array.from(granted);
     persist();
   }
 }
 
+function ensureItemSpells() {
+  const wanted = new Map();
+  (character.equipment || []).forEach(item => {
+    if (item.grantSpell) wanted.set(item.id, item.grantSpell);
+  });
+  let changed = false;
+  character.spells = character.spells.filter(row => {
+    if (!row.itemId) return true;
+    if (wanted.get(row.itemId) === row.index) {
+      wanted.delete(row.itemId);
+      return true;
+    }
+    changed = true;
+    return false;
+  });
+  wanted.forEach((index, itemId) => {
+    const spellInfo = allSpells.find(item => item.index === index);
+    if (!spellInfo) return;
+    character.spells.push({ id: crypto.randomUUID(), index, level: spellInfo.level, prepared: false, itemId });
+    changed = true;
+  });
+  if (changed) persist();
+}
+
+function itemForSpellRow(row) {
+  return row.itemId ? (character.equipment || []).find(item => item.id === row.itemId) : null;
+}
+
 function renderSpells() {
   ensureSubclassSpells();
+  ensureItemSpells();
   const cls = currentClass();
   const ability = cls.spellAbility;
   const spellMod = ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
   const preparedLimit = preparedLimitFor(cls);
-  const preparedUsed = character.spells.filter(row => spellRowHasSpell(row) && row.prepared && spellLevelForRow(row) > 0).length;
+  const preparedUsed = preparedSpellCount();
   document.querySelector("#spellAbility").textContent = ability === "none" ? "-" : ability.toUpperCase();
   document.querySelector("#spellDc").textContent = ability === "none" ? "-" : 8 + proficiencyBonus() + spellMod;
   document.querySelector("#spellAttack").textContent = ability === "none" ? "-" : formatMod(proficiencyBonus() + spellMod);
@@ -52,13 +118,15 @@ function renderSlots(cls) {
     slotGrid.innerHTML = `<div class="slot"><span>Slots</span><strong>-</strong></div>`;
     return;
   }
-  slotGrid.innerHTML = slots.map((count, index) => `
+  slotGrid.innerHTML = slots.map((count, index) => ({ count, level: index + 1 }))
+    .filter(item => item.count > 0)
+    .map(item => `
     <div class="slot slot-tracker">
-      <span>${ordinal(index + 1)}</span>
-      <strong>${slotRemaining(index + 1, count)} / ${count || "-"}</strong>
+      <span>${ordinal(item.level)}</span>
+      <strong>${slotRemaining(item.level, item.count)} / ${item.count}</strong>
       <div>
-        <button type="button" class="ghost" data-slot-level="${index + 1}" data-slot-delta="-1">Use</button>
-        <button type="button" class="ghost" data-slot-level="${index + 1}" data-slot-delta="1">Restore</button>
+        <button type="button" class="ghost" data-slot-level="${item.level}" data-slot-delta="-1">Use</button>
+        <button type="button" class="ghost" data-slot-level="${item.level}" data-slot-delta="1">Restore</button>
       </div>
     </div>
   `).join("");
@@ -85,8 +153,23 @@ function handleSpellCastClick(event) {
   if (!button) return;
   const row = spellRowForElement(button);
   if (!row || !spellRowHasSpell(row)) return;
+  const grantingItem = itemForSpellRow(row);
+  if (grantingItem) {
+    const uses = Number(grantingItem.grantUses || 0);
+    if (uses && Number(grantingItem.grantUsed || 0) >= uses) return;
+    if (uses) grantingItem.grantUsed = Number(grantingItem.grantUsed || 0) + 1;
+    const itemConcentration = spellConcentrationLabel(row);
+    if (itemConcentration) character.concentration = itemConcentration;
+    persistAndRender();
+    return;
+  }
   const baseLevel = spellLevelForRow(row);
   if (baseLevel === 0) {
+    const cantripConcentration = spellConcentrationLabel(row);
+    if (cantripConcentration) {
+      character.concentration = cantripConcentration;
+      persistAndRender();
+    }
     return;
   }
   const castLevel = Number(row.castLevel || button.dataset.castLevel || baseLevel);
@@ -141,11 +224,38 @@ function renderSpellRows() {
       const prepared = node.querySelector(".prepared-toggle");
       const remove = node.querySelector(".remove-spell");
       fillSpellSelect(select, spellSelectValue(row), spellChoices(row.index, level));
-      prepared.checked = level > 0 && row.prepared;
-      prepared.disabled = level === 0;
+      node.querySelector(".spell-summary").innerHTML = spellSummaryHtml(row);
+      const expand = node.querySelector(".spell-expand");
+      const syncExpand = () => {
+        const open = expandedSpellRows.has(row.id);
+        node.classList.toggle("is-expanded", open);
+        expand.textContent = open ? "▾" : "▸";
+      };
+      syncExpand();
+      expand.addEventListener("click", () => {
+        expandedSpellRows.has(row.id) ? expandedSpellRows.delete(row.id) : expandedSpellRows.add(row.id);
+        syncExpand();
+      });
+      const always = spellAlwaysPrepared(row);
+      const grantingItem = itemForSpellRow(row);
+      prepared.checked = always || (level > 0 && row.prepared && !grantingItem);
+      prepared.disabled = level === 0 || always || Boolean(grantingItem);
       if (level === 0) prepared.closest("label").classList.add("is-disabled");
+      if (always) {
+        const label = prepared.closest("label");
+        label.classList.add("is-always");
+        label.lastChild.textContent = " Always prepared";
+      }
+      if (grantingItem) {
+        const label = prepared.closest("label");
+        label.classList.add("is-always");
+        label.lastChild.textContent = ` From ${grantingItem.name || "item"}`;
+        select.disabled = true;
+        remove.style.display = "none";
+      }
       select.addEventListener("change", () => {
         if (select.value === CUSTOM_SPELL_VALUE) {
+          expandedSpellRows.add(row.id);
           row.index = "";
           row.custom = {
             name: row.custom?.name || "",
@@ -230,8 +340,10 @@ function spellLevelLabel(level) {
 function spellMatchesClass(item, cls) {
   const sources = new Set(cls.spellSources || []);
   if (sources.has("artificer") && ARTIFICER_SPELLS.has(item.index)) return true;
-  const grants = SUBCLASS_SPELLS[slug(character.subclassName || "")];
+  const subclassSlug = slug(character.subclassName || "");
+  const grants = SUBCLASS_SPELLS[subclassSlug];
   if (grants && Object.values(grants).some(list => list.includes(item.index))) return true;
+  if ((EXPANDED_SUBCLASS_SPELLS[subclassSlug] || []).includes(item.index)) return true;
   return (item.classes || []).some(classId => sources.has(classId));
 }
 
@@ -328,6 +440,18 @@ function renderPrepSuggestions() {
 
 function spellCastControls(row, baseLevel = spellLevelForRow(row)) {
   if (!spellRowHasSpell(row)) return "";
+  const grantingItem = itemForSpellRow(row);
+  if (grantingItem) {
+    const uses = Number(grantingItem.grantUses || 0);
+    const left = uses ? Math.max(0, uses - Number(grantingItem.grantUsed || 0)) : Infinity;
+    return `
+      <div class="spell-cast-controls">
+        <span>${escapeHtml(grantingItem.name || "Item")} · cast at base level, no slot</span>
+        <button type="button" class="secondary cast-spell" ${uses && !left ? "disabled" : ""}>Cast</button>
+        <em>${uses ? (left ? `${left} of ${uses} use${uses === 1 ? "" : "s"} left today` : "Spent — recharges on a long rest") : "At will"}</em>
+      </div>
+    `;
+  }
   if (baseLevel === 0) {
     return `
       <div class="spell-cast-controls">
@@ -457,5 +581,10 @@ function spellDisplayName(row) {
 }
 
 function preparedSpellCount() {
-  return character.spells.filter(row => row.prepared && spellRowHasSpell(row) && spellLevelForRow(row) > 0).length;
+  const always = new Set(character.autoSpells || []);
+  return character.spells.filter(row => row.prepared && spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !always.has(row.index)).length;
+}
+
+function spellAlwaysPrepared(row) {
+  return Boolean(row.index) && (character.autoSpells || []).includes(row.index);
 }

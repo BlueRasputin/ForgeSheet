@@ -19,10 +19,38 @@ function renderHeader() {
   document.querySelector("#initiativeValue").textContent = formatMod(mod("dex"));
   document.querySelector("#inspirationValue").textContent = character.inspiration;
   document.querySelector("#inspirationTile").classList.toggle("is-on", character.inspiration > 0);
-  const lock = document.querySelector("#abilityLock");
-  lock.classList.toggle("is-locked", character.abilitiesLocked);
-  lock.title = character.abilitiesLocked ? "Unlock ability score editing" : "Lock ability scores";
+  ["speedInput", "acInput", "hpInput", "maxHpInput", "tempHpInput"].forEach(id => {
+    document.querySelector(`#${id}`).disabled = character.identityLocked;
+  });
+  renderIdentityDisplay();
   renderAsiBanner();
+}
+
+function renderIdentityDisplay() {
+  const block = document.querySelector("#identityBlock");
+  block.classList.toggle("is-locked", character.identityLocked);
+  document.querySelector("#identityLock").title = character.identityLocked ? "Edit character details, scores, and stats" : "Done editing";
+  const classLine = [
+    `Level ${character.level}`,
+    character.species,
+    getClasses()[character.classId]?.name || ""
+  ].filter(Boolean).join(" ");
+  const detailLine = [
+    character.subclassName,
+    character.background,
+    character.alignment
+  ].filter(Boolean).join(" · ");
+  document.querySelector("#identityDisplay").innerHTML = `
+    <strong>${escapeHtml(character.name || "Unnamed Character")}</strong>
+    <span>${escapeHtml(classLine)}</span>
+    ${detailLine ? `<em>${escapeHtml(detailLine)}</em>` : ""}
+  `;
+}
+
+function toggleIdentityLock() {
+  character.identityLocked = !character.identityLocked;
+  character.asiAcknowledgedLevel = character.level;
+  persistAndRender();
 }
 
 function renderAsiBanner() {
@@ -34,16 +62,10 @@ function renderAsiBanner() {
     : "";
 }
 
-function toggleAbilityLock() {
-  character.abilitiesLocked = !character.abilitiesLocked;
-  character.asiAcknowledgedLevel = character.level;
-  persistAndRender();
-}
-
 function renderSheet() {
   ABILITIES.forEach(([id]) => {
     setValue(`[data-ability="${id}"]`, character.abilities[id]);
-    document.querySelector(`[data-ability="${id}"]`).disabled = character.abilitiesLocked;
+    document.querySelector(`[data-ability="${id}"]`).disabled = character.identityLocked;
     document.querySelector(`#${id}Mod`).textContent = formatMod(mod(id));
   });
   SKILLS.forEach(([id,, ability]) => {
