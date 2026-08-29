@@ -41,6 +41,7 @@ function defaultCharacter() {
     deathSaveSuccesses: 0,
     deathSaveFailures: 0,
     saveProficiencies: ["con", "int"],
+    expertSkills: [],
     attacks: "",
     features: "",
     inventory: "",
@@ -276,8 +277,15 @@ function proficiencyBonus(level = character.level) {
   return Math.ceil(level / 4) + 1;
 }
 
+function skillBonus(skill, ability) {
+  const proficient = character.proficientSkills.includes(skill);
+  const expert = (character.expertSkills || []).includes(skill);
+  return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : 0);
+}
+
 function passivePerception(source = character) {
   const wisdom = source.abilities?.wis ?? 10;
   const wisMod = Math.floor((wisdom - 10) / 2);
-  return 10 + wisMod + (source.proficientSkills?.includes("perception") ? proficiencyBonus(source.level) : 0);
+  const multiplier = source.expertSkills?.includes("perception") ? 2 : 1;
+  return 10 + wisMod + (source.proficientSkills?.includes("perception") ? proficiencyBonus(source.level) * multiplier : 0);
 }

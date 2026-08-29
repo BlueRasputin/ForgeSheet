@@ -225,8 +225,15 @@ function getClasses() {
   return { ...BUILT_IN_CLASSES, ...customClasses };
 }
 
+// Martial subclasses that turn their class into a third caster (INT, wizard list).
+const THIRD_CASTER_SUBCLASSES = new Set(["eldritch-knight", "arcane-trickster"]);
+
 function currentClass() {
-  return getClasses()[character.classId] || BUILT_IN_CLASSES.artificer;
+  const cls = getClasses()[character.classId] || BUILT_IN_CLASSES.artificer;
+  if (cls.casterType === "none" && THIRD_CASTER_SUBCLASSES.has(slug(character.subclassName || ""))) {
+    return { ...cls, casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"] };
+  }
+  return cls;
 }
 
 function spellSlotsFor(cls, level = character.level) {

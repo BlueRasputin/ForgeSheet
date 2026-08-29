@@ -48,6 +48,7 @@ function buildStaticControls() {
     <label class="skill-row">
       <input data-skill="${id}" type="checkbox">
       <span class="skill-name">${name} <em>${ability.toUpperCase()}</em></span>
+      <button type="button" class="expertise-toggle" data-expert-skill="${id}" title="Toggle expertise (double proficiency)">★</button>
       <button type="button" class="mod-chip" id="${id}Skill" data-roll-skill="${id}" title="Roll ${name}">+0</button>
     </label>
   `).join("");
@@ -93,6 +94,12 @@ function bindEvents() {
     if (button) rollAbilityCheck(button.dataset.rollAbility);
   });
   document.querySelector("#skills").addEventListener("click", event => {
+    const expertButton = event.target.closest("[data-expert-skill]");
+    if (expertButton) {
+      event.preventDefault();
+      toggleExpertise(expertButton.dataset.expertSkill);
+      return;
+    }
     const button = event.target.closest("[data-roll-skill]");
     if (button) {
       event.preventDefault();

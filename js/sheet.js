@@ -70,10 +70,14 @@ function renderSheet() {
   });
   SKILLS.forEach(([id,, ability]) => {
     document.querySelector(`[data-skill="${id}"]`).checked = character.proficientSkills.includes(id);
-    const bonus = mod(ability) + (character.proficientSkills.includes(id) ? proficiencyBonus() : 0);
-    document.querySelector(`#${id}Skill`).textContent = formatMod(bonus);
+    document.querySelector(`#${id}Skill`).textContent = formatMod(skillBonus(id, ability));
+    const expert = (character.expertSkills || []).includes(id);
+    const star = document.querySelector(`[data-expert-skill="${id}"]`);
+    star.classList.toggle("is-expert", expert);
+    star.title = expert ? "Expertise active — double proficiency" : "Toggle expertise (double proficiency)";
   });
-  document.querySelector("#skillSummary").textContent = `${character.proficientSkills.length} proficient`;
+  const expertCount = (character.expertSkills || []).length;
+  document.querySelector("#skillSummary").textContent = `${character.proficientSkills.length} proficient${expertCount ? ` · ${expertCount} expertise` : ""}`;
   renderSavingThrows();
   renderSenses();
   renderDeathSaves();
@@ -196,8 +200,7 @@ function renderSenses() {
   const senses = [["perception", "Passive Perception"], ["investigation", "Passive Investigation"], ["insight", "Passive Insight"]];
   document.querySelector("#senses").innerHTML = senses.map(([skill, label]) => {
     const ability = SKILLS.find(([id]) => id === skill)[2];
-    const bonus = mod(ability) + (character.proficientSkills.includes(skill) ? proficiencyBonus() : 0);
-    return `<div class="sense-row"><strong>${10 + bonus}</strong><span>${label}</span></div>`;
+    return `<div class="sense-row"><strong>${10 + skillBonus(skill, ability)}</strong><span>${label}</span></div>`;
   }).join("");
 }
 
@@ -224,7 +227,21 @@ function renderDeathSaves() {
 function handleSkillInput(event) {
   const skill = event.target.dataset.skill;
   character.proficientSkills = character.proficientSkills.filter(item => item !== skill);
-  if (event.target.checked) character.proficientSkills.push(skill);
+  if (event.target.checked) {
+    character.proficientSkills.push(skill);
+  } else {
+    character.expertSkills = (character.expertSkills || []).filter(item => item !== skill);
+  }
+  persistAndRender();
+}
+
+function toggleExpertise(skill) {
+  const expert = (character.expertSkills || []).includes(skill);
+  character.expertSkills = (character.expertSkills || []).filter(item => item !== skill);
+  if (!expert) {
+    character.expertSkills.push(skill);
+    if (!character.proficientSkills.includes(skill)) character.proficientSkills.push(skill);
+  }
   persistAndRender();
 }
 

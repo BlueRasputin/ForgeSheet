@@ -1,4 +1,60 @@
+// RAW uses and recharge timing for each class's core limited features (2014 rules).
+function classFeatureTrackers(cls = currentClass(), level = character.level) {
+  const chaMod = Math.max(1, mod("cha"));
+  const byClass = {
+    fighter: [
+      ["Second Wind", 1, "short"],
+      level >= 2 ? ["Action Surge", level >= 17 ? 2 : 1, "short"] : null,
+      level >= 9 ? ["Indomitable", level >= 17 ? 3 : level >= 13 ? 2 : 1, "long"] : null
+    ],
+    monk: [level >= 2 ? ["Ki Points", level, "short"] : null],
+    druid: [level >= 2 ? ["Wild Shape", 2, "short"] : null],
+    cleric: [level >= 2 ? ["Channel Divinity", level >= 18 ? 3 : level >= 6 ? 2 : 1, "short"] : null],
+    paladin: [
+      ["Divine Sense", chaMod + 1, "long"],
+      ["Lay on Hands (HP pool)", level * 5, "long"],
+      level >= 3 ? ["Channel Divinity", 1, "short"] : null
+    ],
+    bard: [["Bardic Inspiration", chaMod, level >= 5 ? "short" : "long"]],
+    sorcerer: [level >= 2 ? ["Sorcery Points", level, "long"] : null],
+    barbarian: [["Rage", level >= 17 ? 6 : level >= 12 ? 5 : level >= 6 ? 4 : level >= 3 ? 3 : 2, "long"]],
+    wizard: [["Arcane Recovery", 1, "long"]],
+    artificer: [level >= 7 ? ["Flash of Genius", Math.max(1, mod("int")), "long"] : null],
+    bloodhunter: [["Blood Maledict", level >= 17 ? 4 : level >= 13 ? 3 : level >= 6 ? 2 : 1, "short"]]
+  };
+  return (byClass[cls.id] || []).filter(Boolean).map(([name, max, reset]) => ({ name, max, reset }));
+}
+
+function ensureClassResources() {
+  const expected = classFeatureTrackers();
+  const manualNames = new Set(character.resources.filter(item => !item.auto).map(item => item.name.toLowerCase()));
+  let changed = false;
+  character.resources = character.resources.filter(item => {
+    if (!item.auto) return true;
+    if (expected.some(feature => feature.name === item.name)) return true;
+    changed = true;
+    return false;
+  });
+  expected.forEach(feature => {
+    if (manualNames.has(feature.name.toLowerCase())) return;
+    const existing = character.resources.find(item => item.auto && item.name === feature.name);
+    if (existing) {
+      if (existing.max !== feature.max || existing.reset !== feature.reset) {
+        existing.current = clamp(Number(existing.current || 0) + Math.max(0, feature.max - existing.max), 0, feature.max);
+        existing.max = feature.max;
+        existing.reset = feature.reset;
+        changed = true;
+      }
+      return;
+    }
+    character.resources.push({ id: crypto.randomUUID(), name: feature.name, current: feature.max, max: feature.max, reset: feature.reset, auto: true });
+    changed = true;
+  });
+  if (changed) persist();
+}
+
 function renderPlayTools() {
+  ensureClassResources();
   renderCombatDashboard();
   renderDiceRoller();
   renderRestPreview();
@@ -145,8 +201,7 @@ function rollSavingThrow(ability) {
 function rollSkillCheck(skill) {
   const [, name, ability] = SKILLS.find(([id]) => id === skill) || [];
   if (!name) return;
-  const bonus = mod(ability) + (character.proficientSkills.includes(skill) ? proficiencyBonus() : 0);
-  rollFromInput(`${name} check`, `1d20${formatMod(bonus)}`);
+  rollFromInput(`${name} check`, `1d20${formatMod(skillBonus(skill, ability))}`);
 }
 
 function rollInitiativeCheck() {
@@ -236,7 +291,7 @@ function renderRestPreview() {
   document.querySelector("#hitDiceSummary").textContent = `${Math.max(0, character.level - character.hitDiceUsed)} / ${character.level} hit dice available`;
   document.querySelector("#restPreview").innerHTML = `
     <article><strong>Short rest</strong><span>${escapeHtml(shortRefresh.join(", ") || "No short-rest resources tracked.")}</span></article>
-    <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, ${escapeHtml(longRefresh.join(", ") || "no tracked resources")}</span></article>
+    <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, item spell uses${longRefresh.length ? `, ${escapeHtml(longRefresh.join(", "))}` : ""}</span></article>
   `;
 }
 

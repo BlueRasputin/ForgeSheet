@@ -3233,3 +3233,17 @@ body.print-compact textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.expertise-toggle {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--muted) 45%, transparent);
+  font-size: 0.85rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.expertise-toggle.is-expert {
+  color: var(--accent);
+}
