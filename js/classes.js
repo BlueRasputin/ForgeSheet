@@ -371,9 +371,12 @@ function saveCustomClass() {
 function parseClassTable(text) {
   const rows = {};
   text.split("\n").forEach(line => {
-    const [level, features = "", newSpells = "0", cantrips = "0"] = line.split(",");
-    const number = Number(level);
-    if (number >= 1 && number <= 20) rows[number] = [features.trim(), Number(newSpells), Number(cantrips)];
+    // "level, features, new spells, cantrips": only the first and last two commas are separators.
+    const parts = line.split(",");
+    const number = Number(parts[0]);
+    const numeric = parts.length >= 4 ? parts.slice(-2) : ["0", "0"];
+    const features = (parts.length >= 4 ? parts.slice(1, -2) : parts.slice(1)).join(",").trim();
+    if (number >= 1 && number <= 20) rows[number] = [features, Number(numeric[0]) || 0, Number(numeric[1]) || 0];
   });
   return makeTable(rows);
 }
@@ -413,7 +416,7 @@ function renderOfficialSubclassControls() {
   detail.innerHTML = `
     <div><span>SRD Class</span><strong>${official.className}</strong></div>
     <div><span>Subclass Type</span><strong>${official.flavor || "Subclass"}</strong></div>
-    <p>${truncate((official.desc || []).join(" "), 380) || "Description will appear when API details finish loading."}</p>
+    <p>${truncate((official.desc || []).join(" "), 380) || (subclassApiStatus === "ready" ? "This subclass isn't in the free SRD, so no description is bundled. Record its features in the sections below." : "Description will appear when API details finish loading.")}</p>
   `;
   if (!(official.desc || []).length) loadOfficialSubclassDetail(official.index);
 }

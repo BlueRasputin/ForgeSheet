@@ -22,6 +22,7 @@ function renderEquipment() {
         .slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
         .map(spell => `<option value="${spell.index}">${escapeHtml(spell.name)} (${spell.level === 0 ? "Cantrip" : ordinal(spell.level)})</option>`).join("");
       grantSelect.value = item.grantSpell || "";
+      node.querySelector(".equipment-spell").open = Boolean(item.grantSpell);
       node.querySelector(".equipment-grant-uses").value = item.grantUses || "";
       root.appendChild(node);
     });

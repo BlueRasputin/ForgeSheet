@@ -24,14 +24,19 @@
             </select>
           </label>
           <button id="rulesButton" class="ghost" type="button">Rules</button>
-          <button id="backgroundUpload" class="ghost" type="button">Backdrop</button>
+          <details class="file-menu">
+            <summary class="ghost">File ▾</summary>
+            <div class="file-menu-items">
+              <button id="importSheetButton" class="ghost" type="button">Import PDF or text sheet…</button>
+              <button id="importJsonButton" class="ghost" type="button">Import ForgeSheet JSON…</button>
+              <button id="exportJsonButton" class="ghost" type="button">Export JSON backup</button>
+              <button id="printSheetButton" class="ghost" type="button">Print sheet</button>
+              <button id="backgroundUpload" class="ghost" type="button">Set backdrop image…</button>
+              <button id="saveCharacter" class="ghost" type="button">Save now</button>
+              <button id="resetCharacter" class="danger" type="button">Reset this sheet…</button>
+            </div>
+          </details>
           <input id="backgroundFile" type="file" accept="image/*" hidden>
-          <button id="importSheetButton" class="ghost">Import Sheet</button>
-          <button id="exportJsonButton" class="ghost">Export</button>
-          <button id="printSheetButton" class="ghost">Print</button>
-          <button id="importJsonButton" class="ghost">Import JSON</button>
-          <button id="saveCharacter" class="ghost">Save</button>
-          <button id="resetCharacter" class="danger">Reset</button>
           <button id="shortRestButton" class="secondary" type="button">Short Rest</button>
           <button id="longRestButton" class="secondary" type="button">Long Rest</button>
           <button id="checklistButton" class="secondary" type="button">Checklist</button>
@@ -856,8 +861,8 @@
     <template id="equipmentRowTemplate">
       <article class="equipment-row">
         <input class="equipment-name" placeholder="Item name">
-        <input class="equipment-qty" type="number" min="0" step="1" aria-label="Quantity">
-        <input class="equipment-weight" type="number" min="0" step="0.01" aria-label="Weight each">
+        <label class="equipment-number">Qty <input class="equipment-qty" type="number" min="0" step="1"></label>
+        <label class="equipment-number">Lb each <input class="equipment-weight" type="number" min="0" step="0.01"></label>
         <select class="equipment-container" aria-label="Container">
           <option value="carried">Carried</option>
           <option value="equipped">Equipped</option>
@@ -870,14 +875,15 @@
         <label class="inline-check"><input type="checkbox" class="equipment-attuned"> Attuned</label>
         <textarea class="equipment-notes" rows="2" placeholder="Notes, charges, container, magic item details..."></textarea>
         <button class="ghost remove-equipment" type="button">Remove</button>
-        <div class="equipment-spell">
+        <details class="equipment-spell">
+          <summary>Magic item: grants a spell</summary>
           <label>Grants spell
             <select class="equipment-grant-spell"></select>
           </label>
           <label>Uses per long rest
             <input class="equipment-grant-uses" type="number" min="0" step="1" placeholder="At will">
           </label>
-        </div>
+        </details>
       </article>
     </template>
 

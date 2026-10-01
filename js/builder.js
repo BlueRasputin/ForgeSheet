@@ -45,8 +45,8 @@ function builderStepTab(id) {
   return {
     identity: "background",
     class: "features",
-    abilities: "actions",
-    proficiencies: "actions",
+    abilities: "#abilities",
+    proficiencies: "#skills",
     equipment: "inventory",
     spells: "spells",
     personality: "background"
@@ -55,7 +55,21 @@ function builderStepTab(id) {
 
 function handleBuilderWizardClick(event) {
   const button = event.target.closest("[data-builder-tab]");
-  if (button) activateTab(button.dataset.builderTab);
+  if (button) goToTarget(button.dataset.builderTab);
+}
+
+// Tab names open a tab; "#id" targets live in the always-visible sheet, so scroll there and highlight.
+function goToTarget(target) {
+  if (!target.startsWith("#")) {
+    activateTab(target);
+    return;
+  }
+  const element = document.querySelector(target);
+  if (!element) return;
+  element.scrollIntoView({ behavior: "smooth", block: "center" });
+  element.classList.remove("flash-target");
+  void element.offsetWidth;
+  element.classList.add("flash-target");
 }
 
 function renderBackgroundTools() {
@@ -241,8 +255,9 @@ function openLevelDialog() {
     <div>Hit points: add an average ${Math.ceil(cls.hitDie / 2) + 1 + mod("con")} HP, or edit manually after applying.</div>
     <div>Hit dice: ${nextLevel}d${cls.hitDie}</div>
     <div>Features: ${row.features || "No class-table feature entered."}</div>
-    <div>Spell slots: ${spellSlotsFor(cls, nextLevel).join(" / ") || "none"}</div>
-    <div>Prepared spell limit: ${preparedLimitFor(cls, nextLevel)}</div>
+    ${cls.casterType === "none" ? "" : `
+    <div>Spell slots: ${spellSlotsFor(cls, nextLevel).map((count, index) => count ? `${ordinal(index + 1)} ×${count}` : "").filter(Boolean).join(" · ") || "none yet"}</div>
+    <div>${cls.preparedFormula === "known" ? "Spells known" : "Prepared spell limit"}: ${preparedLimitFor(cls, nextLevel)}</div>`}
   `;
   const choices = document.querySelector("#levelSpellChoices");
   choices.innerHTML = "";
@@ -265,7 +280,7 @@ function openLevelDialog() {
     });
     choices.appendChild(wrapper);
   }
-  if (!totalChoices) choices.innerHTML = `<p class="muted">No spell selections are required for this level.</p>`;
+  if (!totalChoices) choices.innerHTML = cls.casterType === "none" ? "" : `<p class="muted">No spell selections are required for this level.</p>`;
   document.querySelector("#levelDialog").showModal();
 }
 
@@ -541,8 +556,8 @@ function levelChecklist() {
     ["Identity", "Name, species, and background chosen.", Boolean(character.name && character.species && character.background), "background"],
     // ponytail: subclass required at level 3 for everyone; some classes pick at 1-2, refine per-class if it matters
     ["Subclass", level >= 3 ? "Choose and record your subclass." : "Chosen at level 3 for most classes.", level < 3 || Boolean(character.subclassName), "features"],
-    ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "actions"],
-    ["Skills", "Pick your skill proficiencies.", (character.proficientSkills || []).length > 0, "actions"],
+    ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
+    ["Skills", "Pick your skill proficiencies.", (character.proficientSkills || []).length > 0, "#skills"],
     ["Hit Dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
     ["Hit Points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
     ["ASI / Feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level} — record each in the Builder planner.`, featCount >= asiCount, "builder"],

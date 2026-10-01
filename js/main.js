@@ -117,6 +117,13 @@ function bindEvents() {
   document.querySelector("#rollInitiative").addEventListener("click", rollInitiativeCheck);
   document.querySelector("#inspirationAdd").addEventListener("click", gainInspiration);
   document.querySelector("#inspirationSpend").addEventListener("click", spendInspiration);
+  const fileMenu = document.querySelector(".file-menu");
+  fileMenu.addEventListener("click", event => {
+    if (event.target.closest(".file-menu-items button")) fileMenu.open = false;
+  });
+  document.addEventListener("click", event => {
+    if (fileMenu.open && !fileMenu.contains(event.target)) fileMenu.open = false;
+  });
   document.querySelector("#rulesButton").addEventListener("click", () => document.querySelector("#rulesDialog").showModal());
   document.querySelector("#closeRulesDialog").addEventListener("click", () => document.querySelector("#rulesDialog").close());
   document.querySelector("#closeClassBuilder").addEventListener("click", () => document.querySelector("#classBuilderDialog").close());
@@ -197,7 +204,7 @@ function bindEvents() {
     const button = event.target.closest("[data-checklist-tab]");
     if (!button) return;
     document.querySelector("#checklistDialog").close();
-    activateTab(button.dataset.checklistTab);
+    goToTarget(button.dataset.checklistTab);
   });
   document.querySelector("#confirmLevelUp").addEventListener("click", applyLevelUp);
   document.querySelector("#newCustomClass").addEventListener("click", startCustomClassDraft);

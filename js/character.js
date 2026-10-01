@@ -279,7 +279,7 @@ function applyCustomBackground() {
   const data = localStorage.getItem(BACKGROUND_KEY);
   document.body.classList.toggle("custom-bg", Boolean(data));
   document.body.style.setProperty("--custom-bg", data ? `url(${data})` : "none");
-  document.querySelector("#backgroundUpload").textContent = data ? "Clear Backdrop" : "Backdrop";
+  document.querySelector("#backgroundUpload").textContent = data ? "Clear backdrop image" : "Set backdrop image…";
 }
 
 function handleBackgroundButton() {
