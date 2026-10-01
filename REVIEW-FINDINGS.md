@@ -340,6 +340,127 @@ Six testers each simulated a 3-hour session and tallied what they touched:
   - An initiative order with a Next turn button.
   - "Call a save", which highlights every player's modifier.
 
+## Round 5: critical combat trial on the sidebar layout (2026-10-01, commit 74a805c)
+
+Eight critical testers ran the same 4-round fight ("Ambush at the Drowned Chapel": a wight and 4 ghouls, paralysis save, necrotic DEX-save burst with concentration checks, Liam at 0 HP, life drain, short rest). They used positions measured in the browser plus the code. No changes were made; everything below is a proposal.
+
+**Time spent per tester (4 rounds + short rest):**
+
+| Tester | Device | Time | Notes |
+|---|---|---|---|
+| Liam, wizard 2 | laptop | 115s | |
+| Laura, rogue 5 | laptop | 178s | |
+| Sam, sorcerer 9 | laptop | 180s | |
+| Ashley, druid 6 | laptop | 202s | |
+| Travis (Grog), fighter 6 | laptop | 215s | |
+| Marisha, monk 4 | phone | 325s | 38 taps' worth of scrolling |
+| Taliesin, warlock 7 | laptop | 325s | |
+| Matt, DM | laptop | 505s | everything repeated per character |
+
+### Bugs (confirmed in code)
+1. **Play mode still toggles proficiency** (Laura, Marisha).
+   - Skill rows and the ability-card "Save" are `<label>` elements wrapping the checkbox, so clicking a skill or save name toggles proficiency even though the checkbox is styled `pointer-events: none`.
+   - Laura clicked "Stealth" to Hide and silently lost Stealth expertise.
+   - Fix: make the rows non-label elements, or disable `[data-skill]` / `[data-save]` while the sheet is locked.
+2. **Enter in the HP amount field always deals damage** (Liam, Travis, Sam).
+   - Typing a heal and pressing Enter hurts you; at 0 HP it adds a death-save failure.
+   - There's no damage toast and no undo.
+3. **Silent, sticky upcast** (Sam).
+   - When base-level slots run out, `quickCastState` writes `row.castLevel` to the next open level during render.
+   - Spamming Cast burned 3rd, then 4th, then 5th-level slots, and the spell stays "Cast 5th" after a long rest.
+4. **Spell-attack toasts lose the damage roll** (Liam, Sam, Taliesin).
+   - Any toast action closes the toast, so "Roll attack" removes "Roll damage".
+   - Spell attacks get no crit doubling.
+   - "Roll attack x2" (Eldritch Blast beams) rolls one d20.
+5. **Healing a target heals the caster** (Ashley). The "Apply +X HP" button on Healing Word / Cure Wounds heals the open sheet, and at full HP it still reports "Healed 4".
+6. **Toast stack drops actions** (Travis). The stack is capped at 3, so attack 1's "Roll damage" vanishes during Extra Attack + Action Surge.
+7. **HP input edge cases** (Sam):
+   - Current HP accepts values above max (it is clamped only at 999).
+   - The heal toast reports the typed amount, not the amount applied.
+   - Ordinary damage shows no feedback at all.
+8. **Re-casting the concentration spell you already hold gives no warning** (Sam).
+9. **Hex's cast toast offers "Roll damage (1d6)"** (Taliesin), though Hex deals no damage on casting.
+10. **Sleep's pool roll is labelled "Roll damage"** (Liam).
+11. **Arcane Recovery is ignored by the short-rest flow** (Liam).
+
+### Rules gaps
+- **Conditions only affect attack rolls** (Travis, Marisha, Laura, Matt):
+  - Paralyzed, Stunned, Unconscious and Petrified should auto-fail STR/DEX saves.
+  - Restrained should give disadvantage on DEX saves.
+  - Paralyzed should warn on Attack.
+  - The "repeat the save each turn" reminder is missing.
+- **Advantage and disadvantage don't cancel** (Laura, Sam). Prone forces disadvantage even when Advantage is set.
+- **Life drain / max-HP reduction has no home** (all 8). Max HP is locked in play mode, and Edit makes it a permanent build change that a long rest won't restore.
+- **Dropping to 0 HP doesn't add Prone with Unconscious** (Liam), and there is no "Stand up (half speed)" step (Marisha, Laura).
+- **Concentration never expires** before a long rest (Ashley).
+- **Hexblade** (Taliesin):
+  - Hex Warrior isn't modelled: pact weapon attacks use STR/DEX, not CHA.
+  - Hex +1d6, Agonizing Blast and the Curse's +prof and crit-on-19 are never applied.
+  - Armor of Agathys grants no temp HP and has no retaliation reminder.
+- **Class kits are incomplete:**
+  - Monk: Flurry, Patient Defense, Step of the Wind and Deflect Missiles are missing (Marisha).
+  - Rogue: Sneak Attack, Cunning Action and Uncanny Dodge rows are missing, and Sneak Attack isn't doubled on a crit (Laura).
+  - Fighter: Second Wind, Action Surge and Superiority Dice don't roll, and maneuvers show no DC (Travis).
+  - Sorcerer: no Metamagic or Flexible Casting, and Clockwork Soul has no tracker (Sam).
+  - Druid: Wild Shape has no beast HP pool (Ashley).
+  - Monk speed doesn't add Unarmored Movement (Marisha).
+
+### Layout and flow
+- **The roll mode is one global select at the bottom of Combat, and it stays set** (Laura, Travis, Taliesin, Sam). Advantage requires scrolling down and back, and the next save or initiative silently inherits it.
+  - Proposal: Adv/Norm/Dis toggles on attack buttons, save chips and toasts, resetting after each roll.
+- **Skills and passives are below the fold at 1440x900** (Laura, Ashley, Sam, Liam, Travis): passives at y 857 to 983, the Skills header at y 942 to 1008, Insight at about y 1190.
+  - Proposals:
+    - passive Perception as a stat tile
+    - a separately scrolling lower sidebar under a sticky HP and tiles block
+    - search that rolls skills
+- **Combat tab order** (Laura, Ashley, Sam, Taliesin):
+  - Spell cards (up to 17) push Actions, Resources and Conditions below the fold.
+  - Third-casters and hybrids want weapons first.
+  - Empty Actions and Resources blocks still take space.
+  - Proposals: order by class, hide empty blocks, group spell cards by level, mark concentration spells, put class resources beside the slots.
+- **Concentration damage spells can't re-roll damage** without spending a slot (Ashley: Moonbeam, Spike Growth). Proposal: a "Roll damage" chip on the card for the spell you are concentrating on.
+- **Duplicate controls** (Liam, Sam, Taliesin, Ashley):
+  - Slot "Use" next to Cast invites double spending.
+  - Fireball and Fire Bolt action rows roll without spending slots.
+  - Hit dice Spend appears twice.
+  - Concentration appears in up to four places.
+- **Death saves at 0 HP** (Liam):
+  - Roll death save is a ghost button next to an unconfirmed Reset.
+  - The block grows the sidebar by about 100px mid-fight.
+  - Proposals: primary Roll, Reset behind a confirmation, and the block replaces the HP fields instead of adding height.
+- **The hit dice Spend button sits right under Damage/Heal** (Marisha), and is easy to tap by mistake with no confirmation.
+- **Phone** (Marisha):
+  - HP, ki and Attack are about 500 to 1000px apart.
+  - The tabs aren't sticky.
+  - Opened sidebar sections stay open and push Combat further down.
+  - The Rest menu is only at the page top.
+- **Edit mode carries over per sheet** (Matt, Marisha). Marisha and Grog Ironhide open in Edit, which shifts everything 190px. Proposal: open sheets in play mode, and make Edit more visible than a 3px ring.
+- **The Initiative tile doesn't look clickable** (Taliesin).
+- **Toast position** (Travis): the toast stack covers Conditions and the Dice roller. Proposal: bottom-right, and keep toasts that still have actions.
+
+### DM tools (Matt)
+- **The Party view only shows characters stored on this device.**
+  - Synced player sheets appear only in the Campaign roster, which has no HP bars, sorting or conditions.
+  - DM edits don't sync back.
+- **No encounter or initiative tracker:**
+  - Initiative is the latest roll from history, so it can be stale from a previous session.
+  - No enemies, turn pointer, round counter or tie-break.
+- **Roll toasts and history don't name the character.**
+- **Conditions are the faintest text on party cards**, and setting one jumps to the Combat tab.
+- **The "Most hurt" default sort reorders cards after every hit.**
+- **No group actions.** Proposal: select cards, then group save (DC), damage full/half by result, and short rest.
+- **Cards lack passive Insight, passive Investigation and save bonuses.**
+- **Test characters** ("New Character", "Vex Orrin (BLM)", "Grog Ironhide") pollute party totals. Proposal: a "Hide from party" toggle.
+
+### What testers said worked
+- Initiative, AC, HP, Damage/Heal and the first row of save chips are visible without scrolling on desktop; each is one click.
+- The concentration prompt under HP computes the DC correctly and takes one click.
+- Temp HP absorbs damage first; massive-damage death, death-save state, natural 1 and natural 20 are all handled.
+- Prone automatically gives attack disadvantage and says why.
+- Pact slots auto-select 4th level.
+- The short-rest toast recharges resources and chains "Spend a hit die", with Undo.
+- Passive Perception and Dying / Concentrating badges on party cards answer DM questions without opening sheets.
+
 ## Still to do
 
 - Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley
