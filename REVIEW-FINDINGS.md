@@ -201,7 +201,9 @@ Fixed in 4f84732, 12145e4, a5b82f1:
   with bars, badges, click-to-switch; dice formula validation; cantrip caps
 - 404 refetch loop for non-SRD subclasses (found while verifying)
 
-Pending the owner's decision (Brennan's top 5 formatting changes; preview screenshots taken):
+Owner approved all five formatting changes; applied in a60c967 and f8bd14c (see below).
+
+Brennan's top 5 formatting changes (applied):
 1. Notched frame only in the header band, plain cards elsewhere
 2. Page scroll with a sticky tab bar instead of the fixed-height shell with three inner scrollers
 3. One type scale and three button roles (Level Up the only filled top-bar button)
@@ -211,6 +213,27 @@ Pending the owner's decision (Brennan's top 5 formatting changes; preview screen
 Still open: compact read-only inventory rows; Campaign tab "Advanced" config disclosure; Disciple
 of Life bonus on healing; choose who's in the party; bard Expertise/Magical Secrets prompts and an
 Entertainer background; level-up picker duplicate selection; banners shifting the tab bar.
+
+## Combat trial re-run (after round 2 + formatting)
+
+Same method as the original study: open the Actions tab at the top of the page and measure how
+far each control sits below the fold (scroll px), with a level-5 Paladin carrying 5 actions.
+
+| Combat beat | 1440×900 before | 1440×900 after | 1024×768 after |
+|---|---|---|---|
+| Initiative, damage/heal, rests | visible | visible | visible |
+| Weapon attack | 2,156 px | visible | visible |
+| See the roll result | off-screen (scroll-hunt) | toast, always visible | toast |
+| Damage roll after attack | type formula | 1 tap in the toast | 1 tap |
+| Cast a spell | tab + scroll + caret + Cast | tab + Cast (visible) | tab + Cast |
+| Death save while dying | 881 px down the Actions tab | header banner, visible | visible |
+| Resources / conditions | 605 px | 321–377 px | 608–663 px |
+| Saving throw / skill check | visible | visible | visible / 9 px |
+
+Resources sit lower when a character has many actions (5 here); with 2–3 they're ~200 px higher.
+Phone: the tab bar and attacks come first and the tab bar stays pinned; saves and skills follow
+the panel (1.5–2 screens down). The browser pane's phone emulation renders at 714 CSS px, so
+exact phone numbers need a real device.
 
 ## Still to do
 
