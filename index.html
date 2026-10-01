@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
-    <link rel="stylesheet" href="./styles.css?v=23">
+    <link rel="stylesheet" href="./styles.css?v=24">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to the sheet</a>
@@ -21,220 +21,204 @@
         <div class="brand">
           <span class="brand-mark"><i class="ph ph-sword" aria-hidden="true"></i></span>
           <div>
-            <p class="eyebrow">5e character builder</p>
             <h1>ForgeSheet</h1>
+            <span id="autosaveStatus" class="autosave">Autosaved</span>
           </div>
         </div>
+        <label class="character-switch">
+          <span class="visually-hidden">Character</span>
+          <select id="characterLibrarySelect" aria-label="Character"></select>
+        </label>
+        <label class="top-search">
+          <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+          <input id="sheetSearch" autocomplete="off" placeholder="Search the sheet" aria-label="Search the sheet">
+        </label>
+        <nav class="top-nav" aria-label="Tools">
+          <button class="ghost" type="button" data-tab="builder"><i class="ph ph-hammer" aria-hidden="true"></i>Builder</button>
+          <button class="ghost" type="button" data-tab="party"><i class="ph ph-users-three" aria-hidden="true"></i>Party</button>
+          <button class="ghost" type="button" data-tab="campaign"><i class="ph ph-globe" aria-hidden="true"></i>Campaign</button>
+        </nav>
         <div class="top-actions">
-          <label class="theme-picker">
-            Theme
-            <select id="themeSelect">
-              <option value="beyond">Beyond</option>
-              <option value="light">Fantasy</option>
-              <option value="dark">Dark</option>
-              <option value="retro">Retro basement</option>
-            </select>
-          </label>
-          <button id="rulesButton" class="ghost" type="button"><i class="ph ph-book-open" aria-hidden="true"></i>Rules</button>
+          <button id="rulesButton" class="ghost" type="button"><i class="ph ph-book-open" aria-hidden="true"></i><span class="btn-label">Rules</span></button>
           <details class="file-menu">
-            <summary class="ghost"><i class="ph ph-file" aria-hidden="true"></i>File<i class="ph ph-caret-down" aria-hidden="true"></i></summary>
+            <summary class="ghost"><i class="ph ph-moon-stars" aria-hidden="true"></i><span class="btn-label">Rest</span><i class="ph ph-caret-down" aria-hidden="true"></i></summary>
             <div class="file-menu-items">
-              <button id="importSheetButton" class="ghost" type="button">Import a PDF or text sheet…</button>
-              <button id="importJsonButton" class="ghost" type="button">Import ForgeSheet JSON…</button>
-              <button id="exportJsonButton" class="ghost" type="button">Export JSON backup</button>
-              <button id="printSheetButton" class="ghost" type="button">Print sheet</button>
+              <button id="shortRestButton" class="ghost" type="button"><i class="ph ph-hourglass-medium" aria-hidden="true"></i>Short rest</button>
+              <button id="longRestButton" class="ghost" type="button"><i class="ph ph-bed" aria-hidden="true"></i>Long rest</button>
+            </div>
+          </details>
+          <button id="checklistButton" class="ghost" type="button">Checklist</button>
+          <button id="levelUpButton" class="primary" type="button"><i class="ph ph-arrow-fat-line-up" aria-hidden="true"></i><span class="btn-label">Level up</span></button>
+          <details class="file-menu">
+            <summary class="ghost" aria-label="Menu" title="Menu"><i class="ph ph-list" aria-hidden="true"></i></summary>
+            <div class="file-menu-items">
+              <p class="menu-label">Character</p>
+              <button id="newCharacterButton" class="ghost" type="button"><i class="ph ph-plus" aria-hidden="true"></i>New character</button>
+              <button id="duplicateCharacterButton" class="ghost" type="button"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate</button>
+              <button id="deleteCharacterButton" class="danger" type="button"><i class="ph ph-trash" aria-hidden="true"></i>Delete character</button>
+              <hr>
+              <p class="menu-label">File</p>
+              <button id="importSheetButton" class="ghost" type="button"><i class="ph ph-file-arrow-up" aria-hidden="true"></i>Import a PDF or text sheet…</button>
+              <button id="importJsonButton" class="ghost" type="button"><i class="ph ph-file-arrow-up" aria-hidden="true"></i>Import ForgeSheet JSON…</button>
+              <button id="exportJsonButton" class="ghost" type="button"><i class="ph ph-file-arrow-down" aria-hidden="true"></i>Export JSON backup</button>
+              <button id="printSheetButton" class="ghost" type="button"><i class="ph ph-printer" aria-hidden="true"></i>Print sheet</button>
+              <button id="saveCharacter" class="ghost" type="button"><i class="ph ph-floppy-disk" aria-hidden="true"></i>Save now</button>
+              <hr>
+              <p class="menu-label">View</p>
+              <label class="theme-picker">
+                Theme
+                <select id="themeSelect">
+                  <option value="beyond">Beyond</option>
+                  <option value="light">Fantasy</option>
+                  <option value="dark">Dark</option>
+                  <option value="retro">Retro basement</option>
+                </select>
+              </label>
+              <section class="split-toolbar" aria-label="Side-by-side view controls">
+                <label class="inline-check split-toggle">
+                  <input type="checkbox" id="splitViewToggle">
+                  Side-by-side panels
+                </label>
+                <label>
+                  Left
+                  <select id="splitLeftSelect"></select>
+                </label>
+                <label>
+                  Right
+                  <select id="splitRightSelect"></select>
+                </label>
+                <button id="swapSplitPanels" class="ghost" type="button"><i class="ph ph-arrows-left-right" aria-hidden="true"></i>Swap</button>
+              </section>
               <button id="backgroundUpload" class="ghost" type="button">Set backdrop image…</button>
-              <button id="saveCharacter" class="ghost" type="button">Save now</button>
               <hr>
               <button id="resetCharacter" class="danger" type="button">Reset this sheet…</button>
             </div>
           </details>
           <input id="backgroundFile" type="file" accept="image/*" hidden>
-          <button id="shortRestButton" class="ghost" type="button"><i class="ph ph-hourglass-medium" aria-hidden="true"></i>Short rest</button>
-          <button id="longRestButton" class="ghost" type="button"><i class="ph ph-moon-stars" aria-hidden="true"></i>Long rest</button>
-          <button id="checklistButton" class="ghost" type="button">Checklist</button>
-          <button id="levelUpButton" class="primary" type="button"><i class="ph ph-arrow-fat-line-up" aria-hidden="true"></i>Level up</button>
         </div>
       </header>
 
       <div id="asiBanner" class="asi-banner" aria-live="polite"></div>
+      <section id="searchResults" class="search-results"></section>
 
       <main id="main">
-        <section class="manager-band">
-          <label>
-            Character library
-            <select id="characterLibrarySelect"></select>
-          </label>
-          <button id="newCharacterButton" class="secondary" type="button"><i class="ph ph-plus" aria-hidden="true"></i>New</button>
-          <button id="duplicateCharacterButton" class="ghost" type="button"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate</button>
-          <button id="deleteCharacterButton" class="danger" type="button"><i class="ph ph-trash" aria-hidden="true"></i>Delete</button>
-          <label>
-            Search the sheet
-            <input id="sheetSearch" autocomplete="off" placeholder="Spells, notes, features…">
-          </label>
-          <section class="split-toolbar" aria-label="Side-by-side view controls">
-            <label class="inline-check split-toggle">
-              <input type="checkbox" id="splitViewToggle">
-              Side-by-side
-            </label>
-            <label>
-              Left
-              <select id="splitLeftSelect"></select>
-            </label>
-            <label>
-              Right
-              <select id="splitRightSelect"></select>
-            </label>
-            <button id="swapSplitPanels" class="ghost" type="button"><i class="ph ph-arrows-left-right" aria-hidden="true"></i>Swap</button>
-          </section>
-          <span id="autosaveStatus" class="muted">Autosaved</span>
-        </section>
-
-        <section id="searchResults" class="search-results"></section>
-
-        <section class="summary-band">
-          <div id="identityBlock" class="identity-block">
-            <button type="button" id="identityLock" class="ability-lock identity-lock" title="Edit character details">
-              <i class="ph ph-pencil-simple icon-edit" aria-hidden="true"></i>
-              <i class="ph ph-check icon-done" aria-hidden="true"></i>
-            </button>
-            <div id="identityDisplay" class="identity-display"></div>
-            <div class="identity-grid">
-            <label>
-              Character
-              <input id="characterName" autocomplete="off" placeholder="Name">
-            </label>
-            <label>
-              Class
-              <select id="classSelect"></select>
-            </label>
-            <label>
-              Subclass
-              <input id="subclassName" autocomplete="off" placeholder="Armorer" list="subclassOptions">
-              <datalist id="subclassOptions"></datalist>
-            </label>
-            <label>
-              Level
-              <input id="levelInput" type="number" min="1" max="20">
-            </label>
-            <label>
-              Species
-              <input id="speciesInput" autocomplete="off" placeholder="Human">
-            </label>
-            <label>
-              Background
-              <input id="backgroundInput" autocomplete="off" placeholder="Sage">
-            </label>
-            <label>
-              Alignment
-              <input id="alignmentInput" autocomplete="off" placeholder="NG">
-            </label>
-            </div>
-          </div>
-          <div class="vitals">
-            <div id="abilities" class="ability-grid"></div>
-            <div class="stat-tile-group">
-              <div class="stat-tile">
-                <span><span class="label-long">Proficiency</span><span class="label-short">Prof</span></span>
-                <strong id="profBonus">+2</strong>
-              </div>
-              <div class="stat-tile">
-                <span>Speed</span>
-                <strong><input id="speedInput" type="number" min="0"></strong>
-              </div>
-              <div class="stat-tile" id="inspirationTile">
-                <span><span class="label-long">Inspiration</span><span class="label-short">Insp</span></span>
-                <strong id="inspirationValue">0</strong>
-                <div class="tile-buttons">
-                  <button id="inspirationSpend" type="button" title="Spend inspiration" aria-label="Spend inspiration"><i class="ph ph-minus" aria-hidden="true"></i></button>
-                  <button id="inspirationAdd" type="button" title="Gain inspiration" aria-label="Gain inspiration"><i class="ph ph-plus" aria-hidden="true"></i></button>
-                </div>
-              </div>
-              <button type="button" id="rollInitiative" class="stat-tile" title="Roll initiative">
-                <span><span class="label-long">Initiative</span><span class="label-short">Init</span></span>
-                <strong id="initiativeValue">+0</strong>
+        <div class="sheet-layout">
+          <aside class="sheet-sidebar" aria-label="Character summary">
+            <div id="identityBlock" class="identity-block">
+              <button type="button" id="identityLock" class="ability-lock identity-lock" title="Edit character details">
+                <i class="ph ph-pencil-simple icon-edit" aria-hidden="true"></i>
+                <i class="ph ph-check icon-done" aria-hidden="true"></i>
               </button>
-              <div class="stat-tile">
-                <span><span class="label-long">Armor class</span><span class="label-short">AC</span></span>
-                <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
-                <button type="button" id="acHint" class="ac-hint" hidden></button>
-              </div>
-              <div class="stat-tile conditions-tile" id="conditionsTile" role="button" tabindex="0" title="Open conditions">
-                <span><span class="label-long">Conditions</span><span class="label-short">Cond.</span></span>
-                <p id="conditionsMini">None</p>
+              <div id="identityDisplay" class="identity-display"></div>
+              <div class="identity-grid">
+              <label>
+                Character
+                <input id="characterName" autocomplete="off" placeholder="Name">
+              </label>
+              <label>
+                Class
+                <select id="classSelect"></select>
+              </label>
+              <label>
+                Subclass
+                <input id="subclassName" autocomplete="off" placeholder="Armorer" list="subclassOptions">
+                <datalist id="subclassOptions"></datalist>
+              </label>
+              <label>
+                Level
+                <input id="levelInput" type="number" min="1" max="20">
+              </label>
+              <label>
+                Species
+                <input id="speciesInput" autocomplete="off" placeholder="Human">
+              </label>
+              <label>
+                Background
+                <input id="backgroundInput" autocomplete="off" placeholder="Sage">
+              </label>
+              <label>
+                Alignment
+                <input id="alignmentInput" autocomplete="off" placeholder="NG">
+              </label>
               </div>
             </div>
             <div class="hp-box">
               <span class="hp-caption">Hit points</span>
-              <div class="hp-actions">
-                <button id="applyHealButton" class="heal" type="button">Heal</button>
-                <input id="damageAmount" type="number" min="0" placeholder="0" aria-label="Heal or damage amount">
-                <button id="applyDamageButton" class="damage" type="button">Damage</button>
-              </div>
               <div class="hp-fields">
                 <label>Current<input id="hpInput" type="number" min="1"></label>
                 <label>Max<input id="maxHpInput" type="number" min="1"></label>
                 <label>Temp<input id="tempHpInput" type="number" min="0"></label>
               </div>
+              <div class="hp-actions">
+                <button id="applyDamageButton" class="damage" type="button">Damage</button>
+                <input id="damageAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Heal or damage amount">
+                <button id="applyHealButton" class="heal" type="button">Heal</button>
+              </div>
             </div>
-          </div>
-
-        </section>
-
-        <div class="sheet-layout">
-          <aside class="sheet-rail">
-            <section class="block rail-block">
-              <div class="block-head">
-                <h2>Saving throws</h2>
-              </div>
-              <div id="savingThrows" class="skill-grid saves"></div>
-            </section>
-            <section class="block rail-block">
-              <div class="block-head">
-                <h2>Senses</h2>
-              </div>
-              <div id="senses" class="senses-list"></div>
-            </section>
-            <section class="block rail-block">
-              <div class="block-head">
-                <h2>Proficiencies and training</h2>
-              </div>
-              <div class="training-fields">
-                <label>Armor <input id="armorTrainingInput" autocomplete="off" placeholder="e.g. Light armor, shields"></label>
-                <label>Weapons <input id="weaponTrainingInput" autocomplete="off" placeholder="e.g. Simple weapons"></label>
-                <label>Tools <input id="toolsInput" autocomplete="off" placeholder="e.g. Thieves' tools"></label>
-                <label>Languages <input id="languagesInput" autocomplete="off" placeholder="e.g. Common, Dwarvish"></label>
-              </div>
-            </section>
-          </aside>
-
-          <section class="block skills-col">
-            <div class="block-head">
-              <h2>Skills</h2>
-              <span id="skillSummary"></span>
-            </div>
-            <div id="skills" class="skill-grid single"></div>
-          </section>
-
-          <div class="sheet-main">
-            <div class="sticky-head">
-            <div id="quickVitals" class="quick-vitals" aria-label="Quick hit points"></div>
-            <nav class="tabs" aria-label="Character sections">
-              <button class="tab active" data-tab="actions">Actions</button>
-              <button class="tab" data-tab="spells">Spells</button>
-              <button class="tab" data-tab="inventory">Inventory</button>
-              <button class="tab" data-tab="features">Features</button>
-              <button class="tab" data-tab="background">Background</button>
-              <button class="tab" data-tab="notes">Notes</button>
-              <button class="tab" data-tab="builder">Builder</button>
-              <button class="tab" data-tab="party">Party</button>
-              <button class="tab" data-tab="campaign">Campaign</button>
-            </nav>
-            <div class="sticky-alerts">
+            <div class="sheet-alerts">
               <div id="concentrationPrompt" class="concentration-prompt"></div>
               <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
             </div>
+            <div class="stat-tile-group">
+              <div class="stat-tile">
+                <span>AC</span>
+                <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
+                <button type="button" id="acHint" class="ac-hint" hidden></button>
+              </div>
+              <button type="button" id="rollInitiative" class="stat-tile" title="Roll initiative">
+                <span>Initiative</span>
+                <strong id="initiativeValue">+0</strong>
+              </button>
+              <div class="stat-tile">
+                <span>Speed</span>
+                <strong><input id="speedInput" type="number" min="0" aria-label="Speed"></strong>
+              </div>
+              <div class="stat-tile">
+                <span>Proficiency</span>
+                <strong id="profBonus">+2</strong>
+              </div>
+              <div class="stat-tile" id="inspirationTile">
+                <span>Inspiration</span>
+                <div class="tile-buttons">
+                  <button id="inspirationSpend" type="button" title="Spend inspiration" aria-label="Spend inspiration"><i class="ph ph-minus" aria-hidden="true"></i></button>
+                  <strong id="inspirationValue">0</strong>
+                  <button id="inspirationAdd" type="button" title="Gain inspiration" aria-label="Gain inspiration"><i class="ph ph-plus" aria-hidden="true"></i></button>
+                </div>
+              </div>
+              <div class="stat-tile conditions-tile" id="conditionsTile" role="button" tabindex="0" title="Open conditions">
+                <span>Conditions</span>
+                <p id="conditionsMini">None</p>
+              </div>
             </div>
+            <details class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Abilities and saves</h2>
+              </summary>
+              <div id="abilities" class="ability-grid"></div>
+            </details>
+            <details class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Passive senses</h2>
+              </summary>
+              <div id="senses" class="senses-list"></div>
+            </details>
+            <details id="skillsSection" class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Skills</h2>
+                <span id="skillSummary"></span>
+              </summary>
+              <div id="skills" class="skill-grid single"></div>
+            </details>
+          </aside>
+
+          <div class="sheet-main">
+            <nav class="tabs" aria-label="Character sections">
+              <button class="tab active" type="button" data-tab="actions"><i class="ph ph-sword" aria-hidden="true"></i>Combat</button>
+              <button class="tab" type="button" data-tab="spells"><i class="ph ph-sparkle" aria-hidden="true"></i>Spells</button>
+              <button class="tab" type="button" data-tab="inventory"><i class="ph ph-backpack" aria-hidden="true"></i>Inventory</button>
+              <button class="tab" type="button" data-tab="rp"><i class="ph ph-chats-circle" aria-hidden="true"></i>Roleplay</button>
+              <button class="tab" type="button" data-tab="features"><i class="ph ph-scroll" aria-hidden="true"></i>Features</button>
+            </nav>
 
             <div class="deck-shell">
             <div id="panelDeck" class="panel-deck">
@@ -348,7 +332,7 @@
           </section>
         </section>
 
-        <section id="background" class="panel">
+        <section id="rp" class="panel">
           <section class="block">
             <div class="block-head">
               <h2>Background and personality</h2>
@@ -368,43 +352,81 @@
               <label>Flaw <textarea id="flawInput" rows="3"></textarea></label>
             </div>
           </section>
+          <section class="block">
+            <div class="block-head">
+              <h2>Languages and proficiencies</h2>
+            </div>
+            <div class="training-fields">
+              <label>Languages <input id="languagesInput" autocomplete="off" placeholder="e.g. Common, Dwarvish"></label>
+              <label>Tools <input id="toolsInput" autocomplete="off" placeholder="e.g. Thieves' tools"></label>
+              <label>Armor <input id="armorTrainingInput" autocomplete="off" placeholder="e.g. Light armor, shields"></label>
+              <label>Weapons <input id="weaponTrainingInput" autocomplete="off" placeholder="e.g. Simple weapons"></label>
+            </div>
+          </section>
+          <section class="block">
+            <div class="block-head">
+              <h2>Notes</h2>
+              <button id="addGeneralNoteSection" class="secondary" type="button"><i class="ph ph-plus" aria-hidden="true"></i>Section</button>
+            </div>
+            <textarea id="notesInput" rows="12"></textarea>
+            <div id="generalNoteSections" class="note-sections"></div>
+          </section>
         </section>
 
         <section id="actions" class="panel active">
-          <div class="play-actions">
-            <button id="addResourceButton" type="button"><i class="ph ph-plus" aria-hidden="true"></i>Resource</button>
-            <button id="addActionButton" type="button"><i class="ph ph-plus" aria-hidden="true"></i>Action</button>
-            <button id="addClassOptionButton" type="button"><i class="ph ph-plus" aria-hidden="true"></i>Class option</button>
-            <button id="generateActionsButton" type="button"><i class="ph ph-sparkle" aria-hidden="true"></i>Generate actions</button>
-          </div>
+          <section class="block caster-only" id="castingBlock">
+            <div class="block-head">
+              <h2>Spellcasting</h2>
+              <div class="cast-stats">
+                <span>Save DC <strong id="spellDc">-</strong></span>
+                <span>Attack <strong id="spellAttack">-</strong></span>
+              </div>
+            </div>
+            <div class="slots" id="slotGrid"></div>
+            <div class="concentration-box">
+              <label>Concentration <input id="concentrationInput" autocomplete="off" placeholder="Not concentrating"></label>
+              <button id="clearConcentrationButton" class="ghost" type="button">Drop</button>
+            </div>
+            <div id="combatSpells" class="combat-spells"></div>
+          </section>
+
           <section class="block">
             <div class="block-head">
               <h2>Actions</h2>
-              <div id="actionFilter" class="action-filter">
-                <button type="button" data-action-filter="all" class="active">All</button>
-                <button type="button" data-action-filter="Action">Actions</button>
-                <button type="button" data-action-filter="Bonus Action">Bonus</button>
-                <button type="button" data-action-filter="Reaction">Reactions</button>
-                <button type="button" data-action-filter="Free">Other</button>
+              <div class="block-tools">
+                <div id="actionFilter" class="action-filter">
+                  <button type="button" data-action-filter="all" class="active">All</button>
+                  <button type="button" data-action-filter="Action">Actions</button>
+                  <button type="button" data-action-filter="Bonus Action">Bonus</button>
+                  <button type="button" data-action-filter="Reaction">Reactions</button>
+                  <button type="button" data-action-filter="Free">Other</button>
+                </div>
+                <button id="addActionButton" class="ghost" type="button" title="Add an action"><i class="ph ph-plus" aria-hidden="true"></i>Add</button>
+                <button id="generateActionsButton" class="ghost" type="button" title="Generate actions from your gear and class"><i class="ph ph-sparkle" aria-hidden="true"></i>Generate</button>
               </div>
             </div>
             <div id="actionRows" class="action-list"></div>
           </section>
-          <div class="two-col">
-            <section class="block">
+
+          <section class="block resources-row">
               <div class="block-head">
                 <h2>Resources</h2>
+                <div class="block-tools">
+                  <button id="addResourceButton" class="ghost" type="button" title="Add a resource tracker"><i class="ph ph-plus" aria-hidden="true"></i>Resource</button>
+                  <button id="addClassOptionButton" class="ghost" type="button" title="Add a class option module"><i class="ph ph-plus" aria-hidden="true"></i>Class option</button>
+                </div>
               </div>
               <div id="resourceRows" class="tracker-list"></div>
-            </section>
-            <section class="block">
-              <div class="block-head">
-                <h2>Conditions</h2>
-              </div>
-              <div id="conditionGrid" class="condition-grid"></div>
-              <label>Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
-            </section>
-          </div>
+          </section>
+
+          <section class="block">
+            <div class="block-head">
+              <h2>Conditions</h2>
+              <label class="exhaustion-field">Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
+            </div>
+            <div id="conditionGrid" class="condition-grid"></div>
+          </section>
+
           <section class="block">
             <div class="block-head">
               <h2>Dice roller</h2>
@@ -424,43 +446,37 @@
             </div>
             <div id="rollHistory" class="roll-history"></div>
           </section>
-          <div class="two-col">
-            <section class="block">
-              <div class="block-head">
-                <h2>Combat</h2>
-              </div>
-              <div class="field-grid compact">
-                <label>Hit dice <input id="hitDiceInput" autocomplete="off"></label>
+
+          <details id="recoveryDetails" class="block fold">
+            <summary class="block-head">
+              <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Hit dice, rest and death saves</h2>
+              <span id="restSummary" class="muted">Ready</span>
+            </summary>
+            <div class="two-col">
+              <div>
+                <div class="field-grid compact">
+                  <label>Hit dice <input id="hitDiceInput" autocomplete="off"></label>
+                </div>
+                <div class="hit-dice-controls">
+                  <span id="hitDiceSummary" class="muted">Hit dice ready</span>
+                  <button id="spendHitDieButton" class="secondary" type="button">Spend a hit die</button>
+                </div>
+                <div id="restPreview" class="rest-preview"></div>
               </div>
               <div class="death-saves-block">
                 <span class="field-title">Death saves</span>
                 <div id="deathSaveTracker" class="death-saves"></div>
               </div>
-            </section>
-            <section class="block">
-              <div class="block-head">
-                <h2>Rest</h2>
-                <span id="restSummary" class="muted">Ready</span>
-              </div>
-              <div class="hit-dice-controls">
-                <span id="hitDiceSummary" class="muted">Hit dice ready</span>
-                <button id="spendHitDieButton" class="secondary" type="button">Spend a hit die</button>
-              </div>
-              <div id="restPreview" class="rest-preview"></div>
-            </section>
-          </div>
-          <section class="block">
-            <div class="block-head">
-              <h2>Attack notes</h2>
             </div>
-            <textarea id="attacksInput" rows="4" placeholder="Weapon properties, ammo counts, riders…"></textarea>
-          </section>
-          <details class="block turn-reference">
+          </details>
+
+          <details class="block fold turn-reference">
             <summary class="block-head">
-              <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Turn reference</h2>
+              <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Turn reference and attack notes</h2>
               <span id="combatSummary" class="muted">Ready</span>
             </summary>
             <div id="combatDashboard" class="combat-dashboard"></div>
+            <label class="attack-notes">Attack notes <textarea id="attacksInput" rows="4" placeholder="Weapon properties, ammo counts, riders…"></textarea></label>
           </details>
         </section>
 
@@ -501,19 +517,14 @@
           <div class="spell-layout">
             <aside class="block spell-control">
               <div class="block-head">
-                <h2>Spellcasting</h2>
+                <h2>Spellbook</h2>
               </div>
               <div class="calc-grid">
                 <div><span>Ability</span><strong id="spellAbility">-</strong></div>
-                <div><span>Save DC</span><strong id="spellDc">-</strong></div>
-                <div><span>Attack</span><strong id="spellAttack">-</strong></div>
                 <div><span id="preparedLabel">Prepared</span><strong id="preparedCount">0 / 0</strong></div>
               </div>
               <p id="preparedWarning" class="prepared-warning" hidden></p>
-              <div class="concentration-box">
-                <label>Concentration <input id="concentrationInput" autocomplete="off" placeholder="No active concentration"></label>
-                <button id="clearConcentrationButton" class="ghost" type="button">Clear</button>
-              </div>
+              <p class="muted">Cast spells, track slots and concentration from the Combat tab.</p>
               <div class="prep-tools">
                 <label>
                   Spell suggestions
@@ -527,7 +538,6 @@
                 </label>
                 <div id="prepSuggestions" class="prep-suggestions"></div>
               </div>
-              <div class="slots" id="slotGrid"></div>
               <label class="inline-check">
                 <input type="checkbox" id="showAllSpells">
                 Include off-list API spells
@@ -542,17 +552,6 @@
               <div id="spellRows" class="spell-rows"></div>
             </section>
           </div>
-        </section>
-
-        <section id="notes" class="panel">
-          <section class="block">
-            <div class="block-head">
-              <h2>Notes</h2>
-              <button id="addGeneralNoteSection" class="secondary" type="button"><i class="ph ph-plus" aria-hidden="true"></i>Section</button>
-            </div>
-            <textarea id="notesInput" rows="12"></textarea>
-            <div id="generalNoteSections" class="note-sections"></div>
-          </section>
         </section>
 
         <section id="party" class="panel">
@@ -971,20 +970,20 @@
       </article>
     </template>
 
-    <script src="./js/utils.js?v=22"></script>
-    <script src="./js/data.js?v=22"></script>
-    <script src="./js/classes.js?v=22"></script>
-    <script src="./js/character.js?v=22"></script>
-    <script src="./js/layout.js?v=22"></script>
-    <script src="./js/spells.js?v=22"></script>
-    <script src="./js/sheet.js?v=22"></script>
-    <script src="./js/builder.js?v=22"></script>
-    <script src="./js/play.js?v=22"></script>
-    <script src="./js/equipment.js?v=22"></script>
-    <script src="./js/party.js?v=22"></script>
-    <script src="./js/rules.js?v=22"></script>
-    <script src="./js/import.js?v=22"></script>
-    <script src="./js/sync.js?v=22"></script>
-    <script src="./js/main.js?v=22"></script>
+    <script src="./js/utils.js?v=23"></script>
+    <script src="./js/data.js?v=23"></script>
+    <script src="./js/classes.js?v=23"></script>
+    <script src="./js/character.js?v=23"></script>
+    <script src="./js/layout.js?v=23"></script>
+    <script src="./js/spells.js?v=23"></script>
+    <script src="./js/sheet.js?v=23"></script>
+    <script src="./js/builder.js?v=23"></script>
+    <script src="./js/play.js?v=23"></script>
+    <script src="./js/equipment.js?v=23"></script>
+    <script src="./js/party.js?v=23"></script>
+    <script src="./js/rules.js?v=23"></script>
+    <script src="./js/import.js?v=23"></script>
+    <script src="./js/sync.js?v=23"></script>
+    <script src="./js/main.js?v=23"></script>
   </body>
 </html>

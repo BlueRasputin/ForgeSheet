@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", init);
 
 function trackTabBarHeight() {
-  const tabs = document.querySelector(".sticky-head");
+  const tabs = document.querySelector(".sheet-main .tabs");
   const update = () => document.documentElement.style.setProperty("--tabs-height", `${Math.ceil(tabs.getBoundingClientRect().height)}px`);
   new ResizeObserver(update).observe(tabs);
   update();
@@ -49,6 +49,11 @@ function buildStaticControls() {
       <span class="ability-name"><span class="ability-long">${name}</span><span class="ability-short">${id.toUpperCase()}</span></span>
       <button type="button" class="ability-mod" id="${id}Mod" data-roll-ability="${id}" title="Roll ${name} check">+0</button>
       <input data-ability="${id}" type="number" min="1" max="30" aria-label="${name} score">
+      <label class="ability-save" title="${name} saving throw proficiency">
+        <input data-save="${id}" type="checkbox" aria-label="${name} save proficiency">
+        <span>Save</span>
+        <button type="button" class="mod-chip" id="${id}Save" data-roll-save="${id}" title="Roll ${name} save">+0</button>
+      </label>
     </div>
   `).join("");
 
@@ -62,18 +67,11 @@ function buildStaticControls() {
     </label>
   `).join("");
 
-  const saves = document.querySelector("#savingThrows");
-  saves.innerHTML = ABILITIES.map(([id, name]) => `
-    <label class="skill-row">
-      <input data-save="${id}" type="checkbox">
-      <span class="skill-name">${id.toUpperCase()}</span>
-      <button type="button" class="mod-chip" id="${id}Save" data-roll-save="${id}" title="Roll ${name} save">+0</button>
-    </label>
-  `).join("");
+  if (matchMedia("(max-width: 640px)").matches) document.querySelectorAll("details.side-section").forEach(section => { section.open = false; });
 }
 
 function bindEvents() {
-  document.querySelectorAll(".tab").forEach(button => {
+  document.querySelectorAll("[data-tab]").forEach(button => {
     button.addEventListener("click", () => activateTab(button.dataset.tab));
   });
   document.querySelector("#splitViewToggle").addEventListener("input", handleSplitToggle);
@@ -100,6 +98,12 @@ function bindEvents() {
   document.querySelectorAll("[data-skill]").forEach(input => input.addEventListener("input", handleSkillInput));
   document.querySelectorAll("[data-save]").forEach(input => input.addEventListener("input", handleSaveInput));
   document.querySelector("#abilities").addEventListener("click", event => {
+    const save = event.target.closest("[data-roll-save]");
+    if (save) {
+      event.preventDefault();
+      rollSavingThrow(save.dataset.rollSave);
+      return;
+    }
     const button = event.target.closest("[data-roll-ability]");
     if (button) rollAbilityCheck(button.dataset.rollAbility);
   });
@@ -116,13 +120,6 @@ function bindEvents() {
       rollSkillCheck(button.dataset.rollSkill);
     }
   });
-  document.querySelector("#savingThrows").addEventListener("click", event => {
-    const button = event.target.closest("[data-roll-save]");
-    if (button) {
-      event.preventDefault();
-      rollSavingThrow(button.dataset.rollSave);
-    }
-  });
   document.querySelector("#deathSaveTracker").addEventListener("click", handleDeathSaveClick);
   document.querySelector("#rollInitiative").addEventListener("click", rollInitiativeCheck);
   document.querySelector("#acHint").addEventListener("click", () => {
@@ -132,12 +129,16 @@ function bindEvents() {
   });
   document.querySelector("#inspirationAdd").addEventListener("click", gainInspiration);
   document.querySelector("#inspirationSpend").addEventListener("click", spendInspiration);
-  const fileMenu = document.querySelector(".file-menu");
-  fileMenu.addEventListener("click", event => {
-    if (event.target.closest(".file-menu-items button")) fileMenu.open = false;
+  document.querySelectorAll(".file-menu").forEach(menu => {
+    menu.addEventListener("click", event => {
+      if (event.target.closest(".file-menu-items button")) menu.open = false;
+    });
+    menu.addEventListener("toggle", () => {
+      if (menu.open) document.querySelectorAll(".file-menu").forEach(other => { if (other !== menu) other.open = false; });
+    });
   });
   document.addEventListener("click", event => {
-    if (fileMenu.open && !fileMenu.contains(event.target)) fileMenu.open = false;
+    document.querySelectorAll(".file-menu[open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
   });
   document.querySelector("#rulesButton").addEventListener("click", () => {
     document.querySelector("#rulesDialog").showModal();
@@ -163,11 +164,10 @@ function bindEvents() {
   document.querySelector("#applyDamageButton").addEventListener("click", () => applyDamage());
   document.querySelector("#applyHealButton").addEventListener("click", () => applyHeal());
   document.querySelector("#concentrationPrompt").addEventListener("click", handleConcentrationPromptClick);
-  document.querySelector("#quickVitals").addEventListener("click", handleQuickVitalsClick);
-  document.querySelector("#quickVitals").addEventListener("keydown", event => {
-    if (event.key === "Enter" && event.target.id === "quickAmount") {
+  document.querySelector("#damageAmount").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
       event.preventDefault();
-      applyDamage(event.target);
+      applyDamage();
     }
   });
   const conditionsTile = document.querySelector("#conditionsTile");
@@ -203,6 +203,7 @@ function bindEvents() {
     persistAndRender();
   });
   document.querySelector("#slotGrid").addEventListener("click", handleSlotUsageClick);
+  document.querySelector("#combatSpells").addEventListener("click", handleSpellCastClick);
   document.querySelector("#partyDashboard").addEventListener("click", event => {
     const card = event.target.closest("[data-party-sheet]");
     if (!card || card.dataset.partySheet === character.sheetId) return;

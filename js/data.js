@@ -276,12 +276,11 @@ const FEAT_PRESETS = [
 ];
 
 const TAB_DEFS = [
-  ["actions", "Actions"],
+  ["actions", "Combat"],
   ["spells", "Spells"],
   ["inventory", "Inventory"],
-  ["features", "Features & Traits"],
-  ["background", "Background"],
-  ["notes", "Notes"],
+  ["rp", "Roleplay"],
+  ["features", "Features"],
   ["builder", "Builder"],
   ["party", "Party"],
   ["campaign", "Campaign"]

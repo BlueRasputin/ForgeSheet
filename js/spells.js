@@ -127,6 +127,29 @@ function renderSpells() {
   renderPrepSuggestions();
   renderSlots(cls);
   renderSpellRows();
+  document.body.classList.toggle("is-caster", cls.casterType !== "none" || character.spells.some(spellRowHasSpell));
+  renderCombatSpells(cls);
+}
+
+// The Combat tab lists only spells you can cast right now: cantrips, prepared, always-prepared, known, and item spells.
+function renderCombatSpells(cls) {
+  const preparedCaster = ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula);
+  const ready = character.spells
+    .filter(row => spellRowHasSpell(row))
+    .map(row => ({ row, level: spellLevelForRow(row) }))
+    .filter(({ row, level }) => level === 0 || row.itemId || !preparedCaster || row.prepared || spellAlwaysPrepared(row))
+    .sort((a, b) => a.level - b.level || spellDisplayName(a.row).localeCompare(spellDisplayName(b.row)));
+  document.querySelector("#combatSpells").innerHTML = ready.length ? ready.map(({ row, level }) => {
+    const state = quickCastState(row, level);
+    return `
+      <div class="combat-spell" data-spell-id="${row.id}">
+        <div>
+          <strong>${escapeHtml(spellDisplayName(row))}</strong>
+          <span class="spell-summary">${spellSummaryHtml(row)}</span>
+        </div>
+        ${state ? `<button type="button" class="secondary cast-spell" ${state.disabled ? "disabled" : ""} title="${escapeHtml(state.title)}">${escapeHtml(state.label)}</button>` : ""}
+      </div>`;
+  }).join("") : `<p class="empty-state">No spells ready. Pick and prepare spells in the Spells tab.</p>`;
 }
 
 function renderSlots(cls) {
@@ -284,7 +307,7 @@ function spellEffectRoll(row, castLevel) {
 }
 
 function spellRowForElement(element) {
-  const node = element.closest(".spell-row");
+  const node = element.closest("[data-spell-id]");
   return node ? character.spells.find(row => row.id === node.dataset.spellId) : null;
 }
 
@@ -693,7 +716,7 @@ function mergeSpellLists(fallback, api) {
 
 function spellDisplayName(row) {
   if (row.custom) return row.custom.name || "Custom spell";
-  return allSpells.find(spell => spell.index === row.index)?.name || row.index;
+  return allSpells.find(spell => spell.index === row.index)?.name || String(row.index).replace(/-/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 function preparedSpellCount() {

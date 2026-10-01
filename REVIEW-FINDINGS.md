@@ -277,6 +277,69 @@ Still open: searchable spell picker (spells take ~3 interactions each), initiati
 / round counter for the DM, Arcane Recovery slot helper, school limits for Arcane Trickster and
 Eldritch Knight, starting equipment packs, per-tab DM role.
 
+## Round 4: layout usage study (2026-10-01)
+
+Six testers each simulated a 3-hour session and tallied what they touched:
+
+- Matt (DM)
+- Travis (Berserker 6)
+- Laura (Arcane Trickster 5)
+- Liam (Evocation 9)
+- Marisha (Open Hand 7, on a phone)
+- Ashley (Life cleric 8)
+
+**What the testers agreed on (all six):**
+
+- **Sidebar instead of a top band.** Use a sticky left sidebar holding identity, HP with Damage and Heal, the stat tiles, abilities with their saves, passives and skills.
+- **Combat tab:**
+  - Casters need slots, save DC, concentration and Cast in the same place as their attacks. Liam and Ashley flipped tabs on almost every turn.
+  - Martials need resources (ki, rage) near the top.
+  - The Spells tab is not needed for non-casters.
+- **Rarely used:** the add buttons, attack notes, the turn reference, the rest preview and death saves until 0 HP.
+- **Biggest annoyances:**
+  - Marisha (phone): skills and saves were buried below the whole tab panel.
+  - Ashley: damage, the concentration save and the spell list were spread across three areas.
+
+**Done:**
+
+- Removed the sticky HP/AC strip.
+- **Top bar:**
+  - The character switcher and search moved into the top bar.
+  - Builder, Party and Campaign are top-bar buttons.
+  - Short and long rest share a Rest menu.
+  - New, Duplicate, Delete, file actions, theme and side-by-side view sit in one Menu.
+- **Sidebar:**
+  - Added the sticky sidebar.
+  - Saves are merged into the ability tiles.
+  - The concentration and dying prompts sit directly under the HP box.
+  - On phones, Abilities, Passive senses and Skills start collapsed, so the tabs fit in the first screen.
+- **Tabs:** Combat, Spells (casters only), Inventory, Roleplay and Features.
+- **Combat tab:**
+  - Casters get a Spellcasting block first: DC, attack, slots, concentration, and every spell ready to cast with one-tap Cast.
+  - Non-casters get resources first.
+  - Resources are one line each.
+  - Action rows read as text until hovered.
+  - Hit dice, rest and death saves are folded away. That fold opens itself at 0 HP.
+  - Turn reference and attack notes are folded away.
+- **Roleplay tab:** personality, languages and proficiencies, and notes.
+
+**Open ideas from the study (not built yet):**
+
+- **Martial and rogue automation:**
+  - A rage on/off toggle that applies +2 damage and resistance. Reckless Attack sets advantage.
+  - A Sneak Attack toggle on weapon damage, limited to once per turn.
+  - A Thieves' tools roll chip.
+- **Turn tracking:** an Action / Bonus / Reaction used-this-turn strip.
+- **Spellcasting:**
+  - An Arcane Recovery slot picker.
+  - Ritual casting without spending a slot.
+  - Life cleric Disciple of Life added to healing rolls.
+- **DM view:**
+  - Merge Party and the Campaign roster into one view.
+  - Show every player's passive Insight and Investigation and their save modifiers.
+  - An initiative order with a Next turn button.
+  - "Call a save", which highlights every player's modifier.
+
 ## Still to do
 
 - Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley

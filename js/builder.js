@@ -35,13 +35,13 @@ function builderStepHint(id) {
 
 function builderStepTab(id) {
   return {
-    identity: "background",
+    identity: "rp",
     class: "features",
     abilities: "#abilities",
     proficiencies: "#skills",
     equipment: "inventory",
     spells: "spells",
-    personality: "background"
+    personality: "rp"
   }[id] || "actions";
 }
 
@@ -58,6 +58,8 @@ function goToTarget(target) {
   }
   const element = document.querySelector(target);
   if (!element) return;
+  const fold = element.closest("details:not(.file-menu)");
+  if (fold) fold.open = true;
   const panel = element.closest(".panel");
   if (panel && !panel.classList.contains("active") && panel.id) activateTab(panel.id);
   element.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -768,13 +770,13 @@ function levelChecklist() {
   const caster = cls.casterType !== "none";
   const expectedSlots = caster ? spellSlotsFor(cls, level).some(Boolean) : false;
   const items = [
-    ["Identity", "Name, species, and background chosen.", Boolean(character.name && character.species && character.background), "background"],
+    ["Identity", "Name, species, and background chosen.", Boolean(character.name && character.species && character.background), "rp"],
     // ponytail: subclass required at level 3 for everyone; some classes pick at 1-2, refine per-class if it matters
     ["Subclass", level >= subclassUnlock ? "Choose and record your subclass." : `Chosen at level ${subclassUnlock}.`, level < subclassUnlock || Boolean(character.subclassName), "#officialSubclassSelect"],
     ["Ability scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
     ["Skills", `Pick ${expectedSkills} skill proficiencies (${classSkills} from ${cls.name}${character.background ? ", 2 from your background" : ""}).`, (character.proficientSkills || []).length >= expectedSkills, "#skills"],
-    ["Hit dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
-    ["Saving throws", "Mark your class's two saving throw proficiencies.", (character.saveProficiencies || []).length >= 2, "#savingThrows"],
+    ["Hit dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "#hitDiceInput"],
+    ["Saving throws", "Mark your class's two saving throw proficiencies.", (character.saveProficiencies || []).length >= 2, "#abilities"],
     ["Hit points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
     ["ASIs and feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level}. Record each in the Builder planner.`, featCount >= asiCount, "#featPlanner"],
     ["Equipment", "Add starting gear or catalog items.", (character.equipment || []).length > 0 || Boolean(character.inventory), "inventory"]
@@ -802,7 +804,7 @@ function renderChecklist() {
   const items = levelChecklist();
   const remaining = items.filter(item => !item.done);
   const button = document.querySelector("#checklistButton");
-  button.innerHTML = `${icon("list-checks")}${remaining.length ? `Checklist (${remaining.length})` : "Checklist"}`;
+  button.innerHTML = `${icon("list-checks")}<span class="btn-label">${remaining.length ? `Checklist (${remaining.length})` : "Checklist"}</span>`;
   button.classList.toggle("needs-attention", remaining.length > 0);
   button.title = remaining.length ? `To do: ${remaining.map(item => item.label).join(", ")}` : "Everything is up to date for your level.";
   document.querySelector("#checklistSummary").textContent = remaining.length

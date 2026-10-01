@@ -56,7 +56,6 @@ function ensureClassResources() {
 
 function renderPlayTools() {
   ensureClassResources();
-  renderQuickVitals();
   renderCombatDashboard();
   renderDiceRoller();
   renderRestPreview();
@@ -93,6 +92,7 @@ function renderDyingPrompt() {
     root.innerHTML = "";
     return;
   }
+  document.querySelector("#recoveryDetails").open = true;
   const successes = character.deathSaveSuccesses;
   const failures = character.deathSaveFailures;
   const status = failures >= 3
@@ -217,36 +217,6 @@ function reviveCharacter() {
   character.hp = 1;
   persistAndRender();
   showToast(`<span class="toast-label">${escapeHtml(character.name || "Character")} returns at 1 HP</span>`, { tone: "crit" });
-}
-
-function renderQuickVitals() {
-  const root = document.querySelector("#quickVitals");
-  const temp = Number(character.tempHp || 0);
-  const ratio = character.maxHp ? Number(character.hp) / Number(character.maxHp) : 1;
-  const state = isDead() ? "dead" : Number(character.hp) <= 0 ? "down" : ratio <= 0.25 ? "critical" : ratio <= 0.5 ? "bloodied" : "healthy";
-  const conditions = (character.conditions || []).filter(condition => condition !== "Concentrating");
-  const typed = root.querySelector("#quickAmount")?.value || "";
-  root.dataset.state = state;
-  root.innerHTML = `
-    <span class="quick-hp"><b>${character.hp}</b>/${character.maxHp} HP${temp ? ` <em>+${temp}</em>` : ""}</span>
-    <span class="quick-ac">AC ${character.ac}</span>
-    <span class="quick-hp-controls">
-      <input id="quickAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Damage or healing amount" value="${escapeHtml(typed)}">
-      <button type="button" class="damage" data-quick="damage">Damage</button>
-      <button type="button" class="heal" data-quick="heal">Heal</button>
-    </span>
-    <button type="button" class="ghost quick-conditions" data-quick="conditions" title="Open conditions">${conditions.length ? escapeHtml(conditions.join(", ")) : "No conditions"}</button>
-    ${character.concentration ? `<span class="quick-concentration" title="Concentrating">${icon("brain")}${escapeHtml(character.concentration)}</span>` : ""}
-  `;
-}
-
-function handleQuickVitalsClick(event) {
-  const button = event.target.closest("[data-quick]");
-  if (!button) return;
-  const input = document.querySelector("#quickAmount");
-  if (button.dataset.quick === "damage") applyDamage(input);
-  if (button.dataset.quick === "heal") applyHeal(input);
-  if (button.dataset.quick === "conditions") goToTarget("#conditionGrid");
 }
 
 function gainInspiration() {

@@ -54,7 +54,7 @@ function renderViewLayout() {
   setValue("splitLeftSelect", viewLayout.left);
   setValue("splitRightSelect", viewLayout.right);
 
-  document.querySelectorAll(".tab").forEach(button => {
+  document.querySelectorAll(".tab, .top-nav [data-tab]").forEach(button => {
     const tab = button.dataset.tab;
     button.classList.toggle("active", !viewLayout.split && tab === activeTab);
     button.classList.toggle("split-active", viewLayout.split && tab === viewLayout.left);
@@ -107,6 +107,7 @@ function swapSplitPanels() {
 
 function preparePrintLayout() {
   document.body.classList.add("print-compact");
+  document.querySelectorAll("details.side-section").forEach(section => { section.open = true; });
   // Printable area at 96dpi with a safety margin so rounding never spills to page 2.
   const printableWidth = 7.8 * 96;
   const printableHeight = 10 * 96;
