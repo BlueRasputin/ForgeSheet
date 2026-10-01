@@ -452,6 +452,49 @@ Eight critical testers ran the same 4-round fight ("Ambush at the Drowned Chapel
 - **Cards lack passive Insight, passive Investigation and save bonuses.**
 - **Test characters** ("New Character", "Vex Orrin (BLM)", "Grog Ironhide") pollute party totals. Proposal: a "Hide from party" toggle.
 
+### Fix status (2026-10-01)
+All 11 bugs and every item under "Rules gaps" are fixed and verified in the browser against the testers' characters. Their data was restored after testing.
+
+- **Play mode:** proficiency checkboxes are locked, and clicking a skill or save name rolls it.
+- **Damage and healing:**
+  - Enter no longer applies damage.
+  - Every damage and heal gets a toast with Undo, and heals report the HP actually gained.
+  - HP is capped at max.
+  - Damage toasts offer "Lower max HP too" (reverted on a long rest, or with Restore).
+  - Rogues 5+ get "Uncanny Dodge (halve)", once per hit.
+- **Spellcasting:**
+  - Cast never upcasts silently: it asks "Cast at 4th level?", and the upcast preference resets on a long rest.
+  - Re-casting the spell you're concentrating on asks first.
+  - Casting in beast form asks first.
+  - Spell attacks roll every beam, each with its own damage and crit button.
+  - Hex and Hunter's Mark read "Roll extra damage on a hit"; Sleep reads "Roll HP affected".
+  - Healing spells offer "Heal me" plus one button per character below max HP on this device.
+  - Temp-HP spells offer "Gain N temp HP".
+  - Armor of Agathys grants its temp HP and reminds you of the cold retaliation when you're hit.
+- **Toasts:** toasts that still have buttons aren't evicted by plain messages, and the newest toast is never dropped.
+- **Rests:**
+  - Short rest offers Arcane Recovery (highest slots first, within the half-level budget).
+  - Short rest ends concentration on spells lasting an hour or less.
+- **Conditions:**
+  - Paralyzed, Stunned, Unconscious and Petrified auto-fail STR/DEX saves.
+  - Restrained gives disadvantage on DEX saves.
+  - Incapacitating conditions warn before attacks, casts and features ("Do it anyway").
+  - Advantage and disadvantage cancel.
+  - Condition cards have repeat-save buttons that offer "end the condition" on the result.
+  - Prone has a Stand up button (half speed, and not while at 0 HP).
+  - Dropping to 0 HP adds Prone.
+- **Hexblade:**
+  - Hex Warrior uses CHA for one-handed weapons.
+  - The Curse adds a +prof damage button and crits on 19-20 while spent.
+  - Hex adds a +1d6 damage button.
+  - Agonizing Blast adds CHA per beam when the invocation is recorded.
+- **Class features** now appear automatically as action rows with Use buttons that spend the resource:
+  - Monk: Flurry of Blows (rolls both strikes), Patient Defense, Step of the Wind, Deflect Missiles, Stunning Strike. Speed adds Unarmored Movement in play mode.
+  - Rogue: Sneak Attack as a damage add-on (doubled on crits), Cunning Action (with a Stealth roll), Uncanny Dodge.
+  - Fighter: Second Wind (rolls and heals), Action Surge, Superiority Die (rolls, and shows the maneuver DC).
+  - Sorcerer: Metamagic menu (Twinned priced at the last spell's level), Flexible Casting (create or burn slots), Clockwork Soul's Restore Balance tracker.
+  - Druid: Wild Shape with a beast HP row that absorbs damage first and reverts with the overflow; Moon druids use a bonus action.
+
 ### What testers said worked
 - Initiative, AC, HP, Damage/Heal and the first row of save chips are visible without scrolling on desktop; each is one click.
 - The concentration prompt under HP computes the DC correctly and takes one click.

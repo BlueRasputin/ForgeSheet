@@ -56,6 +56,7 @@ function ensureClassResources() {
 
 function renderPlayTools() {
   ensureClassResources();
+  ensureFeatureActions();
   renderCombatDashboard();
   renderDiceRoller();
   renderRestPreview();
@@ -71,7 +72,7 @@ let pendingConcentrationDc = null;
 function renderCombatDashboard() {
   const actions = ["Action", "Bonus Action", "Reaction", "Movement"];
   const temp = Number(character.tempHp || 0);
-  document.querySelector("#combatSummary").textContent = `${character.hp}/${character.maxHp} HP${temp ? ` +${temp} temp` : ""} · AC ${character.ac} · ${character.conditions.length || 0} condition${character.conditions.length === 1 ? "" : "s"}`;
+  document.querySelector("#combatSummary").textContent = `${character.hp}/${effectiveMaxHp()} HP${temp ? ` +${temp} temp` : ""} · AC ${character.ac} · ${character.conditions.length || 0} condition${character.conditions.length === 1 ? "" : "s"}`;
   const exhaustion = Number(character.exhaustion || 0);
   const conditionList = [...character.conditions, ...(exhaustion ? [`Exhaustion ${exhaustion}`] : [])];
   document.querySelector("#conditionsMini").textContent = conditionList.length ? conditionList.join(", ") : "None";
@@ -108,7 +109,7 @@ function handleConcentrationPromptClick(event) {
   if (event.target.closest("[data-roll-concentration]")) {
     const dc = pendingConcentrationDc;
     pendingConcentrationDc = null;
-    const result = rollFromInput(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`);
+    const result = rollWithConditions(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`, "save", "con");
     if (!result) return;
     if (result.total >= dc) {
       showToast(`<span class="toast-label">Concentration held</span><span class="toast-roll"><b>${result.total}</b><small>vs DC ${dc} · still concentrating on ${escapeHtml(character.concentration)}</small></span>`, { tone: "crit" });
@@ -126,30 +127,147 @@ function handleConcentrationPromptClick(event) {
   }
 }
 
+// The last damage taken on this sheet, so its toast (and Uncanny Dodge) can take it back.
+let lastDamage = null;
+
+function vitalsSnapshot() {
+  return structuredCloneSafe({
+    hp: character.hp,
+    tempHp: character.tempHp,
+    deathSaveFailures: character.deathSaveFailures,
+    deathSaveSuccesses: character.deathSaveSuccesses,
+    concentration: character.concentration,
+    wildShape: character.wildShape || null,
+    agathys: character.agathys || 0,
+    maxHpReduction: character.maxHpReduction || 0,
+    conditions: [...(character.conditions || [])],
+    autoUnconscious: Boolean(character.autoUnconscious)
+  });
+}
+
+function restoreVitals(snapshot) {
+  Object.assign(character, structuredCloneSafe(snapshot));
+  pendingConcentrationDc = null;
+}
+
+// Read the shared amount box; returns null (and explains) when it isn't a positive whole number.
+function amountFromInput(input) {
+  if (input.value === "") return null;
+  const amount = Math.round(Number(input.value));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast(`<span class="toast-label">Enter a positive number</span><span>Type the amount, then press Damage or Heal.</span>`);
+    return null;
+  }
+  input.value = "";
+  return amount;
+}
+
 function applyDamage(input = document.querySelector("#damageAmount")) {
-  const amount = clamp(Math.round(Number(input.value)), 0, 999);
-  if (!amount) return;
-  const absorbed = Math.min(Number(character.tempHp || 0), amount);
-  const toHp = amount - absorbed;
+  const amount = amountFromInput(input);
+  if (amount) dealDamage(Math.min(amount, 999), { clamped: amount > 999 });
+}
+
+function dealDamage(amount, { label = `Took ${amount} damage`, clamped = false, halved = false } = {}) {
+  const before = vitalsSnapshot();
+  const notes = clamped ? ["Capped at 999."] : [];
+  let remaining = amount;
+  const shape = character.wildShape;
+  if (shape && Number(shape.hp) > 0) {
+    const taken = Math.min(Number(shape.hp), remaining);
+    shape.hp = Number(shape.hp) - taken;
+    remaining -= taken;
+    if (shape.hp <= 0) {
+      character.wildShape = null;
+      notes.push(`${shape.name || "Beast form"} drops to 0 HP and you revert${remaining ? `, taking ${remaining} more` : ""}.`);
+    }
+  }
+  const hadTemp = Number(character.tempHp || 0) > 0;
+  const absorbed = Math.min(Number(character.tempHp || 0), remaining);
+  const toHp = remaining - absorbed;
   const hpBefore = Number(character.hp || 0);
   character.tempHp = Number(character.tempHp || 0) - absorbed;
+  if (hadTemp && character.agathys) {
+    notes.push(`Armor of Agathys: if a melee attack caused this, the attacker takes ${character.agathys} cold damage.`);
+    if (!character.tempHp) character.agathys = 0;
+  }
   character.hp = Math.max(0, hpBefore - toHp);
-  let note = "";
   if (hpBefore <= 0 && toHp > 0) {
     character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3);
-    note = character.deathSaveFailures >= 3 ? "Damage at 0 HP: third death save failure." : "Damage at 0 HP counts as a death save failure.";
-  } else if (character.hp === 0 && toHp - hpBefore >= Number(character.maxHp || 0)) {
+    notes.push(character.deathSaveFailures >= 3 ? "Damage at 0 HP: third death save failure." : "Damage at 0 HP counts as a death save failure.");
+  } else if (character.hp === 0 && toHp - hpBefore >= effectiveMaxHp()) {
     character.deathSaveFailures = 3;
-    note = "Massive damage: the overflow equals your HP maximum, which is instant death.";
+    notes.push("Massive damage: the overflow equals your HP maximum, which is instant death.");
+  } else if (character.hp === 0 && hpBefore > 0) {
+    notes.push("You drop to 0 HP: unconscious and prone. Roll death saves on your turn.");
   }
   if (character.hp === 0 && character.concentration) {
-    note = `${note} Concentration on ${character.concentration} ends.`.trim();
+    notes.push(`Concentration on ${character.concentration} ends.`);
     character.concentration = "";
   }
-  pendingConcentrationDc = character.concentration ? Math.max(10, Math.floor(amount / 2)) : null;
-  input.value = "";
+  pendingConcentrationDc = character.concentration && remaining + absorbed > 0 ? Math.max(10, Math.floor(amount / 2)) : null;
   persistAndRender();
-  if (note) showToast(`<span class="toast-label">Took ${amount} damage</span><span>${escapeHtml(note)}</span>`, { tone: "fumble", duration: 9000 });
+  lastDamage = { before, amount, sheetId: character.sheetId, halved };
+  const actions = [{ label: "Undo", run: () => undoDamage(before) }];
+  if (!halved && currentClass().id === "rogue" && character.level >= 5) actions.push({ label: "Uncanny Dodge (halve)", run: halveLastDamage });
+  actions.push({ label: "Lower max HP too", run: () => reduceMaxHp(amount) });
+  const temp = Number(character.tempHp || 0);
+  const shapeLine = character.wildShape ? ` · ${character.wildShape.name || "Beast form"} ${character.wildShape.hp}/${character.wildShape.max}` : "";
+  showToast(`<span class="toast-label">${escapeHtml(label)}</span><span>${character.hp}/${effectiveMaxHp()} HP${temp ? ` +${temp} temp` : ""}${escapeHtml(shapeLine)}${notes.length ? `. ${escapeHtml(notes.join(" "))}` : ""}</span>`, {
+    tone: character.hp === 0 ? "fumble" : "",
+    actions,
+    duration: notes.length ? 11000 : 7000
+  });
+}
+
+function undoDamage(before) {
+  restoreVitals(before);
+  lastDamage = null;
+  persistAndRender();
+  showToast(`<span class="toast-label">Damage undone</span><span>${character.hp}/${effectiveMaxHp()} HP</span>`);
+}
+
+function halveLastDamage() {
+  if (!lastDamage || lastDamage.sheetId !== character.sheetId) {
+    showToast(`<span class="toast-label">Uncanny Dodge</span><span>Use it right after an attack hits you: enter the damage first, then halve it.</span>`);
+    return;
+  }
+  if (lastDamage.halved) {
+    showToast(`<span class="toast-label">Already halved</span><span>Uncanny Dodge applies once per hit.</span>`);
+    return;
+  }
+  const { before, amount } = lastDamage;
+  restoreVitals(before);
+  lastDamage = null;
+  const half = Math.floor(amount / 2);
+  if (half > 0) {
+    dealDamage(half, { label: `Uncanny Dodge: took ${half} instead of ${amount}`, halved: true });
+    return;
+  }
+  persistAndRender();
+  showToast(`<span class="toast-label">Uncanny Dodge</span><span>The hit is halved to 0 damage.</span>`, { tone: "crit" });
+}
+
+// Life drain and similar effects: the maximum drops until a long rest.
+function reduceMaxHp(amount) {
+  const before = vitalsSnapshot();
+  character.maxHpReduction = Number(character.maxHpReduction || 0) + amount;
+  character.hp = Math.min(Number(character.hp || 0), effectiveMaxHp());
+  const killed = effectiveMaxHp() === 0;
+  if (killed) {
+    character.hp = 0;
+    character.deathSaveFailures = 3;
+  }
+  persistAndRender();
+  showToast(`<span class="toast-label">Max HP lowered by ${amount}</span><span>${killed ? "Your HP maximum is 0: the character dies." : `${character.hp}/${effectiveMaxHp()} HP until a long rest.`}</span>`, {
+    tone: "fumble",
+    actions: [{ label: "Undo", run: () => { restoreVitals(before); persistAndRender(); } }]
+  });
+}
+
+function clearMaxHpReduction() {
+  character.maxHpReduction = 0;
+  persistAndRender();
+  showToast(`<span class="toast-label">Max HP restored</span><span>${character.hp}/${effectiveMaxHp()} HP</span>`);
 }
 
 function isDying() {
@@ -161,9 +279,8 @@ function isDead() {
 }
 
 function applyHeal(input = document.querySelector("#damageAmount")) {
-  const amount = clamp(Math.round(Number(input.value)), 0, 999);
-  if (!amount) return;
-  if (healBy(amount)) input.value = "";
+  const amount = amountFromInput(input);
+  if (amount) healBy(Math.min(amount, 999));
 }
 
 function healBy(amount) {
@@ -175,25 +292,110 @@ function healBy(amount) {
     });
     return false;
   }
-  character.hp = Math.min(Number(character.maxHp || 0), Number(character.hp || 0) + amount);
+  const before = vitalsSnapshot();
+  const shape = character.wildShape && Number(character.wildShape.max) > 0 ? character.wildShape : null;
+  let applied;
+  if (shape) {
+    const old = Number(shape.hp || 0);
+    shape.hp = Math.min(Number(shape.max), old + amount);
+    applied = shape.hp - old;
+  } else {
+    const old = Number(character.hp || 0);
+    character.hp = Math.min(effectiveMaxHp(), old + amount);
+    applied = character.hp - old;
+  }
   persistAndRender();
-  showToast(`<span class="toast-label">Healed ${amount}</span><span>${character.hp}/${character.maxHp} HP</span>`, { tone: "crit" });
+  const where = shape ? `${shape.name || "Beast form"} ${shape.hp}/${shape.max} HP` : `${character.hp}/${effectiveMaxHp()} HP`;
+  const over = amount - applied;
+  showToast(`<span class="toast-label">${applied ? `Healed ${applied}` : "Already at full HP"}</span><span>${escapeHtml(where)}${applied && over ? ` · ${over} over the maximum` : ""}</span>`, {
+    tone: applied ? "crit" : "",
+    actions: applied ? [{ label: "Undo", run: () => { restoreVitals(before); persistAndRender(); } }] : []
+  });
   return true;
 }
 
+// Heal a different character stored on this device (the healer stays on their own sheet).
+function healOther(sheetId, amount) {
+  const other = characterLibrary[sheetId];
+  if (!other) return;
+  const name = other.name || "That character";
+  if (Number(other.hp) <= 0 && Number(other.deathSaveFailures) >= 3) {
+    showToast(`<span class="toast-label">${escapeHtml(name)} is dead</span><span>Ordinary healing can't help.</span>`, { tone: "fumble" });
+    return;
+  }
+  const old = Number(other.hp || 0);
+  other.hp = Math.min(effectiveMaxHp(other), old + amount);
+  if (other.hp > 0) {
+    other.deathSaveSuccesses = 0;
+    other.deathSaveFailures = 0;
+    if (other.autoUnconscious) {
+      other.conditions = (other.conditions || []).filter(condition => condition !== "Unconscious");
+      other.autoUnconscious = false;
+    }
+  }
+  other.updatedAt = Date.now();
+  saveCharacterLibrary();
+  renderAll();
+  const applied = other.hp - old;
+  showToast(`<span class="toast-label">${applied ? `Healed ${escapeHtml(name)} ${applied}` : `${escapeHtml(name)} is already at full HP`}</span><span>${other.hp}/${effectiveMaxHp(other)} HP</span>`, { tone: applied ? "crit" : "" });
+}
+
+function gainTempHp(amount) {
+  const before = vitalsSnapshot();
+  const old = Number(character.tempHp || 0);
+  character.tempHp = Math.max(old, amount);
+  persistAndRender();
+  showToast(`<span class="toast-label">${character.tempHp > old ? `${character.tempHp} temp HP` : `Kept ${old} temp HP`}</span><span>${character.tempHp > old ? "Temporary hit points don't stack; the higher total applies." : `${amount} is not more than the ${old} you already have.`}</span>`, {
+    actions: [{ label: "Undo", run: () => { restoreVitals(before); persistAndRender(); } }]
+  });
+}
+
+const INCAPACITATING = ["Incapacitated", "Paralyzed", "Petrified", "Stunned", "Unconscious"];
+const SAVE_AUTO_FAIL = ["Paralyzed", "Petrified", "Stunned", "Unconscious"];
+
 // Conditions and exhaustion that impose disadvantage (PHB appendix A).
-function conditionDisadvantage(kind) {
+function disadvantageSources(kind, ability = "") {
   const active = new Set(character.conditions || []);
   const exhaustion = Number(character.exhaustion || 0);
-  const sources = kind === "attack"
-    ? ["Poisoned", "Frightened", "Prone", "Blinded", "Restrained"].filter(name => active.has(name))
-    : kind === "check"
-      ? ["Poisoned", "Frightened"].filter(name => active.has(name))
-      : [];
-  if (kind === "attack" && exhaustion >= 3) sources.push(`exhaustion ${exhaustion}`);
-  if (kind === "check" && exhaustion >= 1) sources.push(`exhaustion ${exhaustion}`);
-  if (kind === "save" && exhaustion >= 3) sources.push(`exhaustion ${exhaustion}`);
-  return sources.length ? `${sources.join(", ")}: disadvantage` : "";
+  const names = {
+    attack: ["Poisoned", "Frightened", "Prone", "Blinded", "Restrained"],
+    check: ["Poisoned", "Frightened"],
+    save: ability === "dex" ? ["Restrained"] : []
+  }[kind] || [];
+  const sources = names.filter(name => active.has(name));
+  const threshold = { attack: 3, check: 1, save: 3 }[kind];
+  if (threshold && exhaustion >= threshold) sources.push(`exhaustion ${exhaustion}`);
+  return sources;
+}
+
+// Advantage and disadvantage cancel out (PHB p. 173) no matter how many sources of each.
+function rollModeFor(kind, ability = "") {
+  const chosen = document.querySelector("#rollMode").value;
+  const sources = disadvantageSources(kind, ability);
+  if (!sources.length) return { mode: chosen, note: "" };
+  if (chosen === "advantage") return { mode: "normal", note: `${sources.join(", ")} cancels advantage` };
+  return { mode: "disadvantage", note: `${sources.join(", ")}: disadvantage` };
+}
+
+function autoFailCondition(ability) {
+  if (!["str", "dex"].includes(ability)) return "";
+  return SAVE_AUTO_FAIL.find(name => (character.conditions || []).includes(name)) || "";
+}
+
+function incapacitatedBy() {
+  return INCAPACITATING.find(name => (character.conditions || []).includes(name)) || "";
+}
+
+// Incapacitated creatures can't act. Warn once and let the player override (the DM may rule otherwise).
+function blockedByIncapacitation(retry) {
+  const condition = incapacitatedBy();
+  if (!condition) return false;
+  showToast(`<span class="toast-label">You're ${condition.toLowerCase()}</span><span>Incapacitated creatures can't take actions or reactions.</span>`, {
+    tone: "fumble",
+    actions: [{ label: "Do it anyway", run: retry }],
+    duration: 9000
+  });
+  return true;
 }
 
 function reviveCharacter() {
@@ -268,14 +470,21 @@ function rollAbilityCheck(ability) {
   rollWithConditions(`${name} check`, `1d20${formatMod(mod(ability) + jackOfAllTrades())}`, "check");
 }
 
-function rollWithConditions(label, formula, kind) {
-  const reason = conditionDisadvantage(kind);
-  rollFromInput(reason ? `${label} (${reason})` : label, formula, reason ? "disadvantage" : document.querySelector("#rollMode").value);
+function rollWithConditions(label, formula, kind, ability = "", actions = []) {
+  const { mode, note } = rollModeFor(kind, ability);
+  return rollFromInput(note ? `${label} (${note})` : label, formula, mode, actions);
 }
 
-function rollSavingThrow(ability) {
+function rollSavingThrow(ability, actions = []) {
   const name = ABILITIES.find(([id]) => id === ability)?.[1] || ability;
-  rollWithConditions(`${name} save`, `1d20${formatMod(saveBonus(ability))}`, "save");
+  const failedBy = autoFailCondition(ability);
+  if (failedBy) {
+    character.rollHistory = [{ label: `${name} save: automatic failure (${failedBy})`, formula: "auto", mode: "normal", total: 0, parts: ["auto-fail"] }, ...(character.rollHistory || [])].slice(0, 25);
+    persistAndRender();
+    showToast(`<span class="toast-label">${escapeHtml(name)} save: automatic failure</span><span>${escapeHtml(failedBy)} creatures fail Strength and Dexterity saves.</span>`, { tone: "fumble" });
+    return null;
+  }
+  return rollWithConditions(`${name} save`, `1d20${formatMod(saveBonus(ability))}`, "save", ability, actions);
 }
 
 function rollSkillCheck(skill) {
@@ -293,7 +502,7 @@ function combatActionHint(action) {
     Action: "Attack, cast, dash, disengage, dodge, help, hide, ready, search, or use object.",
     "Bonus Action": "Available only when a feature, spell, or item grants one.",
     Reaction: "Usually spent off-turn by a trigger such as an opportunity attack.",
-    Movement: `${character.speed || 30} ft speed before modifiers.`
+    Movement: `${effectiveSpeed()} ft speed.`
   }[action];
 }
 
@@ -305,12 +514,12 @@ function renderDiceRoller() {
       <strong>${escapeHtml(roll.label)}</strong>
       <span>${escapeHtml(roll.parts.join(" + "))}</span>
       <b>${roll.total}</b>
-      ${/^(death save|hit die)/i.test(roll.label) ? "<span></span>" : `<button type="button" class="ghost reroll" data-roll-index="${index}" aria-label="Reroll ${escapeHtml(roll.label)}" title="Reroll">${icon("arrow-clockwise")}</button>`}
+      ${/^(death save|hit die)|automatic failure/i.test(roll.label) ? "<span></span>" : `<button type="button" class="ghost reroll" data-roll-index="${index}" aria-label="Reroll ${escapeHtml(roll.label)}" title="Reroll">${icon("arrow-clockwise")}</button>`}
     </article>
   `).join("") || `<p class="empty-state">No roll history yet.</p>`;
 }
 
-function rollFromInput(label = "Custom Roll", formula = document.querySelector("#rollFormula").value, mode = document.querySelector("#rollMode").value, actions = []) {
+function rollFromInput(label = "Custom Roll", formula = document.querySelector("#rollFormula").value, mode = document.querySelector("#rollMode").value, actions = [], detail = "") {
   const problem = formulaProblem(formula || "1d20");
   if (problem) {
     showToast(`<span class="toast-label">Can't roll "${escapeHtml(formula)}"</span><span>${problem}</span>`, { tone: "fumble" });
@@ -325,7 +534,8 @@ function rollFromInput(label = "Custom Roll", formula = document.querySelector("
   showToast(`
     <span class="toast-label">${escapeHtml(label)}${natural === 20 ? " · natural 20!" : natural === 1 ? " · natural 1" : ""}</span>
     <span class="toast-roll"><b>${result.total}</b><small>${escapeHtml(result.parts.join(" + "))}${mode !== "normal" ? ` · ${mode}` : ""}</small></span>
-  `, { tone, actions: toastActions, duration: 7000 });
+    ${detail ? `<span class="toast-detail">${escapeHtml(detail)}</span>` : ""}
+  `, { tone, actions: toastActions, duration: detail ? 10000 : 7000 });
   return result;
 }
 
@@ -411,12 +621,12 @@ function spendHitDie() {
   const face = rollDie(cls.hitDie);
   const heal = Math.max(1, face + mod("con"));
   character.hitDiceUsed += 1;
-  character.hp = Math.min(Number(character.maxHp || character.hp), Number(character.hp || 0) + heal);
+  character.hp = Math.min(effectiveMaxHp(), Number(character.hp || 0) + heal);
   character.rollHistory = [{ label: "Hit die healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`1d${cls.hitDie}[${face}]`, String(mod("con"))] }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
   const left = character.level - character.hitDiceUsed;
-  const more = left > 0 && character.hp < character.maxHp ? [{ label: `Spend another (${left} left)`, run: spendHitDie }] : [];
-  showToast(`<span class="toast-label">Hit die · 1d${cls.hitDie}${formatMod(mod("con"))}</span><span class="toast-roll"><b>+${heal} HP</b><small>${character.hp}/${character.maxHp} HP · ${left} hit ${left === 1 ? "die" : "dice"} left</small></span>`, { actions: more, duration: 9000 });
+  const more = left > 0 && character.hp < effectiveMaxHp() ? [{ label: `Spend another (${left} left)`, run: spendHitDie }] : [];
+  showToast(`<span class="toast-label">Hit die · 1d${cls.hitDie}${formatMod(mod("con"))}</span><span class="toast-roll"><b>+${heal} HP</b><small>${character.hp}/${effectiveMaxHp()} HP · ${left} hit ${left === 1 ? "die" : "dice"} left</small></span>`, { actions: more, duration: 9000 });
 }
 
 function takeRest(type) {
@@ -424,8 +634,17 @@ function takeRest(type) {
   if (type === "short" && isPactCaster()) {
     character.spellSlotUsage = {};
   }
+  // A short rest is an hour: concentration on a spell lasting an hour or less has run out.
+  if (type === "short" && character.concentration) {
+    const minutes = spellDurationMinutes(character.concentration);
+    if (minutes !== null && minutes <= 60) character.concentration = "";
+  }
   if (type === "long") {
-    character.hp = character.maxHp || character.hp;
+    character.maxHpReduction = 0;
+    character.wildShape = null;
+    character.agathys = 0;
+    (character.spells || []).forEach(row => { delete row.castLevel; });
+    character.hp = effectiveMaxHp() || character.hp;
     character.spellSlotUsage = {};
     character.conditions = (character.conditions || []).filter(condition => condition === "Exhaustion");
     character.exhaustion = Math.max(0, Number(character.exhaustion || 0) - 1);
@@ -450,9 +669,10 @@ function takeRest(type) {
     run: undoLastRest
   }];
   const hitDiceLeft = character.level - character.hitDiceUsed;
-  if (type === "short" && hitDiceLeft > 0 && character.hp < character.maxHp) actions.push({ label: `Spend a hit die (${hitDiceLeft} left)`, run: spendHitDie });
+  if (type === "short" && hitDiceLeft > 0 && character.hp < effectiveMaxHp()) actions.push({ label: `Spend a hit die (${hitDiceLeft} left)`, run: spendHitDie });
+  if (type === "short" && arcaneRecoveryPlan().length) actions.push({ label: "Arcane Recovery", run: useArcaneRecovery });
   const changes = restChanges(before, character);
-  const nothing = character.hp < character.maxHp && hitDiceLeft > 0 ? "No resources to recover. Spend hit dice to heal." : "Nothing needed recovering.";
+  const nothing = character.hp < effectiveMaxHp() && hitDiceLeft > 0 ? "No resources to recover. Spend hit dice to heal." : "Nothing needed recovering.";
   showToast(`<span class="toast-label">${name}</span><span>${escapeHtml(changes.join(" · ") || nothing)}</span>`, { actions, duration: 12000 });
   lastRest = { before, after, name };
   renderRestPreview();
@@ -472,7 +692,14 @@ function undoLastRest() {
 // Reverse the rest's own changes as deltas, so anything done after the rest (here or in another tab) survives.
 function undoRest(before, after) {
   const delta = (field, from = before, to = after) => Number(from?.[field] || 0) - Number(to?.[field] || 0);
-  character.hp = clamp(Number(character.hp || 0) + delta("hp"), 0, Number(character.maxHp || 0));
+  if (Number(before.maxHpReduction || 0) !== Number(after.maxHpReduction || 0)) character.maxHpReduction = before.maxHpReduction;
+  if (before.wildShape && !after.wildShape && !character.wildShape) character.wildShape = before.wildShape;
+  if (before.agathys && !after.agathys && !character.agathys) character.agathys = before.agathys;
+  (before.spells || []).forEach(old => {
+    const row = (character.spells || []).find(entry => entry.id === old.id);
+    if (row && old.castLevel && !row.castLevel) row.castLevel = old.castLevel;
+  });
+  character.hp = clamp(Number(character.hp || 0) + delta("hp"), 0, effectiveMaxHp());
   const levels = new Set([...Object.keys(before.spellSlotUsage || {}), ...Object.keys(after.spellSlotUsage || {})]);
   levels.forEach(level => {
     const change = delta(level, before.spellSlotUsage, after.spellSlotUsage);
@@ -523,7 +750,47 @@ function restChanges(before, after) {
   if (cleared.length) changes.push(`cleared ${cleared.join(", ")}`);
   if (Number(after.exhaustion) < Number(before.exhaustion)) changes.push(`exhaustion ${after.exhaustion}`);
   if (before.concentration && !after.concentration) changes.push(`ended ${before.concentration}`);
+  if (Number(before.maxHpReduction || 0) > Number(after.maxHpReduction || 0)) changes.push("max HP restored");
+  if (before.wildShape && !after.wildShape) changes.push("left Wild Shape");
   return changes;
+}
+
+// Arcane Recovery (wizard, once per day after a short rest): recover spent slots totalling up to
+// half your wizard level (rounded up), none 6th level or higher. Highest slots first.
+function arcaneRecoveryPlan() {
+  if (currentClass().id !== "wizard") return [];
+  const feature = character.resources.find(item => item.name === "Arcane Recovery");
+  if (!feature || Number(feature.current) < 1) return [];
+  let budget = Math.ceil(character.level / 2);
+  const plan = [];
+  for (let level = Math.min(5, budget); level >= 1; level -= 1) {
+    let spent = Number(character.spellSlotUsage?.[level] || 0);
+    while (spent > 0 && level <= budget) {
+      plan.push(level);
+      budget -= level;
+      spent -= 1;
+    }
+  }
+  return plan;
+}
+
+function useArcaneRecovery() {
+  const plan = arcaneRecoveryPlan();
+  if (!plan.length) {
+    showToast(`<span class="toast-label">Arcane Recovery</span><span>No spent slots to recover, or it's already used today.</span>`);
+    return;
+  }
+  const before = { usage: { ...character.spellSlotUsage }, feature: character.resources.find(item => item.name === "Arcane Recovery").current };
+  plan.forEach(level => {
+    character.spellSlotUsage[level] = Math.max(0, Number(character.spellSlotUsage[level] || 0) - 1);
+  });
+  const feature = character.resources.find(item => item.name === "Arcane Recovery");
+  feature.current = Number(feature.current) - 1;
+  persistAndRender();
+  showToast(`<span class="toast-label">Arcane Recovery</span><span>Recovered ${plan.map(level => `a ${ordinal(level)}-level slot`).join(", ")}.</span>`, {
+    tone: "crit",
+    actions: [{ label: "Undo", run: () => { character.spellSlotUsage = before.usage; feature.current = before.feature; persistAndRender(); } }]
+  });
 }
 
 function renderResources() {
@@ -657,12 +924,54 @@ function renderConditions() {
       ${CONDITIONS.map(condition => `<button type="button" title="${escapeHtml(conditionRule(condition))}" class="condition-chip ${active.has(condition) ? "active" : ""}" aria-pressed="${active.has(condition)}" data-condition="${condition}">${condition}</button>`).join("")}
     </div>
     ${[...active].filter(condition => CONDITIONS.includes(condition)).map(condition => `
-      <article class="condition-card active"><strong>${escapeHtml(condition)}</strong><span>${escapeHtml(conditionRule(condition))}</span></article>
+      <article class="condition-card active">
+        <strong>${escapeHtml(condition)}</strong>
+        <span>${escapeHtml(conditionRule(condition))}</span>
+        ${conditionCardControls(condition)}
+      </article>
     `).join("")}
   `;
 }
 
+// Conditions that a spell or monster usually lets you shake off with a repeated save at the end of your turn.
+const REPEAT_SAVE_CONDITIONS = ["Blinded", "Charmed", "Frightened", "Incapacitated", "Paralyzed", "Petrified", "Poisoned", "Restrained", "Stunned"];
+
+function conditionCardControls(condition) {
+  if (condition === "Prone") {
+    return `<div class="condition-actions"><button type="button" class="secondary" data-stand-up>Stand up (costs ${Math.floor(effectiveSpeed() / 2)} ft)</button></div>`;
+  }
+  if (!REPEAT_SAVE_CONDITIONS.includes(condition)) return "";
+  return `
+    <div class="condition-actions">
+      <span>Repeat save</span>
+      ${ABILITIES.map(([id, name]) => `<button type="button" class="ghost" data-repeat-save="${id}" data-condition-name="${condition}" title="Roll a ${name} save to end ${condition}">${id.toUpperCase()}</button>`).join("")}
+    </div>
+  `;
+}
+
+function removeCondition(condition) {
+  character.conditions = (character.conditions || []).filter(item => item !== condition);
+  persistAndRender();
+  showToast(`<span class="toast-label">${escapeHtml(condition)} ended</span>`);
+}
+
 function handleConditionClick(event) {
+  if (event.target.closest("[data-stand-up]")) {
+    if (Number(character.hp) <= 0) {
+      showToast(`<span class="toast-label">You can't stand yet</span><span>You're unconscious at 0 HP. Healing wakes you, but you stay prone until you stand.</span>`);
+      return;
+    }
+    character.conditions = (character.conditions || []).filter(condition => condition !== "Prone");
+    persistAndRender();
+    showToast(`<span class="toast-label">You stand up</span><span>Standing costs half your speed: ${Math.ceil(effectiveSpeed() / 2)} ft of movement left this turn.</span>`);
+    return;
+  }
+  const repeat = event.target.closest("[data-repeat-save]");
+  if (repeat) {
+    const condition = repeat.dataset.conditionName;
+    rollSavingThrow(repeat.dataset.repeatSave, () => [{ label: `It worked: end ${condition}`, run: () => removeCondition(condition) }]);
+    return;
+  }
   const button = event.target.closest("[data-condition]");
   if (!button) return;
   if (button.dataset.condition === "Concentrating" && character.concentration) {
@@ -706,6 +1015,7 @@ function refreshGeneratedActions() {
     if (fresh) {
       action.attack = fresh.attack;
       action.damage = fresh.damage;
+      if (fresh.use) action.use = fresh.use;
     }
   });
 }
@@ -759,6 +1069,13 @@ function handleActionInput(event) {
 function syncActionButtons(node, action) {
   node.querySelector(".roll-attack").style.display = /^\s*[+-]?\d+/.test(action.attack || "") ? "" : "none";
   node.querySelector(".roll-damage").style.display = actionDamageFormula(action) ? "" : "none";
+  const use = node.querySelector(".use-action");
+  use.hidden = !action.use;
+  if (action.use) {
+    const [resource, amount] = action.use.cost || [];
+    use.textContent = resource === "Ki Points" ? `Use (${amount} ki)` : resource === "Superiority Dice" ? "Use a die" : "Use";
+    use.title = resource ? `Spends ${amount} ${resource}` : "";
+  }
 }
 
 function actionDamageFormula(action) {
@@ -770,39 +1087,80 @@ function doubleDice(formula) {
 }
 
 function handleActionClick(event) {
-  const button = event.target.closest(".remove-action");
-  const attackButton = event.target.closest(".roll-attack");
-  const damageButton = event.target.closest(".roll-damage");
-  if (attackButton || damageButton) {
-    const action = character.actions.find(item => item.id === event.target.closest(".action-row").dataset.actionId);
-    if (!action) return;
-    const name = action.name || "Action";
-    const damage = actionDamageFormula(action);
-    if (damageButton) {
-      if (damage) rollFromInput(`${name} damage`, damage, "normal");
-      else showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>No damage dice entered. Add something like 1d8+3.</span>`);
-      return;
-    }
-    const bonus = String(action.attack || "").match(/^\s*([+-]?\d+)/)?.[1];
-    if (bonus === undefined) {
-      showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>${escapeHtml(action.attack || "No attack bonus entered.")}${damage ? " Roll damage after the target saves." : ""}</span>`);
-      return;
-    }
-    const label = action.type === "Free" ? name : `${name} to hit`;
-    const followUp = result => {
-      if (!damage) return [];
-      return naturalD20(result) === 20
-        ? [{ label: "Roll crit damage", run: () => rollFromInput(`${name} critical damage`, doubleDice(damage), "normal") }]
-        : [{ label: "Roll damage", run: () => rollFromInput(`${name} damage`, damage, "normal") }];
-    };
-    const reason = conditionDisadvantage("attack");
-    rollFromInput(reason ? `${label} (${reason})` : label, `1d20${formatMod(Number(bonus))}`, reason ? "disadvantage" : document.querySelector("#rollMode").value, followUp);
+  const row = event.target.closest(".action-row");
+  const action = row && character.actions.find(item => item.id === row.dataset.actionId);
+  if (!action) return;
+  if (event.target.closest(".use-action")) {
+    useFeatureAction(action);
     return;
   }
-  if (!button) return;
-  const row = button.closest(".action-row");
-  character.actions = character.actions.filter(item => item.id !== row.dataset.actionId);
+  if (event.target.closest(".roll-damage")) {
+    const damage = actionDamageFormula(action);
+    if (damage) rollFromInput(`${action.name || "Action"} damage`, damage, "normal");
+    else showToast(`<span class="toast-label">${escapeHtml(action.name || "Action")}</span><span>No damage dice entered. Add something like 1d8+3.</span>`);
+    return;
+  }
+  if (event.target.closest(".roll-attack")) {
+    rollActionAttack(action);
+    return;
+  }
+  if (!event.target.closest(".remove-action")) return;
+  if (action.source?.feature) character.dismissedFeatures = [...new Set([...(character.dismissedFeatures || []), action.source.feature])];
+  character.actions = character.actions.filter(item => item.id !== action.id);
   persistAndRender();
+}
+
+function rollActionAttack(action, suffix = "", confirmed = false) {
+  const name = action.name || "Action";
+  if (!confirmed && blockedByIncapacitation(() => rollActionAttack(action, suffix, true))) return;
+  const damage = actionDamageFormula(action);
+  const bonus = String(action.attack || "").match(/^\s*([+-]?\d+)/)?.[1];
+  if (bonus === undefined) {
+    showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>${escapeHtml(action.attack || "No attack bonus entered.")}${damage ? " Roll damage after the target saves." : ""}</span>`);
+    return;
+  }
+  const label = `${action.type === "Free" ? name : `${name} to hit`}${suffix}`;
+  const { mode, note } = rollModeFor("attack");
+  const weapon = !action.source?.spell;
+  rollFromInput(note ? `${label} (${note})` : label, `1d20${formatMod(Number(bonus))}`, mode, result => damageFollowUps(name, damage, naturalD20(result), { weapon }));
+}
+
+// Damage that rides on a hit: Hex, Hunter's Mark, Hexblade's Curse, Sneak Attack. Each gets its own button
+// so the player decides whether it applies to this target and turn.
+function damageRiders({ weapon = false } = {}) {
+  const riders = [];
+  if (character.concentration === "Hex") riders.push({ name: "Hex", formula: "1d6" });
+  if (weapon && character.concentration === "Hunter's Mark") riders.push({ name: "Hunter's Mark", formula: "1d6" });
+  if (hexbladeCurseActive()) riders.push({ name: "Curse", formula: String(proficiencyBonus()) });
+  if (weapon && currentClass().id === "rogue") riders.push({ name: "Sneak Attack", formula: `${Math.ceil(character.level / 2)}d6` });
+  return riders;
+}
+
+function hexbladeCurseActive() {
+  if (!lookupBySubclass({ hexblade: true })) return false;
+  const curse = character.resources.find(item => item.name === "Hexblade's Curse");
+  return Boolean(curse) && Number(curse.current) < Number(curse.max);
+}
+
+// Hexblade's Curse widens the crit range against the cursed target to 19-20.
+function critThreshold() {
+  return hexbladeCurseActive() ? 19 : 20;
+}
+
+function damageFollowUps(name, formula, natural, options = {}) {
+  if (!formula) return [];
+  const crit = Number(natural) >= critThreshold();
+  const viaCurse = crit && Number(natural) < 20;
+  const base = crit ? doubleDice(formula) : formula;
+  const riders = damageRiders(options).map(rider => ({ ...rider, formula: crit ? doubleDice(rider.formula) : rider.formula }));
+  const label = crit ? `Roll crit damage${viaCurse ? " (19, cursed target)" : ""}` : "Roll damage";
+  const title = `${name} ${crit ? "critical " : ""}damage`;
+  const actions = [{ label, run: () => rollFromInput(title, base, "normal") }];
+  riders.forEach(rider => actions.push({ label: `${label} + ${rider.name}`, run: () => rollFromInput(`${title} + ${rider.name}`, `${base}+${rider.formula}`, "normal") }));
+  if (riders.length > 1) {
+    actions.push({ label: `${label} + all`, run: () => rollFromInput(`${title} + ${riders.map(rider => rider.name).join(" + ")}`, [base, ...riders.map(rider => rider.formula)].join("+"), "normal") });
+  }
+  return actions;
 }
 
 function weaponAction(item) {
@@ -812,7 +1170,10 @@ function weaponAction(item) {
   const text = `${item.name} ${notes}`.toLowerCase();
   const ranged = /ranged|ammunition|crossbow|\bbow\b|longbow|shortbow|sling|dart/.test(text);
   const finesse = /finesse/.test(text);
-  const abilityMod = ranged ? mod("dex") : finesse ? Math.max(mod("str"), mod("dex")) : mod("str");
+  let abilityMod = ranged ? mod("dex") : finesse ? Math.max(mod("str"), mod("dex")) : mod("str");
+  // Hex Warrior: a Hexblade attacks with Charisma using any one-handed weapon (or pact weapon).
+  const hexWarrior = lookupBySubclass({ hexblade: true }) && !/two-handed/.test(text) && mod("cha") > abilityMod;
+  if (hexWarrior) abilityMod = mod("cha");
   const damageType = notes.match(/\d+d\d+\s+([a-z]+)/i)?.[1] || "";
   return {
     id: crypto.randomUUID(),
@@ -820,26 +1181,211 @@ function weaponAction(item) {
     type: "Action",
     attack: formatMod(proficiencyBonus() + abilityMod),
     damage: `${die}${formatMod(abilityMod)}${damageType ? ` ${damageType}` : ""}`,
-    notes: `Assumes proficiency. ${notes}`.trim(),
+    notes: `${hexWarrior ? "Hex Warrior: uses Charisma. " : ""}Assumes proficiency. ${notes}`.trim(),
     source: { weapon: item.id }
   };
 }
 
+// Class features that act at the table. "use" describes what the Use button does and what it spends.
 function featureActions() {
   const cls = currentClass();
   const level = character.level;
+  const prof = proficiencyBonus();
   const actions = [];
+  const add = (key, fields) => actions.push({ id: crypto.randomUUID(), attack: "", damage: "", notes: "", ...fields, source: { feature: key } });
   if (cls.id === "monk") {
     const die = level >= 17 ? 10 : level >= 11 ? 8 : level >= 5 ? 6 : 4;
     const ability = Math.max(mod("str"), mod("dex"));
-    const strike = { type: "Action", attack: formatMod(proficiencyBonus() + ability), damage: `1d${die}${formatMod(ability)} bludgeoning` };
-    actions.push({ id: crypto.randomUUID(), name: "Unarmed Strike", ...strike, notes: `Martial Arts d${die}.`, source: { feature: "unarmed" } });
-    actions.push({ id: crypto.randomUUID(), name: "Unarmed Strike (bonus)", ...strike, type: "Bonus Action", notes: "Martial Arts: after you take the Attack action.", source: { feature: "unarmed-bonus" } });
+    const strike = { attack: formatMod(prof + ability), damage: `1d${die}${formatMod(ability)} bludgeoning` };
+    add("unarmed", { name: "Unarmed Strike", type: "Action", ...strike, notes: `Martial Arts d${die}.` });
+    add("unarmed-bonus", { name: "Unarmed Strike (bonus)", type: "Bonus Action", ...strike, notes: "Martial Arts: after you take the Attack action." });
+    if (level >= 2) {
+      add("flurry", { name: "Flurry of Blows", type: "Bonus Action", ...strike, notes: "Two unarmed strikes after you take the Attack action.", use: { cost: ["Ki Points", 1], kind: "attacks", attacks: 2 } });
+      add("patient-defense", { name: "Patient Defense", type: "Bonus Action", notes: "Take the Dodge action as a bonus action.", use: { cost: ["Ki Points", 1], kind: "note", text: "Dodging: attacks against you have disadvantage and you make DEX saves with advantage until your next turn." } });
+      add("step-of-the-wind", { name: "Step of the Wind", type: "Bonus Action", notes: "Disengage or Dash as a bonus action.", use: { cost: ["Ki Points", 1], kind: "note", text: "Disengage or Dash as a bonus action, and your jump distance doubles this turn." } });
+    }
+    if (level >= 3) {
+      add("deflect-missiles", { name: "Deflect Missiles", type: "Reaction", notes: "Reduce the damage of a ranged weapon attack that hits you.", use: { kind: "roll", roll: `1d10${formatMod(mod("dex") + level)}`, text: "Reduce the damage by this much. If it drops to 0 you catch the missile and can spend 1 ki to throw it back." } });
+    }
+    if (level >= 5) {
+      const dc = 8 + prof + mod("wis");
+      add("stunning-strike", { name: "Stunning Strike", type: "Free", notes: `After a melee hit: CON save DC ${dc} or stunned.`, use: { cost: ["Ki Points", 1], kind: "note", text: `The target makes a Constitution save, DC ${dc}. On a failure it is stunned until the end of your next turn.` } });
+    }
   }
   if (cls.id === "rogue") {
-    actions.push({ id: crypto.randomUUID(), name: "Sneak Attack", type: "Free", attack: "", damage: `${Math.ceil(level / 2)}d6`, notes: "Once per turn, with a finesse or ranged weapon, when you have advantage or an ally is within 5 feet of the target.", source: { feature: "sneak" } });
+    if (level >= 2) add("cunning-action", { name: "Cunning Action", type: "Bonus Action", notes: "Dash, Disengage, or Hide as a bonus action.", use: { kind: "cunning" } });
+    if (level >= 5) add("uncanny-dodge", { name: "Uncanny Dodge", type: "Reaction", notes: "Halve the damage of an attack that hits you.", use: { kind: "uncanny" } });
+  }
+  if (cls.id === "fighter") {
+    add("second-wind", { name: "Second Wind", type: "Bonus Action", notes: `Regain 1d10+${level} HP.`, use: { cost: ["Second Wind", 1], kind: "heal", roll: `1d10+${level}` } });
+    if (level >= 2) add("action-surge", { name: "Action Surge", type: "Free", notes: "One additional action this turn.", use: { cost: ["Action Surge", 1], kind: "note", text: "Take one additional action on this turn." } });
+    if (level >= 3 && lookupBySubclass({ "battle-master": true })) {
+      const die = level >= 18 ? 12 : level >= 10 ? 10 : 8;
+      const dc = 8 + prof + Math.max(mod("str"), mod("dex"));
+      add("superiority", { name: "Superiority Die", type: "Free", notes: `Maneuver save DC ${dc}.`, use: { cost: ["Superiority Dice", 1], kind: "roll", roll: `1d${die}`, text: `Add it as your maneuver says (attack, damage, or AC). Maneuver save DC ${dc}.` } });
+    }
+  }
+  if (cls.id === "sorcerer") {
+    if (level >= 2) add("flexible-casting", { name: "Flexible Casting", type: "Bonus Action", notes: "Turn sorcery points into a spell slot, or a slot into points.", use: { kind: "flexible" } });
+    if (level >= 3) add("metamagic", { name: "Metamagic", type: "Free", notes: "Spend sorcery points to change a spell as you cast it.", use: { kind: "metamagic" } });
+  }
+  if (cls.id === "druid" && level >= 2) {
+    add("wild-shape", { name: "Wild Shape", type: lookupBySubclass({ moon: true }) ? "Bonus Action" : "Action", notes: "Become a beast. Its HP absorb damage first.", use: { cost: ["Wild Shape", 1], kind: "wildshape" } });
   }
   return actions;
+}
+
+// Class feature rows appear on their own, like class resources. Removing one keeps it removed.
+function ensureFeatureActions() {
+  const dismissed = new Set(character.dismissedFeatures || []);
+  const present = new Set(character.actions.map(action => action.source?.feature).filter(Boolean));
+  const names = new Set(character.actions.map(action => String(action.name || "").toLowerCase()));
+  const missing = featureActions().filter(action => !present.has(action.source.feature) && !dismissed.has(action.source.feature) && !names.has(action.name.toLowerCase()));
+  if (!missing.length) return;
+  character.actions.push(...missing);
+  persist();
+}
+
+function useFeatureAction(action, confirmed = false) {
+  const use = action.use;
+  if (!use) return;
+  if (!confirmed && blockedByIncapacitation(() => useFeatureAction(action, true))) return;
+  const name = action.name || "Feature";
+  let spent = null;
+  if (use.cost) {
+    const [resourceName, amount] = use.cost;
+    const resource = character.resources.find(item => item.name === resourceName);
+    if (!resource || Number(resource.current) < amount) {
+      showToast(`<span class="toast-label">No ${escapeHtml(resourceName)} left</span><span>${resource ? `${resource.current}/${resource.max}. Rest to recover.` : "This sheet doesn't track it yet."}</span>`, { tone: "fumble" });
+      return;
+    }
+    resource.current = Number(resource.current) - amount;
+    spent = { resource, amount };
+    persistAndRender();
+  }
+  const status = spent ? `${spent.resource.name} ${spent.resource.current}/${spent.resource.max}` : "";
+  const refund = () => {
+    if (!spent) return;
+    spent.resource.current = Math.min(Number(spent.resource.max), Number(spent.resource.current) + spent.amount);
+  };
+  const undo = spent ? [{ label: "Undo", run: () => { refund(); persistAndRender(); } }] : [];
+  if (use.kind === "attacks") {
+    showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>${escapeHtml(status)}</span>`, { actions: undo });
+    for (let index = 1; index <= use.attacks; index += 1) rollActionAttack(action, ` ${index} of ${use.attacks}`, true);
+    return;
+  }
+  if (use.kind === "heal") {
+    const result = rollFromInput(`${name}${status ? ` (${status})` : ""}`, use.roll, "normal");
+    if (result) healBy(result.total);
+    return;
+  }
+  if (use.kind === "roll") {
+    rollFromInput(`${name}${status ? ` (${status})` : ""}`, use.roll, "normal", undo, use.text);
+    return;
+  }
+  if (use.kind === "note") {
+    showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>${escapeHtml(use.text)}${status ? ` ${escapeHtml(status)}.` : ""}</span>`, { actions: undo, duration: 9000 });
+    return;
+  }
+  if (use.kind === "cunning") {
+    showToast(`<span class="toast-label">Cunning Action</span><span>Dash, Disengage, or Hide as a bonus action.</span>`, { actions: [{ label: "Hide (Stealth)", run: () => rollSkillCheck("stealth") }] });
+    return;
+  }
+  if (use.kind === "uncanny") {
+    halveLastDamage();
+    return;
+  }
+  if (use.kind === "metamagic") {
+    metamagicMenu();
+    return;
+  }
+  if (use.kind === "flexible") {
+    flexibleCastingMenu();
+    return;
+  }
+  if (use.kind === "wildshape") {
+    character.wildShape = { name: "Beast form", hp: 0, max: 0 };
+    persistAndRender();
+    document.querySelector('[data-wild-shape="max"]')?.focus();
+    showToast(`<span class="toast-label">Wild Shape</span><span>Enter the beast's hit points in the Beast form row under Hit points. ${escapeHtml(status)}.</span>`, {
+      actions: [{ label: "Undo", run: () => { refund(); character.wildShape = null; persistAndRender(); } }],
+      duration: 9000
+    });
+  }
+}
+
+function sorceryPoints() {
+  return character.resources.find(item => item.name === "Sorcery Points");
+}
+
+function spendSorceryPoints(amount, label) {
+  const points = sorceryPoints();
+  if (!points || Number(points.current) < amount) {
+    showToast(`<span class="toast-label">Not enough sorcery points</span><span>${points ? `${points.current}/${points.max}` : "Not tracked."}</span>`, { tone: "fumble" });
+    return false;
+  }
+  points.current = Number(points.current) - amount;
+  persistAndRender();
+  showToast(`<span class="toast-label">${escapeHtml(label)}</span><span>Sorcery points ${points.current}/${points.max}</span>`, {
+    actions: [{ label: "Undo", run: () => { points.current = Math.min(Number(points.max), Number(points.current) + amount); persistAndRender(); } }]
+  });
+  return true;
+}
+
+function metamagicMenu() {
+  const points = sorceryPoints();
+  const twinned = Math.max(1, Number(character.lastCastLevel || 1));
+  const options = [["Careful", 1], ["Distant", 1], ["Empowered", 1], ["Extended", 1], ["Heightened", 3], ["Quickened", 2], ["Subtle", 1], ["Twinned", twinned]];
+  const affordable = options.filter(([, cost]) => cost <= Number(points?.current || 0));
+  showToast(`<span class="toast-label">Metamagic</span><span>${points ? `${points.current}/${points.max} sorcery points. Twinned costs ${twinned} (the level of your last spell).` : "Sorcery points aren't tracked on this sheet."}</span>`, {
+    actions: affordable.map(([name, cost]) => ({ label: `${name} (${cost})`, run: () => spendSorceryPoints(cost, `${name} Spell`) })),
+    duration: 15000
+  });
+}
+
+// Flexible Casting (PHB p. 101): create a slot (2/3/5/6/7 points for 1st-5th) or burn a slot for its level in points.
+const SLOT_POINT_COST = { 1: 2, 2: 3, 3: 5, 4: 6, 5: 7 };
+
+function flexibleCastingMenu() {
+  const points = sorceryPoints();
+  if (!points) {
+    showToast(`<span class="toast-label">Flexible Casting</span><span>Sorcery points aren't tracked on this sheet.</span>`);
+    return;
+  }
+  const slots = spellSlotsFor(currentClass(), character.level);
+  const actions = [];
+  Object.entries(SLOT_POINT_COST).forEach(([level, cost]) => {
+    const spent = Number(character.spellSlotUsage?.[level] || 0);
+    if (spent > 0 && cost <= Number(points.current)) {
+      actions.push({ label: `Make a ${ordinal(Number(level))}-level slot (${cost})`, run: () => {
+        points.current = Number(points.current) - cost;
+        character.spellSlotUsage[level] = spent - 1;
+        persistAndRender();
+        showToast(`<span class="toast-label">${ordinal(Number(level))}-level slot created</span><span>Sorcery points ${points.current}/${points.max}</span>`);
+      } });
+    }
+  });
+  slots.forEach((count, index) => {
+    const level = index + 1;
+    if (!count || slotRemaining(level, count) <= 0 || Number(points.current) >= Number(points.max)) return;
+    actions.push({ label: `Burn a ${ordinal(level)}-level slot (+${level})`, run: () => {
+      character.spellSlotUsage[level] = Number(character.spellSlotUsage?.[level] || 0) + 1;
+      points.current = Math.min(Number(points.max), Number(points.current) + level);
+      persistAndRender();
+      showToast(`<span class="toast-label">${ordinal(level)}-level slot burned</span><span>Sorcery points ${points.current}/${points.max}</span>`);
+    } });
+  });
+  showToast(`<span class="toast-label">Flexible Casting</span><span>${points.current}/${points.max} sorcery points.${actions.length ? "" : " Nothing to convert right now."}</span>`, { actions, duration: 15000 });
+}
+
+// Speed shown in play mode: the stored base plus monk Unarmored Movement while unarmored.
+function effectiveSpeed() {
+  const base = Number(character.speed || 0);
+  const level = Number(character.level || 1);
+  if (currentClass().id !== "monk" || level < 2) return base;
+  const worn = (character.equipment || []).filter(item => item.equipped || item.container === "equipped");
+  if (worn.some(item => /\bAC\s+\d+/i.test(item.notes || "") || /shield/i.test(item.name || ""))) return base;
+  return base + (level >= 18 ? 30 : level >= 14 ? 25 : level >= 10 ? 20 : level >= 6 ? 15 : 10);
 }
 
 function spellAction(row) {

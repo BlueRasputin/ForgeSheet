@@ -104,6 +104,13 @@ function bindEvents() {
       rollSavingThrow(save.dataset.rollSave);
       return;
     }
+    // In play mode the whole "Save" line rolls the save (proficiency only changes in Edit).
+    const saveLine = event.target.closest(".ability-save");
+    if (saveLine && character.identityLocked) {
+      event.preventDefault();
+      rollSavingThrow(saveLine.querySelector("[data-save]").dataset.save);
+      return;
+    }
     const button = event.target.closest("[data-roll-ability]");
     if (button) rollAbilityCheck(button.dataset.rollAbility);
   });
@@ -118,6 +125,13 @@ function bindEvents() {
     if (button) {
       event.preventDefault();
       rollSkillCheck(button.dataset.rollSkill);
+      return;
+    }
+    // In play mode clicking anywhere on a skill row rolls it (proficiency only changes in Edit).
+    const row = event.target.closest(".skill-row");
+    if (row && character.identityLocked) {
+      event.preventDefault();
+      rollSkillCheck(row.querySelector("[data-skill]").dataset.skill);
     }
   });
   document.querySelector("#deathSaveTracker").addEventListener("click", handleDeathSaveClick);
@@ -164,11 +178,13 @@ function bindEvents() {
   document.querySelector("#applyDamageButton").addEventListener("click", () => applyDamage());
   document.querySelector("#applyHealButton").addEventListener("click", () => applyHeal());
   document.querySelector("#concentrationPrompt").addEventListener("click", handleConcentrationPromptClick);
-  document.querySelector("#damageAmount").addEventListener("keydown", event => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      applyDamage();
-    }
+  document.querySelector("#wildShapeBox").addEventListener("input", handleWildShapeInput);
+  document.querySelector("#wildShapeBox").addEventListener("change", () => renderAll());
+  document.querySelector("#wildShapeBox").addEventListener("click", event => {
+    if (event.target.closest("[data-wild-shape-revert]")) revertWildShape();
+  });
+  document.querySelector("#maxHpNote").addEventListener("click", event => {
+    if (event.target.closest("[data-clear-reduction]")) clearMaxHpReduction();
   });
   const conditionsTile = document.querySelector("#conditionsTile");
   conditionsTile.addEventListener("click", () => goToTarget("#conditionGrid"));

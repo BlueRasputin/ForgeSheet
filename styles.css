@@ -2469,7 +2469,7 @@ body:not(.is-editing) :is(#acInput, #speedInput, #maxHpInput) {
   pointer-events: none;
 }
 
-body:not(.is-editing) #actionRows .action-notes:placeholder-shown {
+body:not(.is-editing) #actionRows :is(.action-notes, .action-attack, .action-damage):placeholder-shown {
   display: none;
 }
 
@@ -3867,6 +3867,97 @@ dialog.create-dialog {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
+}
+
+/* ===== Combat rules UI ===== */
+
+body:not(.is-editing) :is(.skill-row, .ability-save) input[type="checkbox"]:disabled {
+  opacity: 1;
+  cursor: inherit;
+}
+
+.toast-detail {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.condition-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.condition-actions > span {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.condition-actions button {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+}
+
+.wild-shape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--r-control);
+  padding: 8px;
+  background: var(--accent-soft);
+}
+
+.wild-shape > input {
+  flex: 1 1 120px;
+  min-height: 30px;
+  font-weight: 600;
+}
+
+.wild-shape label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+}
+
+.wild-shape label input {
+  width: 58px;
+  min-height: 30px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.wild-shape button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+}
+
+.hp-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  border-radius: var(--r-control);
+  padding: 6px 8px;
+  background: var(--warn-soft);
+  color: color-mix(in srgb, var(--warn) 72%, var(--ink));
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.hp-note button {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.75rem;
 }
 
 /* ===== Signature details ===== */

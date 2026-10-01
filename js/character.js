@@ -213,6 +213,8 @@ function persist() {
   if (down && !character.conditions.includes("Unconscious")) {
     character.conditions.push("Unconscious");
     character.autoUnconscious = true;
+    // Falling unconscious also drops you prone; waking up does not stand you up.
+    if (!character.conditions.includes("Prone")) character.conditions.push("Prone");
   }
   if (!down && character.autoUnconscious) {
     character.conditions = character.conditions.filter(condition => condition !== "Unconscious");
@@ -228,6 +230,11 @@ function persist() {
 function persistAndRender() {
   persist();
   renderAll();
+}
+
+// Max HP after temporary reductions (life drain and similar), which a long rest clears.
+function effectiveMaxHp(target = character) {
+  return Math.max(0, Number(target.maxHp || 0) - Number(target.maxHpReduction || 0));
 }
 
 function duplicateCharacter() {

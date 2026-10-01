@@ -113,7 +113,12 @@ function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
     if (button) actions[Number(button.dataset.toastAction)].run();
   });
   stack.appendChild(toast);
-  while (stack.children.length > 3) stack.firstElementChild.remove();
+  // Keep at most 4; drop finished messages before any toast that still offers a button.
+  while (stack.children.length > 4) {
+    const older = [...stack.children].filter(item => item !== toast);
+    const victim = older.find(item => !item.querySelector("[data-toast-action]")) || older[0];
+    victim.remove();
+  }
   requestAnimationFrame(() => toast.classList.add("is-visible"));
   arm(duration);
   return toast;

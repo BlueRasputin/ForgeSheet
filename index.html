@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
-    <link rel="stylesheet" href="./styles.css?v=29">
+    <link rel="stylesheet" href="./styles.css?v=31">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to the sheet</a>
@@ -151,6 +151,8 @@
                 <input id="damageAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Heal or damage amount">
                 <button id="applyHealButton" class="heal" type="button">Heal</button>
               </div>
+              <div id="wildShapeBox" class="wild-shape" hidden></div>
+              <p id="maxHpNote" class="hp-note" hidden></p>
               <div class="death-saves-block">
                 <span class="field-title">Death saves</span>
                 <div id="deathSaveTracker" class="death-saves"></div>
@@ -957,6 +959,7 @@
         <input class="action-damage" placeholder="e.g. 1d8+3 fire" aria-label="Damage">
         <textarea class="action-notes" rows="1" placeholder="Range, save, riders, ammo…"></textarea>
         <div class="action-buttons">
+          <button class="primary use-action" type="button" hidden>Use</button>
           <button class="secondary roll-attack" type="button">Attack</button>
           <button class="secondary roll-damage" type="button">Damage</button>
           <button class="ghost remove-action" type="button">Remove</button>
@@ -964,20 +967,20 @@
       </article>
     </template>
 
-    <script src="./js/utils.js?v=26"></script>
-    <script src="./js/data.js?v=26"></script>
-    <script src="./js/classes.js?v=26"></script>
-    <script src="./js/character.js?v=26"></script>
-    <script src="./js/layout.js?v=26"></script>
-    <script src="./js/spells.js?v=26"></script>
-    <script src="./js/sheet.js?v=26"></script>
-    <script src="./js/builder.js?v=26"></script>
-    <script src="./js/play.js?v=26"></script>
-    <script src="./js/equipment.js?v=26"></script>
-    <script src="./js/party.js?v=26"></script>
-    <script src="./js/rules.js?v=26"></script>
-    <script src="./js/import.js?v=26"></script>
-    <script src="./js/sync.js?v=26"></script>
-    <script src="./js/main.js?v=26"></script>
+    <script src="./js/utils.js?v=27"></script>
+    <script src="./js/data.js?v=27"></script>
+    <script src="./js/classes.js?v=27"></script>
+    <script src="./js/character.js?v=27"></script>
+    <script src="./js/layout.js?v=27"></script>
+    <script src="./js/spells.js?v=27"></script>
+    <script src="./js/sheet.js?v=27"></script>
+    <script src="./js/builder.js?v=27"></script>
+    <script src="./js/play.js?v=27"></script>
+    <script src="./js/equipment.js?v=27"></script>
+    <script src="./js/party.js?v=27"></script>
+    <script src="./js/rules.js?v=27"></script>
+    <script src="./js/import.js?v=27"></script>
+    <script src="./js/sync.js?v=27"></script>
+    <script src="./js/main.js?v=27"></script>
   </body>
 </html>

@@ -9,12 +9,12 @@ function partyState(item) {
   if (hp <= 0 && Number(item.deathSaveFailures) >= 3) return "dead";
   if (hp <= 0 && Number(item.deathSaveSuccesses) >= 3) return "stable";
   if (hp <= 0) return "down";
-  const ratio = Number(item.maxHp) ? hp / Number(item.maxHp) : 1;
+  const ratio = effectiveMaxHp(item) ? hp / effectiveMaxHp(item) : 1;
   return ratio <= 0.25 ? "critical" : ratio <= 0.5 ? "bloodied" : "healthy";
 }
 
 function renderPartyDashboard() {
-  const ratio = item => Number(item.maxHp) ? Number(item.hp) / Number(item.maxHp) : 1;
+  const ratio = item => effectiveMaxHp(item) ? Number(item.hp) / effectiveMaxHp(item) : 1;
   const sorters = {
     hp: (a, b) => ratio(a) - ratio(b),
     init: (a, b) => (latestInitiative(b) ?? -99) - (latestInitiative(a) ?? -99),
@@ -44,7 +44,7 @@ function renderPartyDashboard() {
         ${initiative !== null ? `<span class="party-init" title="Latest initiative roll">Init ${initiative}</span>` : ""}
       </div>
       <span class="party-class">${escapeHtml(cls)} ${item.level || 1}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span>
-      <div class="party-hp"><b>${item.hp ?? "-"}</b>/${item.maxHp ?? "-"} HP · AC ${item.ac || "-"} · Passive ${passivePerception(item)}</div>
+      <div class="party-hp"><b>${item.hp ?? "-"}</b>/${effectiveMaxHp(item) || "-"} HP · AC ${item.ac || "-"} · Passive ${passivePerception(item)}</div>
       <div class="party-hp-bar" aria-hidden="true"><span style="width:${percent}%"></span></div>
       ${badges.length ? `<p class="party-badges">${badges.map(escapeHtml).join(" · ")}</p>` : ""}
       ${conditions.length ? `<p class="party-conditions">${escapeHtml(conditions.join(", "))}</p>` : ""}
@@ -56,7 +56,7 @@ function renderPartySummary(characters) {
   const down = characters.filter(item => ["down", "dead", "stable"].includes(partyState(item)));
   const concentrating = characters.filter(item => item.concentration);
   const totalHp = characters.reduce((sum, item) => sum + Number(item.hp || 0), 0);
-  const maxHp = characters.reduce((sum, item) => sum + Number(item.maxHp || 0), 0);
+  const maxHp = characters.reduce((sum, item) => sum + effectiveMaxHp(item), 0);
   const list = items => items.length ? items.map(escapeHtml).join(", ") : "None";
   document.querySelector("#partySummary").innerHTML = `
     <article><span>Down</span><strong>${down.length}</strong><small>${list(down.map(item => `${item.name} (${partyState(item)})`))}</small></article>

@@ -196,20 +196,31 @@ function handleSpellCastClick(event) {
   if (row) castSpellRow(row);
 }
 
-function castSpellRow(row, force = false) {
+// Casting asks before anything surprising: acting while incapacitated, casting in beast form,
+// replacing or restarting concentration, or using a higher slot because the chosen level is spent.
+function castSpellRow(row, confirmed = {}, overrideLevel = null) {
   if (!spellRowHasSpell(row)) return;
   const name = spellDisplayName(row);
   const baseLevel = spellLevelForRow(row);
   const grantingItem = itemForSpellRow(row);
   const cls = currentClass();
+  const retry = flag => castSpellRow(row, { ...confirmed, [flag]: true }, overrideLevel);
   if (!grantingItem && baseLevel > 0 && ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula) && !row.prepared && !spellAlwaysPrepared(row)) {
     showToast(`<span class="toast-label">${escapeHtml(name)} isn't prepared</span><span>Tick Prepared on its row to cast it.</span>`);
     return;
   }
+  if (!confirmed.incapacitated && blockedByIncapacitation(() => retry("incapacitated"))) return;
+  if (!confirmed.wildShape && character.wildShape) {
+    showToast(`<span class="toast-label">You're in beast form</span><span>Beasts can't cast spells (druids gain Beast Spells at 18th level).</span>`, {
+      actions: [{ label: "Cast anyway", run: () => retry("wildShape") }]
+    });
+    return;
+  }
   const concentration = spellConcentrationLabel(row);
-  if (!force && concentration && character.concentration && character.concentration !== concentration) {
-    showToast(`<span class="toast-label">Concentrating on ${escapeHtml(character.concentration)}</span><span>Casting ${escapeHtml(concentration)} ends it.</span>`, {
-      actions: [{ label: "Cast anyway", run: () => castSpellRow(row, true) }],
+  if (!confirmed.concentration && concentration && character.concentration) {
+    const same = character.concentration === concentration;
+    showToast(`<span class="toast-label">${same ? `Already concentrating on ${escapeHtml(concentration)}` : `Concentrating on ${escapeHtml(character.concentration)}`}</span><span>${same ? "Casting it again spends another slot and restarts the spell." : `Casting ${escapeHtml(concentration)} ends it.`}</span>`, {
+      actions: [{ label: same ? "Cast again" : "Cast anyway", run: () => retry("concentration") }],
       duration: 10000
     });
     return;
@@ -218,50 +229,127 @@ function castSpellRow(row, force = false) {
   let status = "Cantrip";
   if (grantingItem) {
     const uses = Number(grantingItem.grantUses || 0);
-    if (uses && Number(grantingItem.grantUsed || 0) >= uses) return;
+    if (uses && Number(grantingItem.grantUsed || 0) >= uses) {
+      showToast(`<span class="toast-label">${escapeHtml(grantingItem.name)} is spent</span><span>It recharges on a long rest.</span>`);
+      return;
+    }
     if (uses) grantingItem.grantUsed = Number(grantingItem.grantUsed || 0) + 1;
     status = uses ? `${uses - grantingItem.grantUsed} of ${uses} ${grantingItem.name} use${uses === 1 ? "" : "s"} left` : `From ${grantingItem.name}`;
   } else if (baseLevel > 0) {
-    castLevel = Number(row.castLevel || baseLevel);
-    const max = spellSlotsFor(cls, character.level)[castLevel - 1] || 0;
+    const slots = spellSlotsFor(cls, character.level);
+    castLevel = overrideLevel || Number(row.castLevel || baseLevel);
+    if (slotRemaining(castLevel, slots[castLevel - 1] || 0) <= 0) {
+      const open = nearestOpenSlot(baseLevel, castLevel, slots);
+      if (open) {
+        showToast(`<span class="toast-label">No ${ordinal(castLevel)}-level slots left</span><span>Cast ${escapeHtml(name)} with a ${ordinal(open)}-level slot instead?</span>`, {
+          actions: [{ label: `Cast at ${ordinal(open)} level`, run: () => castSpellRow(row, confirmed, open) }],
+          duration: 10000
+        });
+      } else {
+        showToast(`<span class="toast-label">No spell slots left</span><span>Nothing at ${ordinal(baseLevel)} level or higher. Rest to recover slots.</span>`, { tone: "fumble" });
+      }
+      return;
+    }
+    const max = slots[castLevel - 1] || 0;
     const used = Number(character.spellSlotUsage?.[castLevel] || 0);
-    if (!max || used >= max) return;
     character.spellSlotUsage[castLevel] = used + 1;
-    row.castLevel = castLevel;
     const left = max - used - 1;
     status = `${left} ${ordinal(castLevel)}-level slot${left === 1 ? "" : "s"} left`;
   }
-  const previousConcentration = character.concentration;
+  const previous = { concentration: character.concentration, tempHp: character.tempHp, agathys: character.agathys || 0 };
   if (concentration) character.concentration = concentration;
+  character.lastCastLevel = Math.max(1, castLevel);
+  const grant = spellTempHpGrant(row, castLevel);
+  if (grant) {
+    character.tempHp = Math.max(Number(character.tempHp || 0), grant.amount);
+    if (grant.retaliation) character.agathys = grant.retaliation;
+  }
   persistAndRender();
   const undo = () => {
     if (grantingItem) grantingItem.grantUsed = Math.max(0, Number(grantingItem.grantUsed || 0) - 1);
     else if (baseLevel > 0) character.spellSlotUsage[castLevel] = Math.max(0, Number(character.spellSlotUsage[castLevel] || 0) - 1);
-    character.concentration = previousConcentration;
+    Object.assign(character, previous);
     persistAndRender();
     showToast(`<span class="toast-label">${escapeHtml(name)} cast undone</span>`);
   };
   const effect = spellEffectRoll(row, castLevel);
   const actions = [];
   if (effect?.attack) {
-    actions.push({ label: `Roll attack (${formatMod(effect.attack.bonus)})${effect.attack.times > 1 ? ` ×${effect.attack.times}` : ""}`, run: () => rollSpellAttack(name, effect.attack.bonus) });
+    const times = effect.attack.times > 1 ? ` ×${effect.attack.times}` : "";
+    actions.push({ label: `Roll attack${times} (${formatMod(effect.attack.bonus)})`, run: () => rollSpellAttack(name, effect) });
+  } else if (effect) {
+    actions.push({ label: `${effect.label} (${effect.formula})`, run: () => rollSpellEffect(name, effect) });
   }
-  if (effect) actions.push({ label: `${effect.label} (${effect.formula})`, run: () => rollSpellEffect(name, effect) });
   actions.push({ label: "Undo", run: undo });
-  showToast(`<span class="toast-label">Cast ${escapeHtml(name)}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${escapeHtml(status)}${concentration ? " · concentrating" : ""}</span>`, { actions, duration: 10000 });
+  const extra = grant ? ` · +${grant.amount} temp HP${grant.retaliation ? `, melee attackers take ${grant.retaliation} cold` : ""}` : "";
+  showToast(`<span class="toast-label">Cast ${escapeHtml(name)}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${escapeHtml(status)}${concentration ? " · concentrating" : ""}${escapeHtml(extra)}</span>`, { actions, duration: 10000 });
 }
 
-function rollSpellAttack(name, bonus) {
-  const reason = conditionDisadvantage("attack");
-  const mode = reason ? "disadvantage" : document.querySelector("#rollMode").value;
-  rollFromInput(`${name} spell attack${reason ? ` (${reason})` : ""}`, `1d20${formatMod(bonus)}`, mode);
+// The closest level with a free slot: higher first (an upcast), then down to the spell's own level.
+function nearestOpenSlot(baseLevel, from, slots) {
+  for (let level = from + 1; level <= slots.length; level += 1) {
+    if (slotRemaining(level, slots[level - 1] || 0) > 0) return level;
+  }
+  for (let level = from - 1; level >= baseLevel; level -= 1) {
+    if (slotRemaining(level, slots[level - 1] || 0) > 0) return level;
+  }
+  return null;
+}
+
+// Each attack (beam, ray) is its own d20 with its own damage button; crits double the dice.
+function rollSpellAttack(name, effect, confirmed = false) {
+  if (!confirmed && blockedByIncapacitation(() => rollSpellAttack(name, effect, true))) return;
+  const times = Math.max(1, Number(effect.attack.times || 1));
+  for (let index = 1; index <= times; index += 1) {
+    const { mode, note } = rollModeFor("attack");
+    const label = `${name} spell attack${times > 1 ? ` ${index} of ${times}` : ""}${note ? ` (${note})` : ""}`;
+    rollFromInput(label, `1d20${formatMod(effect.attack.bonus)}`, mode, result => damageFollowUps(name, effect.perHit, naturalD20(result)));
+  }
 }
 
 function rollSpellEffect(name, effect) {
-  const followUp = effect.kind === "healing"
-    ? result => [{ label: `Apply +${result.total} HP`, run: () => healBy(result.total) }]
-    : [];
-  rollFromInput(`${name} ${effect.kind}`, effect.formula, "normal", followUp);
+  if (effect.kind === "healing") {
+    rollFromInput(`${name} healing`, effect.formula, "normal", result => [
+      { label: `Heal me +${result.total}`, run: () => healBy(result.total) },
+      ...Object.values(characterLibrary)
+        .filter(other => other.sheetId !== character.sheetId && Number(other.hp || 0) < effectiveMaxHp(other) && !(Number(other.hp) <= 0 && Number(other.deathSaveFailures) >= 3))
+        .map(other => ({ label: `Heal ${other.name || "unnamed"} +${result.total}`, run: () => healOther(other.sheetId, result.total) }))
+    ]);
+    return;
+  }
+  if (effect.kind === "temp") {
+    rollFromInput(`${name} temporary HP`, effect.formula, "normal", result => [{ label: `Gain ${result.total} temp HP`, run: () => gainTempHp(result.total) }]);
+    return;
+  }
+  const what = { pool: "HP affected", rider: "extra damage on a hit" }[effect.kind] || effect.kind;
+  rollFromInput(`${name} ${what}`, effect.formula, "normal");
+}
+
+// Flat temporary hit points granted on casting (Armor of Agathys and similar), scaled by slot level.
+function spellTempHpGrant(row, castLevel) {
+  const detail = row.custom || spellDetails[row.index] || {};
+  const text = [detail.desc].flat().filter(Boolean).join(" ");
+  const higher = [detail.higher_level].flat().filter(Boolean).join(" ");
+  const base = text.match(/(?:gain|grants?)\s+(\d+)\s+temporary hit points/i);
+  if (!base) return null;
+  const upcast = Math.max(0, castLevel - spellLevelForRow(row));
+  const per = Number(`${text} ${higher}`.match(/increase by (\d+) (?:for each|per) slot level above/i)?.[1] || 0);
+  const cold = text.match(/takes (\d+) cold damage/i);
+  return {
+    amount: Number(base[1]) + per * upcast,
+    retaliation: cold ? Number(cold[1]) + per * upcast : 0
+  };
+}
+
+// Minutes a spell lasts, from its duration text ("Concentration, up to 1 hour"), or null when unknown.
+function spellDurationMinutes(spellName) {
+  const row = (character.spells || []).find(entry => spellDisplayName(entry) === spellName);
+  const detail = row?.custom || (row && spellDetails[row.index]) || Object.values(spellDetails).find(entry => entry.name === spellName);
+  const duration = String(detail?.duration || "");
+  const match = duration.match(/(\d+)\s*(round|minute|hour|day)/i);
+  if (!match) return null;
+  const unit = { round: 0.1, minute: 1, hour: 60, day: 1440 }[match[2].toLowerCase()];
+  return Number(match[1]) * unit;
 }
 
 const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5 };
@@ -289,19 +377,27 @@ function spellEffectRoll(row, castLevel) {
   if (baseLevel === 0 && /more than one beam/i.test(`${text} ${higher}`)) beams = 1 + tiers;
   else if (baseLevel === 0 && /5th level/i.test(`${text} ${higher}`)) count *= 1 + tiers;
   const healing = /regains?\s+(a number of\s+)?hit points/i.test(text);
+  const pool = /the total is how many hit points/i.test(text);
+  const tempHp = !healing && /temporary hit points/i.test(text);
+  // Damage that rides on later hits ("an extra 1d6", "+1d6 necrotic"), not upcast scaling ("+1d8 per slot level").
+  const rider = !healing && /\b(?:extra|additional)\s+\d+d\d+|\+\d+d\d+(?!\s*per\b)/i.test(text);
   const ability = currentClass().spellAbility;
-  const modifier = /spellcasting ability modifier/i.test(text) && ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
+  // Agonizing Blast adds Charisma to each Eldritch Blast beam when the invocation is recorded.
+  const agonizing = row.index === "eldritch-blast" && /agonizing blast/i.test(`${character.features || ""} ${(character.classOptions || []).map(option => `${option.name} ${option.notes || ""}`).join(" ")}`);
+  const modifier = agonizing ? mod("cha") : /spellcasting ability modifier/i.test(text) && ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
   const attack = /spell attack/i.test(text);
   const each = `${count}d${sides}${flat + modifier ? formatMod(flat + modifier) : ""}`;
   // Darts that always hit roll as one total; rays and beams roll per attack.
   const autoHit = projectiles > 1 && !attack;
   const formula = autoHit ? `${count * projectiles}d${sides}${flat * projectiles + modifier ? formatMod(flat * projectiles + modifier) : ""}` : each;
   const multiple = beams > 1 ? `${beams} beams` : projectiles > 1 && attack ? `${projectiles} ${noun}` : "";
+  const kind = healing ? "healing" : pool ? "pool" : tempHp ? "temp" : rider ? "rider" : "damage";
   return {
     formula,
+    perHit: each,
     chip: multiple ? `${each} ×${beams || projectiles}` : formula,
-    kind: healing ? "healing" : "damage",
-    label: healing ? "Roll healing" : multiple ? `Roll damage per ${noun.replace(/s$/, "") || "beam"}` : "Roll damage",
+    kind,
+    label: { healing: "Roll healing", pool: "Roll HP affected", temp: "Roll temp HP", rider: "Roll extra damage on a hit" }[kind] || (multiple ? `Roll damage per ${noun.replace(/s$/, "") || "beam"}` : "Roll damage"),
     attack: attack ? { bonus: proficiencyBonus() + (ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0), times: beams || projectiles } : null
   };
 }
@@ -746,17 +842,15 @@ function quickCastState(row, level) {
   if (preparedCaster && !row.prepared && !spellAlwaysPrepared(row)) return { label: "Cast", disabled: true, title: "Prepare this spell to cast it" };
   const slots = spellSlotsFor(cls, character.level);
   const options = castLevelOptions(level, slots);
-  let selected = normalizeCastLevel(row, level, options);
-  if (slotRemaining(selected, slots[selected - 1] || 0) <= 0) {
-    const open = options.find(option => slotRemaining(option, slots[option - 1] || 0) > 0);
-    if (open) selected = row.castLevel = open;
-  }
+  const selected = options.includes(Number(row.castLevel || level)) ? Number(row.castLevel || level) : options[0];
   const remaining = slotRemaining(selected, slots[selected - 1] || 0);
-  return {
-    label: `Cast ${ordinal(selected)}`,
-    disabled: remaining <= 0,
-    title: remaining > 0 ? `${remaining} ${ordinal(selected)}-level slot${remaining === 1 ? "" : "s"} left` : "No slots left at this level"
-  };
+  if (remaining > 0) {
+    return { label: `Cast ${ordinal(selected)}`, disabled: false, title: `${remaining} ${ordinal(selected)}-level slot${remaining === 1 ? "" : "s"} left` };
+  }
+  const open = nearestOpenSlot(level, selected, slots);
+  return open
+    ? { label: `Cast ${ordinal(selected)}`, disabled: false, title: `No ${ordinal(selected)}-level slots left. You'll be asked before using a ${ordinal(open)}-level slot.` }
+    : { label: `Cast ${ordinal(selected)}`, disabled: true, title: "No slots left at this level or higher" };
 }
 
 function addSuggestedSpell(index) {

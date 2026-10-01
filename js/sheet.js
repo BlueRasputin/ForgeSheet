@@ -14,7 +14,9 @@ function renderHeader() {
   setValue("maxHpInput", character.maxHp);
   setValue("tempHpInput", character.tempHp);
   setValue("acInput", character.ac);
-  setValue("speedInput", character.speed);
+  const speed = effectiveSpeed();
+  setValue("speedInput", character.identityLocked ? speed : character.speed);
+  document.querySelector("#speedInput").title = speed > Number(character.speed || 0) ? `${character.speed} ft base + ${speed - character.speed} ft Unarmored Movement` : "";
   document.querySelector("#profBonus").textContent = formatMod(proficiencyBonus());
   document.querySelector("#initiativeValue").textContent = formatMod(initiativeBonus());
   const armorClass = calculatedArmorClass();
@@ -31,13 +33,56 @@ function renderHeader() {
   ["speedInput", "acInput", "maxHpInput"].forEach(id => {
     document.querySelector(`#${id}`).disabled = character.identityLocked;
   });
-  const hpRatio = character.maxHp ? Number(character.hp) / Number(character.maxHp) : 1;
+  const maxNow = effectiveMaxHp();
+  const hpRatio = maxNow ? Number(character.hp) / maxNow : 1;
+  const reduction = Number(character.maxHpReduction || 0);
+  const note = document.querySelector("#maxHpNote");
+  note.hidden = !reduction;
+  note.innerHTML = reduction ? `<span>Max HP lowered by ${reduction} until a long rest (now ${maxNow}).</span><button type="button" class="ghost" data-clear-reduction>Restore</button>` : "";
+  renderWildShape();
   document.querySelector(".hp-box").dataset.state = Number(character.hp) <= 0 ? "down" : hpRatio <= 0.25 ? "critical" : hpRatio <= 0.5 ? "bloodied" : "healthy";
   document.querySelector("#subclassOptions").innerHTML = officialSubclasses
     .filter(item => item.classIndex === character.classId)
     .map(item => `<option value="${escapeHtml(item.name)}"></option>`).join("");
   renderIdentityDisplay();
   renderAsiBanner();
+}
+
+// Wild Shape: the beast's HP sit in front of yours and absorb damage first.
+function renderWildShape() {
+  const root = document.querySelector("#wildShapeBox");
+  const shape = character.wildShape;
+  root.hidden = !shape;
+  if (!shape) {
+    root.innerHTML = "";
+    return;
+  }
+  if (root.contains(document.activeElement)) return;
+  root.innerHTML = `
+    <input data-wild-shape="name" value="${escapeHtml(shape.name || "Beast form")}" aria-label="Beast form name">
+    <label>HP <input type="number" min="0" data-wild-shape="hp" value="${Number(shape.hp || 0)}" aria-label="Beast HP"></label>
+    <label>of <input type="number" min="0" data-wild-shape="max" value="${Number(shape.max || 0)}" aria-label="Beast max HP"></label>
+    <button type="button" class="ghost" data-wild-shape-revert>Revert</button>
+  `;
+}
+
+function handleWildShapeInput(event) {
+  const field = event.target.dataset.wildShape;
+  if (!field || !character.wildShape) return;
+  if (field === "name") character.wildShape.name = event.target.value;
+  if (field === "hp") character.wildShape.hp = clamp(Number(event.target.value), 0, 999);
+  if (field === "max") {
+    const max = clamp(Number(event.target.value), 0, 999);
+    if (!Number(character.wildShape.hp) || Number(character.wildShape.hp) === Number(character.wildShape.max)) character.wildShape.hp = max;
+    character.wildShape.max = max;
+  }
+  persist();
+}
+
+function revertWildShape() {
+  character.wildShape = null;
+  persistAndRender();
+  showToast(`<span class="toast-label">You revert to your normal form</span>`);
 }
 
 function renderIdentityDisplay() {
@@ -90,7 +135,10 @@ function renderSheet() {
     document.querySelector(`#${id}Mod`).textContent = formatMod(mod(id));
   });
   SKILLS.forEach(([id,, ability]) => {
-    document.querySelector(`[data-skill="${id}"]`).checked = character.proficientSkills.includes(id);
+    const box = document.querySelector(`[data-skill="${id}"]`);
+    box.checked = character.proficientSkills.includes(id);
+    // Locked in play mode: the row's label would otherwise toggle proficiency when you click the skill name.
+    box.disabled = character.identityLocked;
     document.querySelector(`#${id}Skill`).textContent = formatMod(skillBonus(id, ability));
     const expert = (character.expertSkills || []).includes(id);
     const star = document.querySelector(`[data-expert-skill="${id}"]`);
@@ -130,7 +178,9 @@ function handleInput(event) {
   };
   if (map[id]) {
     if (id === "acInput") character.acAuto = false;
-    character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), map[id] === "hp" ? 0 : 1, map[id] === "level" ? 20 : 999) : value;
+    const ceiling = map[id] === "level" ? 20 : map[id] === "hp" ? effectiveMaxHp() : 999;
+    character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), map[id] === "hp" ? 0 : 1, ceiling) : value;
+    if (map[id] === "maxHp") character.hp = Math.min(Number(character.hp || 0), effectiveMaxHp());
     if (id === "classSelect") switchClassTo(value);
     if (id === "subclassName") linkTypedSubclass(value);
     persist();
@@ -258,6 +308,7 @@ function saveBonus(ability) {
 function renderSavingThrows() {
   document.querySelectorAll("[data-save]").forEach(input => {
     input.checked = character.saveProficiencies.includes(input.dataset.save);
+    input.disabled = character.identityLocked;
   });
   ABILITIES.forEach(([id]) => {
     document.querySelector(`#${id}Save`).textContent = formatMod(saveBonus(id));

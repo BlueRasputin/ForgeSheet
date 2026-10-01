@@ -207,6 +207,8 @@ const CLASS_SKILL_CHOICES = {
 // Subclass grants beyond spells: extra training and limited-use features with their own trackers.
 const SUBCLASS_EXTRAS = {
   "battle-master": { trackers: level => level >= 3 ? [["Superiority Dice", level >= 15 ? 6 : level >= 7 ? 5 : 4, "short"]] : [] },
+  // Restore Balance: uses equal to your proficiency bonus, regained on a long rest (Tasha's).
+  "clockwork-soul": { trackers: level => [["Restore Balance", Math.ceil(level / 4) + 1, "long"]] },
   hexblade: { armor: ["Medium armor, shields"], weapons: ["Martial weapons"], trackers: () => [["Hexblade's Curse", 1, "short"]] },
   "eldritch-knight": {},
   champion: {},
