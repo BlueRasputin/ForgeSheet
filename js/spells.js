@@ -10,7 +10,7 @@ function spellSummaryHtml(row) {
   // ponytail: save type and damage dice scraped from the description with regexes; matches SRD phrasing, misses exotic wording
   const save = spellSaveAbility(text);
   const attack = /spell attack/i.test(text);
-  const dice = text.match(/\b\d+d\d+\b/)?.[0];
+  const dice = spellEffectRoll(row, level)?.chip || text.match(/\b\d+d\d+\b/)?.[0];
   const cast = castingShorthand(row.custom ? row.custom.castingTime : detail.casting_time);
   const concentration = row.custom ? /concentration/i.test(row.custom.duration || "") : detail.concentration;
   const parts = [
@@ -53,7 +53,8 @@ function ensureSubclassSpells() {
   granted.forEach(index => {
     if (entitled.has(index)) return;
     granted.delete(index);
-    character.spells = character.spells.filter(row => row.index !== index);
+    // Only rows the grant created leave; a copy the player added stays with its own prepared flag.
+    character.spells = character.spells.filter(row => row.index !== index || !row.auto);
     changed = true;
   });
   const known = new Set(character.spells.map(row => row.index).filter(Boolean));
@@ -64,7 +65,7 @@ function ensureSubclassSpells() {
     granted.add(index);
     changed = true;
     if (!known.has(index)) {
-      character.spells.push({ id: crypto.randomUUID(), index, level: spellInfo.level, prepared: spellInfo.level > 0 });
+      character.spells.push({ id: crypto.randomUUID(), index, level: spellInfo.level, prepared: spellInfo.level > 0, auto: true });
       known.add(index);
     }
   });
@@ -207,35 +208,78 @@ function castSpellRow(row, force = false) {
     const left = max - used - 1;
     status = `${left} ${ordinal(castLevel)}-level slot${left === 1 ? "" : "s"} left`;
   }
+  const previousConcentration = character.concentration;
   if (concentration) character.concentration = concentration;
   persistAndRender();
+  const undo = () => {
+    if (grantingItem) grantingItem.grantUsed = Math.max(0, Number(grantingItem.grantUsed || 0) - 1);
+    else if (baseLevel > 0) character.spellSlotUsage[castLevel] = Math.max(0, Number(character.spellSlotUsage[castLevel] || 0) - 1);
+    character.concentration = previousConcentration;
+    persistAndRender();
+    showToast(`<span class="toast-label">${escapeHtml(name)} cast undone</span>`);
+  };
   const effect = spellEffectRoll(row, castLevel);
-  showToast(`<span class="toast-label">Cast ${escapeHtml(name)}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${escapeHtml(status)}${concentration ? " · concentrating" : ""}</span>`, {
-    actions: effect ? [{ label: `${effect.label} (${effect.formula})`, run: () => rollFromInput(`${name} ${effect.kind}`, effect.formula, "normal") }] : [],
-    duration: 9000
-  });
+  const actions = [];
+  if (effect?.attack) {
+    actions.push({ label: `Roll attack (${formatMod(effect.attack.bonus)})${effect.attack.times > 1 ? ` ×${effect.attack.times}` : ""}`, run: () => rollSpellAttack(name, effect.attack.bonus) });
+  }
+  if (effect) actions.push({ label: `${effect.label} (${effect.formula})`, run: () => rollSpellEffect(name, effect) });
+  actions.push({ label: "Undo", run: undo });
+  showToast(`<span class="toast-label">Cast ${escapeHtml(name)}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${escapeHtml(status)}${concentration ? " · concentrating" : ""}</span>`, { actions, duration: 10000 });
 }
 
-// ponytail: reads dice, upcast increments, and cantrip scaling from the spell text; SRD phrasing only
+function rollSpellAttack(name, bonus) {
+  const reason = conditionDisadvantage("attack");
+  const mode = reason ? "disadvantage" : document.querySelector("#rollMode").value;
+  rollFromInput(`${name} spell attack${reason ? ` (${reason})` : ""}`, `1d20${formatMod(bonus)}`, mode);
+}
+
+function rollSpellEffect(name, effect) {
+  const followUp = effect.kind === "healing"
+    ? result => [{ label: `Apply +${result.total} HP`, run: () => healBy(result.total) }]
+    : [];
+  rollFromInput(`${name} ${effect.kind}`, effect.formula, "normal", followUp);
+}
+
+const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5 };
+
+// ponytail: reads dice, flat bonuses, darts/rays/beams, upcasting and cantrip scaling from SRD-style spell text
 function spellEffectRoll(row, castLevel) {
   const detail = row.custom || spellDetails[row.index] || {};
   const text = [detail.desc].flat().filter(Boolean).join(" ");
-  const base = text.match(/\b(\d+)d(\d+)\b/);
+  const higher = [detail.higher_level].flat().filter(Boolean).join(" ");
+  const base = text.match(/\b(\d+)d(\d+)(?:\s*\+\s*(\d+)(?!d))?/);
   if (!base) return null;
   const sides = Number(base[2]);
   let count = Number(base[1]);
+  let flat = Number(base[3] || 0);
   const baseLevel = spellLevelForRow(row);
-  const higher = [detail.higher_level].flat().filter(Boolean).join(" ");
+  const upcast = Math.max(0, castLevel - baseLevel);
+  const projectileMatch = text.match(/\b(two|three|four|five|\d+)\s+(?:glowing\s+)?(darts|rays|beams|bolts)\b/i);
+  let projectiles = projectileMatch ? NUMBER_WORDS[projectileMatch[1].toLowerCase()] || Number(projectileMatch[1]) : 1;
+  const noun = projectileMatch ? projectileMatch[2].toLowerCase() : "";
+  if (projectileMatch && /one (?:more|additional) (dart|ray|beam|bolt)/i.test(higher)) projectiles += upcast;
   const perSlot = higher.match(/(\d+)d(\d+)\s+for each slot level above/i);
-  if (perSlot && Number(perSlot[2]) === sides && castLevel > baseLevel) count += Number(perSlot[1]) * (castLevel - baseLevel);
-  if (baseLevel === 0 && /5th level/i.test(`${text} ${higher}`)) count *= 1 + [5, 11, 17].filter(level => character.level >= level).length;
+  if (perSlot && Number(perSlot[2]) === sides && upcast) count += Number(perSlot[1]) * upcast;
+  const tiers = [5, 11, 17].filter(level => character.level >= level).length;
+  let beams = 0;
+  if (baseLevel === 0 && /more than one beam/i.test(`${text} ${higher}`)) beams = 1 + tiers;
+  else if (baseLevel === 0 && /5th level/i.test(`${text} ${higher}`)) count *= 1 + tiers;
   const healing = /regains?\s+(a number of\s+)?hit points/i.test(text);
   const ability = currentClass().spellAbility;
   const modifier = /spellcasting ability modifier/i.test(text) && ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
+  const attack = /spell attack/i.test(text);
+  const each = `${count}d${sides}${flat + modifier ? formatMod(flat + modifier) : ""}`;
+  // Darts that always hit roll as one total; rays and beams roll per attack.
+  const autoHit = projectiles > 1 && !attack;
+  const formula = autoHit ? `${count * projectiles}d${sides}${flat * projectiles + modifier ? formatMod(flat * projectiles + modifier) : ""}` : each;
+  const multiple = beams > 1 ? `${beams} beams` : projectiles > 1 && attack ? `${projectiles} ${noun}` : "";
   return {
-    formula: `${count}d${sides}${modifier ? formatMod(modifier) : ""}`,
+    formula,
+    chip: multiple ? `${each} ×${beams || projectiles}` : formula,
     kind: healing ? "healing" : "damage",
-    label: healing ? "Roll healing" : "Roll damage"
+    label: healing ? "Roll healing" : multiple ? `Roll damage per ${noun.replace(/s$/, "") || "beam"}` : "Roll damage",
+    attack: attack ? { bonus: proficiencyBonus() + (ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0), times: beams || projectiles } : null
   };
 }
 
@@ -260,7 +304,7 @@ function renderSpellRows() {
     const rows = character.spells.filter(row => spellLevelForRow(row) === level);
     const cap = level === 0 ? cantripCap() : null;
     if (level === 0 && !cap && !rows.length) return;
-    const chosen = rows.filter(spellRowHasSpell).length;
+    const chosen = rows.filter(row => spellRowHasSpell(row) && !spellAlwaysPrepared(row)).length;
     section.innerHTML = `
       <div class="spell-section-head">
         <div>
@@ -312,6 +356,7 @@ function renderSpellRows() {
         label.classList.add("is-always");
         label.lastChild.textContent = row.racial ? ` From ${character.species || "species"}` : " Always prepared";
         remove.style.display = "none";
+        select.disabled = true;
       }
       if (grantingItem) {
         const label = prepared.closest("label");
@@ -661,8 +706,7 @@ function spellAlwaysPrepared(row) {
 }
 
 function knownSpellCount() {
-  const always = new Set(character.autoSpells || []);
-  return character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !always.has(row.index) && !row.itemId).length;
+  return character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !spellAlwaysPrepared(row) && !row.itemId).length;
 }
 
 function quickCastState(row, level) {

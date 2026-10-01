@@ -72,7 +72,7 @@ let pendingConcentrationDc = null;
 function renderCombatDashboard() {
   const actions = ["Action", "Bonus Action", "Reaction", "Movement"];
   const temp = Number(character.tempHp || 0);
-  document.querySelector("#combatSummary").textContent = `${character.hp}/${character.maxHp} HP${temp ? ` +${temp} temp` : ""} · AC ${character.ac} · ${character.conditions.length || 0} conditions`;
+  document.querySelector("#combatSummary").textContent = `${character.hp}/${character.maxHp} HP${temp ? ` +${temp} temp` : ""} · AC ${character.ac} · ${character.conditions.length || 0} condition${character.conditions.length === 1 ? "" : "s"}`;
   document.querySelector("#conditionsMini").textContent = character.conditions.length
     ? character.conditions.join(", ")
     : "None";
@@ -178,18 +178,37 @@ function isDead() {
 function applyHeal(input = document.querySelector("#damageAmount")) {
   const amount = clamp(Math.round(Number(input.value)), 0, 999);
   if (!amount) return;
+  if (healBy(amount)) input.value = "";
+}
+
+function healBy(amount) {
   if (isDead()) {
     showToast(`<span class="toast-label">${escapeHtml(character.name || "This character")} is dead</span><span>Ordinary healing can't help. Revivify, Raise Dead and similar magic bring a character back.</span>`, {
       tone: "fumble",
       actions: [{ label: "Revive at 1 HP", run: reviveCharacter }],
       duration: 12000
     });
-    return;
+    return false;
   }
   character.hp = Math.min(Number(character.maxHp || 0), Number(character.hp || 0) + amount);
-  input.value = "";
   persistAndRender();
   showToast(`<span class="toast-label">Healed ${amount}</span><span>${character.hp}/${character.maxHp} HP</span>`, { tone: "crit" });
+  return true;
+}
+
+// Conditions and exhaustion that impose disadvantage (PHB appendix A).
+function conditionDisadvantage(kind) {
+  const active = new Set(character.conditions || []);
+  const exhaustion = Number(character.exhaustion || 0);
+  const sources = kind === "attack"
+    ? ["Poisoned", "Frightened", "Prone", "Blinded", "Restrained"].filter(name => active.has(name))
+    : kind === "check"
+      ? ["Poisoned", "Frightened"].filter(name => active.has(name))
+      : [];
+  if (kind === "attack" && exhaustion >= 3) sources.push(`exhaustion ${exhaustion}`);
+  if (kind === "check" && exhaustion >= 1) sources.push(`exhaustion ${exhaustion}`);
+  if (kind === "save" && exhaustion >= 3) sources.push(`exhaustion ${exhaustion}`);
+  return sources.length ? `${sources.join(", ")}: disadvantage` : "";
 }
 
 function reviveCharacter() {
@@ -291,18 +310,23 @@ function rollDeathSave() {
 
 function rollAbilityCheck(ability) {
   const name = ABILITIES.find(([id]) => id === ability)?.[1] || ability;
-  rollFromInput(`${name} check`, `1d20${formatMod(mod(ability) + jackOfAllTrades())}`);
+  rollWithConditions(`${name} check`, `1d20${formatMod(mod(ability) + jackOfAllTrades())}`, "check");
+}
+
+function rollWithConditions(label, formula, kind) {
+  const reason = conditionDisadvantage(kind);
+  rollFromInput(reason ? `${label} (${reason})` : label, formula, reason ? "disadvantage" : document.querySelector("#rollMode").value);
 }
 
 function rollSavingThrow(ability) {
   const name = ABILITIES.find(([id]) => id === ability)?.[1] || ability;
-  rollFromInput(`${name} save`, `1d20${formatMod(saveBonus(ability))}`);
+  rollWithConditions(`${name} save`, `1d20${formatMod(saveBonus(ability))}`, "save");
 }
 
 function rollSkillCheck(skill) {
   const [, name, ability] = SKILLS.find(([id]) => id === skill) || [];
   if (!name) return;
-  rollFromInput(`${name} check`, `1d20${formatMod(skillBonus(skill, ability))}`);
+  rollWithConditions(`${name} check`, `1d20${formatMod(skillBonus(skill, ability))}`, "check");
 }
 
 function rollInitiativeCheck() {
@@ -326,7 +350,7 @@ function renderDiceRoller() {
       <strong>${escapeHtml(roll.label)}</strong>
       <span>${escapeHtml(roll.parts.join(" + "))}</span>
       <b>${roll.total}</b>
-      <button type="button" class="ghost reroll" data-roll-index="${index}" aria-label="Reroll ${escapeHtml(roll.label)}" title="Reroll">↻</button>
+      ${/^(Death Save|Hit Die)/.test(roll.label) ? "<span></span>" : `<button type="button" class="ghost reroll" data-roll-index="${index}" aria-label="Reroll ${escapeHtml(roll.label)}" title="Reroll">↻</button>`}
     </article>
   `).join("") || `<p class="empty-state">No roll history yet.</p>`;
 }
@@ -421,19 +445,23 @@ function renderRestPreview() {
     <article><strong>Short rest</strong><span>${escapeHtml(shortRefresh.join(", ") || "No short-rest resources tracked.")}</span></article>
     <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, item spell uses${longRefresh.length ? `, ${escapeHtml(longRefresh.join(", "))}` : ""}</span></article>
   `;
+  if (lastRest) {
+    document.querySelector("#restPreview").insertAdjacentHTML("beforeend", `<article><strong>${escapeHtml(lastRest.name)} taken</strong><button type="button" class="ghost" data-undo-rest>Undo ${escapeHtml(lastRest.name.toLowerCase())}</button></article>`);
+  }
 }
 
 function spendHitDie() {
   if (character.hitDiceUsed >= character.level) return;
   const cls = currentClass();
-  const heal = Math.max(1, rollDie(cls.hitDie) + mod("con"));
+  const face = rollDie(cls.hitDie);
+  const heal = Math.max(1, face + mod("con"));
   character.hitDiceUsed += 1;
   character.hp = Math.min(Number(character.maxHp || character.hp), Number(character.hp || 0) + heal);
-  character.rollHistory = [{ label: "Hit Die Healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`heal ${heal}`] }, ...(character.rollHistory || [])].slice(0, 25);
+  character.rollHistory = [{ label: "Hit Die Healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`1d${cls.hitDie}[${face}]`, String(mod("con"))] }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
   const left = character.level - character.hitDiceUsed;
   const more = left > 0 && character.hp < character.maxHp ? [{ label: `Spend another (${left} left)`, run: spendHitDie }] : [];
-  showToast(`<span class="toast-label">Hit die · 1d${cls.hitDie}${formatMod(mod("con"))}</span><span class="toast-roll"><b>+${heal} HP</b><small>${character.hp}/${character.maxHp} HP · ${left} hit dice left</small></span>`, { actions: more, duration: 9000 });
+  showToast(`<span class="toast-label">Hit die · 1d${cls.hitDie}${formatMod(mod("con"))}</span><span class="toast-roll"><b>+${heal} HP</b><small>${character.hp}/${character.maxHp} HP · ${left} hit ${left === 1 ? "die" : "dice"} left</small></span>`, { actions: more, duration: 9000 });
 }
 
 function takeRest(type) {
@@ -464,15 +492,26 @@ function takeRest(type) {
   const name = type === "long" ? "Long rest" : "Short rest";
   const actions = [{
     label: "Undo",
-    run: () => {
-      undoRest(before, after);
-      showToast(`<span class="toast-label">${name} undone</span>`);
-    }
+    run: undoLastRest
   }];
   const hitDiceLeft = character.level - character.hitDiceUsed;
   if (type === "short" && hitDiceLeft > 0 && character.hp < character.maxHp) actions.push({ label: `Spend Hit Die (${hitDiceLeft} left)`, run: spendHitDie });
   const changes = restChanges(before, character);
-  showToast(`<span class="toast-label">${name}</span><span>${escapeHtml(changes.join(" · ") || "Nothing needed recovering.")}</span>`, { actions, duration: 12000 });
+  const nothing = character.hp < character.maxHp && hitDiceLeft > 0 ? "No resources to recover. Spend hit dice to heal." : "Nothing needed recovering.";
+  showToast(`<span class="toast-label">${name}</span><span>${escapeHtml(changes.join(" · ") || nothing)}</span>`, { actions, duration: 12000 });
+  lastRest = { before, after, name };
+  renderRestPreview();
+}
+
+// The most recent rest can be undone from the Rest panel until the next rest, not just from its toast.
+let lastRest = null;
+
+function undoLastRest() {
+  if (!lastRest) return;
+  undoRest(lastRest.before, lastRest.after);
+  showToast(`<span class="toast-label">${lastRest.name} undone</span>`);
+  lastRest = null;
+  renderRestPreview();
 }
 
 // Reverse the rest's own changes as deltas, so anything done after the rest (here or in another tab) survives.
@@ -695,7 +734,29 @@ function handleActionFilterClick(event) {
   renderActions();
 }
 
+// Actions made by Generate Actions remember what they came from and recompute as scores and levels change.
+function refreshGeneratedActions() {
+  character.actions.forEach(action => {
+    if (!action.source) return;
+    let fresh = null;
+    if (action.source.weapon) {
+      const item = (character.equipment || []).find(entry => entry.id === action.source.weapon);
+      fresh = item ? weaponAction(item) : null;
+    } else if (action.source.spell) {
+      const row = character.spells.find(entry => entry.index === action.source.spell);
+      fresh = row ? spellAction(row) : null;
+    } else if (action.source.feature) {
+      fresh = featureActions().find(entry => entry.source.feature === action.source.feature);
+    }
+    if (fresh) {
+      action.attack = fresh.attack;
+      action.damage = fresh.damage;
+    }
+  });
+}
+
 function renderActions() {
+  refreshGeneratedActions();
   const root = document.querySelector("#actionRows");
   const template = document.querySelector("#actionRowTemplate");
   document.querySelectorAll("[data-action-filter]").forEach(button => {
@@ -732,6 +793,7 @@ function handleActionInput(event) {
   if (!action) return;
   if (event.target.classList.contains("action-name")) action.name = event.target.value;
   if (event.target.classList.contains("action-type")) action.type = event.target.value;
+  if (event.target.classList.contains("action-attack") || event.target.classList.contains("action-damage")) delete action.source;
   if (event.target.classList.contains("action-attack")) action.attack = event.target.value;
   if (event.target.classList.contains("action-damage")) action.damage = event.target.value;
   if (event.target.classList.contains("action-notes")) action.notes = event.target.value;
@@ -778,7 +840,8 @@ function handleActionClick(event) {
         ? [{ label: "Roll crit damage", run: () => rollFromInput(`${name} critical damage`, doubleDice(damage), "normal") }]
         : [{ label: "Roll damage", run: () => rollFromInput(`${name} damage`, damage, "normal") }];
     };
-    rollFromInput(label, `1d20${formatMod(Number(bonus))}`, document.querySelector("#rollMode").value, followUp);
+    const reason = conditionDisadvantage("attack");
+    rollFromInput(reason ? `${label} (${reason})` : label, `1d20${formatMod(Number(bonus))}`, reason ? "disadvantage" : document.querySelector("#rollMode").value, followUp);
     return;
   }
   if (!button) return;
@@ -802,8 +865,26 @@ function weaponAction(item) {
     type: "Action",
     attack: formatMod(proficiencyBonus() + abilityMod),
     damage: `${die}${formatMod(abilityMod)}${damageType ? ` ${damageType}` : ""}`,
-    notes: `Assumes proficiency. ${notes}`.trim()
+    notes: `Assumes proficiency. ${notes}`.trim(),
+    source: { weapon: item.id }
   };
+}
+
+function featureActions() {
+  const cls = currentClass();
+  const level = character.level;
+  const actions = [];
+  if (cls.id === "monk") {
+    const die = level >= 17 ? 10 : level >= 11 ? 8 : level >= 5 ? 6 : 4;
+    const ability = Math.max(mod("str"), mod("dex"));
+    const strike = { type: "Action", attack: formatMod(proficiencyBonus() + ability), damage: `1d${die}${formatMod(ability)} bludgeoning` };
+    actions.push({ id: crypto.randomUUID(), name: "Unarmed Strike", ...strike, notes: `Martial Arts d${die}.`, source: { feature: "unarmed" } });
+    actions.push({ id: crypto.randomUUID(), name: "Unarmed Strike (bonus)", ...strike, type: "Bonus Action", notes: "Martial Arts: after you take the Attack action.", source: { feature: "unarmed-bonus" } });
+  }
+  if (cls.id === "rogue") {
+    actions.push({ id: crypto.randomUUID(), name: "Sneak Attack", type: "Free", attack: "", damage: `${Math.ceil(level / 2)}d6`, notes: "Once per turn, with a finesse or ranged weapon, when you have advantage or an ally is within 5 feet of the target.", source: { feature: "sneak" } });
+  }
+  return actions;
 }
 
 function spellAction(row) {
@@ -815,13 +896,15 @@ function spellAction(row) {
   if (!dice && !save && !attack) return null;
   const level = spellLevelForRow(row);
   const castType = castingShorthand(detail.casting_time);
+  const effect = spellEffectRoll(row, level);
   return {
     id: crypto.randomUUID(),
     name: spellDisplayName(row),
     type: castType === "B" ? "Bonus Action" : castType === "R" ? "Reaction" : "Action",
     attack: save ? `DC ${document.querySelector("#spellDc")?.textContent || "-"} ${save.slice(0, 3).toUpperCase()}` : attack ? document.querySelector("#spellAttack")?.textContent || "" : "",
-    damage: dice || "",
-    notes: `${level === 0 ? "Cantrip" : `${ordinal(level)}-level spell`} from your spell list.`
+    damage: effect?.chip || dice || "",
+    notes: `${level === 0 ? "Cantrip" : `${ordinal(level)}-level spell`} from your spell list.`,
+    source: { spell: row.index }
   };
 }
 
@@ -833,9 +916,10 @@ function generateActions() {
     names.add(action.name.toLowerCase());
     generated.push(action);
   };
+  featureActions().forEach(add);
   (character.equipment || []).filter(item => item.equipped || item.container === "equipped").forEach(item => add(weaponAction(item)));
   character.spells.filter(spellRowHasSpell).forEach(row => add(spellAction(row)));
   character.actions.push(...generated);
   persistAndRender();
-  showToast(`<span class="toast-label">Generate Actions</span><span>${generated.length ? `Added ${generated.map(action => escapeHtml(action.name)).join(", ")}.` : "Nothing new: equip weapons or add damaging spells first."}</span>`, { duration: 8000 });
+  showToast(`<span class="toast-label">Generate Actions</span><span>${generated.length ? `Added ${generated.map(action => escapeHtml(action.name)).join(", ")}.` : "Nothing new to add: equip a weapon in Inventory or add damaging spells."}</span>`, { duration: 8000 });
 }

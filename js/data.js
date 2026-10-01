@@ -370,9 +370,9 @@ const ARTIFICER_SPELLS = new Set([
   "magic-weapon", "protection-from-poison", "rope-trick", "see-invisibility", "spider-climb", "web",
   "blink", "create-food-and-water", "dispel-magic", "fly", "glyph-of-warding", "haste",
   "protection-from-energy", "revivify", "water-breathing", "water-walk",
-  "arcane-eye", "fabricate", "freedom-of-movement", "secret-chest", "leomunds-secret-chest",
+  "arcane-eye", "fabricate", "freedom-of-movement", "secret-chest", "secret-chest",
   "faithful-hound", "private-sanctum", "resilient-sphere", "stone-shape", "stoneskin",
-  "animate-objects", "arcane-hand", "bigbys-hand", "creation", "greater-restoration", "wall-of-stone"
+  "animate-objects", "arcane-hand", "arcane-hand", "creation", "greater-restoration", "wall-of-stone"
 ]);
 
 const SUBCLASS_SPELLS = {
@@ -391,12 +391,12 @@ const SUBCLASS_SPELLS = {
   knowledge: { 1: ["command", "identify"], 3: ["augury", "suggestion"], 5: ["nondetection", "speak-with-dead"], 7: ["arcane-eye", "confusion"], 9: ["legend-lore", "scrying"] },
   nature: { 1: ["animal-friendship", "speak-with-animals"], 3: ["barkskin", "spike-growth"], 5: ["plant-growth", "wind-wall"], 7: ["dominate-beast", "grasping-vine"], 9: ["insect-plague", "tree-stride"] },
   death: { 1: ["false-life", "ray-of-sickness"], 3: ["blindness-deafness", "ray-of-enfeeblement"], 5: ["animate-dead", "vampiric-touch"], 7: ["blight", "death-ward"], 9: ["antilife-shell", "cloudkill"] },
-  arcana: { 1: ["detect-magic", "magic-missile"], 3: ["magic-weapon", "arcanists-magic-aura"], 5: ["dispel-magic", "magic-circle"], 7: ["arcane-eye", "leomunds-secret-chest"], 9: ["planar-binding", "teleportation-circle"] },
+  arcana: { 1: ["detect-magic", "magic-missile"], 3: ["magic-weapon", "arcanists-magic-aura"], 5: ["dispel-magic", "magic-circle"], 7: ["arcane-eye", "secret-chest"], 9: ["planar-binding", "teleportation-circle"] },
   forge: { 1: ["identify", "searing-smite"], 3: ["heat-metal", "magic-weapon"], 5: ["elemental-weapon", "protection-from-energy"], 7: ["fabricate", "wall-of-fire"], 9: ["animate-objects", "creation"] },
   grave: { 1: ["bane", "false-life"], 3: ["gentle-repose", "ray-of-enfeeblement"], 5: ["revivify", "vampiric-touch"], 7: ["blight", "death-ward"], 9: ["antilife-shell", "raise-dead"] },
   order: { 1: ["command", "heroism"], 3: ["hold-person", "zone-of-truth"], 5: ["mass-healing-word", "slow"], 7: ["compulsion", "locate-creature"], 9: ["commune", "dominate-person"] },
   peace: { 1: ["heroism", "sanctuary"], 3: ["aid", "warding-bond"], 5: ["beacon-of-hope", "sending"], 7: ["aura-of-purity", "resilient-sphere"], 9: ["greater-restoration", "telepathic-bond"] },
-  twilight: { 1: ["faerie-fire", "sleep"], 3: ["moonbeam", "see-invisibility"], 5: ["aura-of-vitality", "leomunds-tiny-hut"], 7: ["aura-of-life", "greater-invisibility"], 9: ["circle-of-power", "mislead"] },
+  twilight: { 1: ["faerie-fire", "sleep"], 3: ["moonbeam", "see-invisibility"], 5: ["aura-of-vitality", "tiny-hut"], 7: ["aura-of-life", "greater-invisibility"], 9: ["circle-of-power", "mislead"] },
   conquest: { 3: ["armor-of-agathys", "command"], 5: ["hold-person", "spiritual-weapon"], 9: ["bestow-curse", "fear"], 13: ["dominate-beast", "stoneskin"], 17: ["cloudkill", "dominate-person"] },
   redemption: { 3: ["sanctuary", "sleep"], 5: ["calm-emotions", "hold-person"], 9: ["counterspell", "hypnotic-pattern"], 13: ["resilient-sphere", "stoneskin"], 17: ["hold-monster", "wall-of-force"] },
   glory: { 3: ["guiding-bolt", "heroism"], 5: ["enhance-ability", "magic-weapon"], 9: ["haste", "protection-from-energy"], 13: ["compulsion", "freedom-of-movement"], 17: ["commune", "flame-strike"] },
@@ -405,7 +405,7 @@ const SUBCLASS_SPELLS = {
   oathbreaker: { 3: ["hellish-rebuke", "inflict-wounds"], 5: ["crown-of-madness", "darkness"], 9: ["animate-dead", "bestow-curse"], 13: ["blight", "confusion"], 17: ["contagion", "dominate-person"] },
   wildfire: { 2: ["burning-hands", "cure-wounds"], 3: ["flaming-sphere", "scorching-ray"], 5: ["plant-growth", "revivify"], 7: ["aura-of-life", "fire-shield"], 9: ["flame-strike", "mass-cure-wounds"] },
   spores: { 2: ["chill-touch"], 3: ["blindness-deafness", "gentle-repose"], 5: ["animate-dead", "gaseous-form"], 7: ["blight", "confusion"], 9: ["cloudkill", "contagion"] },
-  "aberrant-mind": { 1: ["arms-of-hadar", "dissonant-whispers", "mind-sliver"], 3: ["calm-emotions", "detect-thoughts"], 5: ["hunger-of-hadar", "sending"], 7: ["evards-black-tentacles", "telekinesis"], 9: ["telepathic-bond"] },
+  "aberrant-mind": { 1: ["arms-of-hadar", "dissonant-whispers", "mind-sliver"], 3: ["calm-emotions", "detect-thoughts"], 5: ["hunger-of-hadar", "sending"], 7: ["black-tentacles", "telekinesis"], 9: ["telepathic-bond"] },
   "clockwork-soul": { 1: ["alarm", "protection-from-evil-and-good"], 3: ["aid", "lesser-restoration"], 5: ["dispel-magic", "protection-from-energy"], 7: ["freedom-of-movement", "fabricate"], 9: ["greater-restoration", "wall-of-force"] },
   "gloom-stalker": { 3: ["disguise-self"], 5: ["rope-trick"], 9: ["fear"], 13: ["greater-invisibility"], 17: ["seeming"] },
   "horizon-walker": { 3: ["protection-from-evil-and-good"], 5: ["misty-step"], 9: ["haste"], 13: ["banishment"], 17: ["teleportation-circle"] },
@@ -419,10 +419,10 @@ const SUBCLASS_SPELLS = {
 const EXPANDED_SUBCLASS_SPELLS = {
   fiend: ["burning-hands", "command", "blindness-deafness", "scorching-ray", "fireball", "stinking-cloud", "fire-shield", "wall-of-fire", "flame-strike", "hallow"],
   archfey: ["faerie-fire", "sleep", "calm-emotions", "phantasmal-force", "blink", "plant-growth", "dominate-beast", "greater-invisibility", "dominate-person", "seeming"],
-  "great-old-one": ["dissonant-whispers", "tashas-hideous-laughter", "detect-thoughts", "phantasmal-force", "clairvoyance", "sending", "dominate-beast", "evards-black-tentacles", "dominate-person", "telekinesis"],
+  "great-old-one": ["dissonant-whispers", "hideous-laughter", "detect-thoughts", "phantasmal-force", "clairvoyance", "sending", "dominate-beast", "black-tentacles", "dominate-person", "telekinesis"],
   celestial: ["cure-wounds", "guiding-bolt", "flaming-sphere", "lesser-restoration", "daylight", "revivify", "guardian-of-faith", "wall-of-fire", "flame-strike", "greater-restoration"],
   hexblade: ["shield", "wrathful-smite", "blur", "branding-smite", "blink", "elemental-weapon", "phantasmal-killer", "staggering-smite", "banishing-smite", "cone-of-cold"],
-  fathomless: ["create-or-destroy-water", "thunderwave", "gust-of-wind", "silence", "lightning-bolt", "sleet-storm", "control-water", "watery-sphere", "bigbys-hand", "cone-of-cold"],
+  fathomless: ["create-or-destroy-water", "thunderwave", "gust-of-wind", "silence", "lightning-bolt", "sleet-storm", "control-water", "watery-sphere", "arcane-hand", "cone-of-cold"],
   genie: ["detect-evil-and-good", "phantasmal-force", "create-food-and-water", "phantasmal-killer", "creation", "wish"],
   undying: ["false-life", "ray-of-sickness", "blindness-deafness", "silence", "feign-death", "speak-with-dead", "aura-of-life", "death-ward", "contagion", "legend-lore"],
   undead: ["bane", "false-life", "blindness-deafness", "phantasmal-force", "phantom-steed", "speak-with-dead", "death-ward", "greater-invisibility", "antilife-shell", "cloudkill"]
@@ -461,6 +461,26 @@ function localSpell(index, name, level, classIds, castingTime, range, components
 }
 
 const LOCAL_SPELLS = [
+  localSpell("aura-of-life", "Aura of Life", 4, ["paladin"], "1 action", "Self (30-foot radius)", ["V"], "Concentration, up to 10 minutes", true,
+    "A life-preserving aura moves with you. Nonhostile creatures in it, including you, resist necrotic damage and can't have their hit point maximum reduced. A nonhostile creature at 0 hit points that starts its turn in the aura regains 1 hit point."),
+  localSpell("circle-of-power", "Circle of Power", 5, ["paladin"], "1 action", "Self (30-foot radius)", ["V"], "Concentration, up to 10 minutes", true,
+    "Divine energy radiates from you. You and friendly creatures in the aura have advantage on saving throws against spells and other magical effects, and take no damage instead of half on a successful save."),
+  localSpell("compelled-duel", "Compelled Duel", 1, ["paladin"], "1 bonus action", "30 feet", ["V"], "Concentration, up to 1 minute", true,
+    "A creature you can see makes a Wisdom save or is compelled to duel you: it has disadvantage on attacks against creatures other than you, and must make a Wisdom save to move more than 30 feet away from you."),
+  localSpell("crusaders-mantle", "Crusader's Mantle", 3, ["paladin"], "1 action", "Self (30-foot radius)", ["V"], "Concentration, up to 1 minute", true,
+    "Holy power radiates from you. Each nonhostile creature in the aura, including you, deals an extra 1d4 radiant damage when it hits with a weapon attack."),
+  localSpell("elemental-weapon", "Elemental Weapon", 3, ["paladin"], "1 action", "Touch", ["V", "S"], "Concentration, up to 1 hour", true,
+    "A nonmagical weapon becomes a +1 magic weapon and deals an extra 1d4 damage of a type you choose (acid, cold, fire, lightning, or thunder) on a hit. With a 5th- or 6th-level slot it is +2 and 2d4; 7th level or higher, +3 and 3d4."),
+  localSpell("feign-death", "Feign Death", 3, ["bard", "cleric", "druid", "wizard"], "1 action (ritual)", "Touch", ["V", "S", "M"], "1 hour", false,
+    "A willing creature appears dead to all outward inspection. It is blinded and incapacitated, its speed drops to 0, it resists all damage except psychic, and diseases and poisons have no effect on it until the spell ends."),
+  localSpell("grasping-vine", "Grasping Vine", 4, ["druid", "ranger"], "1 bonus action", "30 feet", ["V", "S"], "Concentration, up to 1 minute", true,
+    "A vine sprouts from a surface you can see. When you cast it, and as a bonus action on later turns, the vine lashes at a creature within 30 feet of it: Dexterity save or be pulled 20 feet toward the vine."),
+  localSpell("hunger-of-hadar", "Hunger of Hadar", 3, ["warlock"], "1 action", "150 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "A 20-foot-radius sphere of blackness and bitter cold. Creatures fully inside are blinded. A creature that starts its turn there takes 2d6 cold damage; one that ends its turn there makes a Dexterity save or takes 2d6 acid damage."),
+  localSpell("staggering-smite", "Staggering Smite", 4, ["paladin"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
+    "Your next melee weapon hit deals an extra 4d6 psychic damage, and the target makes a Wisdom save or has disadvantage on attack rolls and ability checks and can't take reactions until the end of its next turn."),
+  localSpell("watery-sphere", "Watery Sphere", 4, ["druid", "sorcerer", "wizard"], "1 action", "90 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
+    "A 5-foot-radius sphere of water. Each creature in its space makes a Strength save or is restrained inside it. As an action you can move the sphere up to 30 feet, carrying restrained creatures with it."),
   localSpell("booming-blade", "Booming Blade", 0, ["artificer", "sorcerer", "warlock", "wizard"], "1 action", "Self (5-foot radius)", ["S", "M"], "1 round", false,
     "Make a melee attack with a weapon as part of the cast. On a hit the target takes normal weapon damage and hums with stored thunder; if it willingly moves before your next turn, it takes 1d8 thunder damage. The stored damage, and from 5th level a bonus thunder die on the hit itself, scale as you level."),
   localSpell("green-flame-blade", "Green-Flame Blade", 0, ["artificer", "sorcerer", "warlock", "wizard"], "1 action", "Self (5-foot radius)", ["S", "M"], "Instantaneous", false,

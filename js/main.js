@@ -174,8 +174,12 @@ function bindEvents() {
     const button = event.target.closest("[data-add-spell-level]");
     if (button) {
       const level = Number(button.dataset.addSpellLevel);
-      character.spells.push({ id: crypto.randomUUID(), index: "", level, prepared: level > 0 && preparedSpellCount() < preparedLimitFor(currentClass()) });
+      const id = crypto.randomUUID();
+      character.spells.push({ id, index: "", level, prepared: level > 0 && preparedSpellCount() < preparedLimitFor(currentClass()) });
       persistAndRender();
+      const select = document.querySelector(`[data-spell-id="${id}"] .spell-select`);
+      select?.scrollIntoView({ block: "center" });
+      select?.focus();
       return;
     }
     handleSpellCastClick(event);
@@ -257,6 +261,9 @@ function bindEvents() {
   document.querySelector("#shortRestButton").addEventListener("click", () => takeRest("short"));
   document.querySelector("#longRestButton").addEventListener("click", () => takeRest("long"));
   document.querySelector("#spendHitDieButton").addEventListener("click", spendHitDie);
+  document.querySelector("#restPreview").addEventListener("click", event => {
+    if (event.target.closest("[data-undo-rest]")) undoLastRest();
+  });
   document.querySelector("#rollDiceButton").addEventListener("click", () => rollFromInput());
   document.querySelector("#rollHistory").addEventListener("click", handleRollHistoryClick);
   document.querySelector("#addResourceButton").addEventListener("click", addResource);
