@@ -178,6 +178,40 @@ Still open (backlog):
   cards, SRD equipment from the API
 - Create wizard: subclass step for level 3+ characters
 
+## Round 2 (Sam, Brennan, Ashley against the fixed build)
+
+Confirmed working live: multi-tab merge (away-player test passed), escaping across all player
+input, number clamping, bard known-spell/Bardic Inspiration rules, domain spells, roll toasts,
+rest Undo, dying banner.
+
+Fixed in 4f84732, 12145e4, a5b82f1:
+
+- Rules: damage at 0 HP = death save failure; massive damage = instant death; 0 HP and failed
+  concentration saves end concentration; death saves only roll while dying
+- Casting: one path for collapsed/expanded Cast (prepared check), in-app "Cast anyway" instead of
+  confirm(), healing/damage roll with upcast dice; full spell text in the expanded card
+- Rest Undo reverses only the rest's own changes; Level Up raises max HP
+- Security: custom class names/features, API text, and select labels escaped (script injection)
+- Cross-tab: per-tab active character (sessionStorage); other tabs' saves don't rebuild the sheet
+- Layout: spell rows adapt to the list column (container query); sticky spell panel desktop-only
+- Wizard output: per-level class features for casters, class proficiencies, PHB species bonuses,
+  subclass picker on the Class step, class-aware Standard Array; checklist counts class skills and
+  cantrips; Builder tab reuses the checklist
+- Bard Jack of All Trades; AC from equipped armor ("Gear: 18" one-click); Party tab sorted by HP
+  with bars, badges, click-to-switch; dice formula validation; cantrip caps
+- 404 refetch loop for non-SRD subclasses (found while verifying)
+
+Pending the owner's decision (Brennan's top 5 formatting changes; preview screenshots taken):
+1. Notched frame only in the header band, plain cards elsewhere
+2. Page scroll with a sticky tab bar instead of the fixed-height shell with three inner scrollers
+3. One type scale and three button roles (Level Up the only filled top-bar button)
+4. Header tile labels wrap; bigger Inspiration stepper; HP controls in one row
+5. Phone/tablet reflow: tabs before skills, single scrolling tab row, compact top bar
+
+Still open: compact read-only inventory rows; Campaign tab "Advanced" config disclosure; Disciple
+of Life bonus on healing; choose who's in the party; bard Expertise/Magical Secrets prompts and an
+Entertainer background; level-up picker duplicate selection; banners shifting the tab bar.
+
 ## Still to do
 
 - Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley
