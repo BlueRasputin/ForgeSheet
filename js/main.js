@@ -153,6 +153,10 @@ function bindEvents() {
   document.querySelector("#resetCharacter").addEventListener("click", resetCharacter);
   document.querySelector("#newCharacterButton").addEventListener("click", openCreateDialog);
   document.querySelector("#createBack").addEventListener("click", createStepBack);
+  document.querySelector("#createDialog").addEventListener("close", () => {
+    creationDraft = null;
+  });
+  document.querySelector("#levelInput").addEventListener("change", event => applyLevelChange(event.target.value));
   document.querySelector("#createNext").addEventListener("click", createStepNext);
   document.querySelector("#createStepBody").addEventListener("input", handleCreateFieldInput);
   document.querySelector("#createDialog").addEventListener("click", handleCreateStepClick);

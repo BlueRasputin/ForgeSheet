@@ -80,10 +80,14 @@ function defaultCharacter() {
 let character = loadCharacter();
 let characterLibrary = loadCharacterLibrary();
 
+// With no active character saved yet, reopen the most recent library character instead of minting a new blank one.
 function loadCharacter() {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-    return normalizeCharacter(stored);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (stored) return normalizeCharacter(stored);
+    const library = Object.values(JSON.parse(localStorage.getItem(CHARACTER_LIBRARY_KEY)) || {});
+    const latest = library.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    return normalizeCharacter(latest);
   } catch {
     return defaultCharacter();
   }
@@ -142,17 +146,57 @@ function loadCharacterLibrary() {
   }
 }
 
+const removedSheetIds = new Set();
+
+// Merge by character instead of overwriting the whole map, so two open tabs can't erase each other's characters.
 function saveCharacterLibrary() {
-  localStorage.setItem(CHARACTER_LIBRARY_KEY, JSON.stringify(characterLibrary));
+  let stored = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(CHARACTER_LIBRARY_KEY)) || {};
+  } catch {
+    stored = {};
+  }
+  removedSheetIds.forEach(id => delete stored[id]);
+  Object.entries(characterLibrary).forEach(([id, item]) => {
+    if (!stored[id] || (item.updatedAt || 0) >= (stored[id].updatedAt || 0)) stored[id] = item;
+  });
+  localStorage.setItem(CHARACTER_LIBRARY_KEY, JSON.stringify(stored));
+  Object.entries(stored).forEach(([id, item]) => {
+    if (characterLibrary[id] !== item) characterLibrary[id] = normalizeCharacter(item);
+  });
 }
+
+window.addEventListener("storage", event => {
+  if (event.key !== CHARACTER_LIBRARY_KEY) return;
+  characterLibrary = loadCharacterLibrary();
+  const latest = characterLibrary[character.sheetId];
+  if (!latest) characterLibrary[character.sheetId] = character;
+  else if ((latest.updatedAt || 0) > (character.updatedAt || 0)) character = latest;
+  renderAll();
+});
 
 function ensureCharacterInLibrary() {
   characterLibrary[character.sheetId] = structuredCloneSafe(character);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
   saveCharacterLibrary();
 }
 
 function persist() {
   character = normalizeCharacter(character);
+  character.updatedAt = Date.now();
+  const down = Number(character.hp) <= 0;
+  if (!down) {
+    character.deathSaveSuccesses = 0;
+    character.deathSaveFailures = 0;
+  }
+  if (down && !character.conditions.includes("Unconscious")) {
+    character.conditions.push("Unconscious");
+    character.autoUnconscious = true;
+  }
+  if (!down && character.autoUnconscious) {
+    character.conditions = character.conditions.filter(condition => condition !== "Unconscious");
+    character.autoUnconscious = false;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
   characterLibrary[character.sheetId] = structuredCloneSafe(character);
   saveCharacterLibrary();
@@ -173,6 +217,7 @@ function duplicateCharacter() {
 function deleteCharacter() {
   if (!confirm(`Delete ${character.name || "this character"} from the library?`)) return;
   deleteCharacterFromCloud(character.sheetId);
+  removedSheetIds.add(character.sheetId);
   delete characterLibrary[character.sheetId];
   const remaining = Object.values(characterLibrary);
   character = remaining.length ? normalizeCharacter(remaining[0]) : defaultCharacter();

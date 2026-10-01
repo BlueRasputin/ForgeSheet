@@ -33,7 +33,7 @@ function castingShorthand(time) {
 }
 
 function ensureSubclassSpells() {
-  const grants = SUBCLASS_SPELLS[slug(character.subclassName || "")] || {};
+  const grants = lookupBySubclass(SUBCLASS_SPELLS) || {};
   const entitled = new Set();
   Object.entries(grants).forEach(([grantLevel, indexes]) => {
     if (character.level >= Number(grantLevel)) indexes.forEach(index => entitled.add(index));
@@ -340,10 +340,9 @@ function spellLevelLabel(level) {
 function spellMatchesClass(item, cls) {
   const sources = new Set(cls.spellSources || []);
   if (sources.has("artificer") && ARTIFICER_SPELLS.has(item.index)) return true;
-  const subclassSlug = slug(character.subclassName || "");
-  const grants = SUBCLASS_SPELLS[subclassSlug];
+  const grants = lookupBySubclass(SUBCLASS_SPELLS);
   if (grants && Object.values(grants).some(list => list.includes(item.index))) return true;
-  if ((EXPANDED_SUBCLASS_SPELLS[subclassSlug] || []).includes(item.index)) return true;
+  if ((lookupBySubclass(EXPANDED_SUBCLASS_SPELLS) || []).includes(item.index)) return true;
   return (item.classes || []).some(classId => sources.has(classId));
 }
 

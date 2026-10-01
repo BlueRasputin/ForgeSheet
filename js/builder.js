@@ -104,7 +104,7 @@ function renderAdvancementTimeline() {
   document.querySelector("#advancementSummary").textContent = levels.length ? `Next ${levels.length} level${levels.length === 1 ? "" : "s"}` : "At level cap";
   document.querySelector("#advancementTimeline").innerHTML = levels.length ? levels.map(level => {
     const row = cls.table[level - 1] || {};
-    const slots = spellSlotsFor(cls, level).filter(Boolean).map((count, index) => `${index + 1}:${count}`).join(" ");
+    const slots = spellSlotsFor(cls, level).map((count, index) => count ? `${index + 1}:${count}` : "").filter(Boolean).join(" ");
     const items = [
       row.features || "Class progression",
       asiLevelsFor(cls).has(level) ? "ASI / feat choice" : "",
@@ -335,7 +335,12 @@ function renderCreateClass() {
   const saves = CLASS_SAVES[cls.id];
   const casting = cls.casterType === "none" ? "Martial — no spell slots" : `${(cls.spellAbility || "").toUpperCase()} spellcasting`;
   return `
-    <h3 class="create-screen-title">Choose your class</h3>
+    <div class="create-title-row">
+      <h3 class="create-screen-title">Choose your class</h3>
+      <label class="create-level">Starting Level
+        <input type="number" min="1" max="20" data-create-field="level" value="${creationDraft.level}">
+      </label>
+    </div>
     <div class="create-option-grid">
       ${Object.values(getClasses()).map(item => `
         <button type="button" class="create-option-card ${item.id === creationDraft.classId ? "is-selected" : ""}" data-create-option="classId:${item.id}">
@@ -351,10 +356,7 @@ function renderCreateClass() {
       </button>
     </div>
     <p class="create-detail"><strong>${escapeHtml(cls.name)}</strong> — d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}</p>
-    <label class="create-name">Starting Level
-      <input type="number" min="1" max="20" data-create-field="level" value="${creationDraft.level}">
-    </label>
-    <p class="create-detail">${creationDraft.level > 1 ? "Starting above level 1 — after creation a checklist will show everything to fill in for your level." : "Most campaigns start at level 1."}</p>
+    ${creationDraft.level > 1 ? `<p class="create-detail">Starting at level ${creationDraft.level}: after creation a checklist shows everything to fill in for your level.</p>` : ""}
   `;
 }
 
@@ -521,7 +523,7 @@ function finishCreation() {
   creationDraft = null;
   document.querySelector("#createDialog").close();
   persistAndRender();
-  if (levelChecklist().some(item => !item.done)) document.querySelector("#checklistDialog").showModal();
+  if (level > 1 && levelChecklist().some(item => !item.done)) document.querySelector("#checklistDialog").showModal();
 }
 
 function levelChecklist() {
@@ -530,7 +532,9 @@ function levelChecklist() {
   const conMod = mod("con");
   const asiCount = [...asiLevelsFor(cls)].filter(asiLevel => asiLevel <= level).length;
   const featCount = (character.planner?.feats || []).length;
-  const minHp = cls.hitDie + conMod + (level - 1); // ponytail: rules-minimum HP check (max first die + 1s after); can't validate rolled HP more tightly
+  // Lowest legal max HP: full first die, then a roll of 1 + CON (min 1) every level after.
+  const minHp = Math.max(level, cls.hitDie + conMod + (level - 1) * Math.max(1, 1 + conMod));
+  const averageHp = averageHpFor(cls, level, conMod);
   const caster = cls.casterType !== "none";
   const expectedSlots = caster ? spellSlotsFor(cls, level).some(Boolean) : false;
   const items = [
@@ -540,7 +544,7 @@ function levelChecklist() {
     ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "actions"],
     ["Skills", "Pick your skill proficiencies.", (character.proficientSkills || []).length > 0, "actions"],
     ["Hit Dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
-    ["Hit Points", `Max HP looks low for level ${level} — expect at least ${minHp}.`, Number(character.maxHp) >= minHp, null],
+    ["Hit Points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
     ["ASI / Feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level} — record each in the Builder planner.`, featCount >= asiCount, "builder"],
     ["Equipment", "Add starting gear or catalog items.", (character.equipment || []).length > 0 || Boolean(character.inventory), "inventory"]
   ];

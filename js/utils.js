@@ -71,3 +71,55 @@ function clamp(value, min, max = Infinity) {
 function structuredCloneSafe(value) {
   return JSON.parse(JSON.stringify(value));
 }
+
+let toastTimer = null;
+
+function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
+  let toast = document.querySelector("#appToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "appToast";
+    toast.className = "app-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    document.body.appendChild(toast);
+    toast.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+    toast.addEventListener("mouseleave", () => {
+      toastTimer = setTimeout(hideToast, 2500);
+    });
+  }
+  toast.dataset.tone = tone;
+  toast.innerHTML = `
+    <div class="app-toast-body">${html}</div>
+    ${actions.map((action, index) => `<button type="button" class="secondary" data-toast-action="${index}">${escapeHtml(action.label)}</button>`).join("")}
+    <button type="button" class="ghost app-toast-close" aria-label="Dismiss">×</button>
+  `;
+  toast.onclick = event => {
+    const button = event.target.closest("[data-toast-action]");
+    if (button) actions[Number(button.dataset.toastAction)].run();
+    if (button || event.target.closest(".app-toast-close")) hideToast();
+  };
+  toast.classList.add("is-visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, duration);
+}
+
+function hideToast() {
+  document.querySelector("#appToast")?.classList.remove("is-visible");
+}
+
+// "Oath of Devotion", "Life Domain", "Gloomstalker" and "gloom-stalker" all resolve to the same table key.
+function normalizedSubclassKey(text) {
+  return slug(String(text || ""))
+    .replace(/^(order|oath|circle|college|school|way|path|domain|patron)-of-/, "")
+    .replace(/^the-/, "")
+    .replace(/-(domain|oath|circle|college|school|patron|order)$/, "")
+    .replace(/-/g, "");
+}
+
+function lookupBySubclass(table, name = character.subclassName) {
+  const key = normalizedSubclassKey(name);
+  if (!key) return undefined;
+  const match = Object.keys(table).find(candidate => candidate.replace(/-/g, "") === key);
+  return match ? table[match] : undefined;
+}

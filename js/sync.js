@@ -266,21 +266,19 @@ function handleSyncSettingsInput(event) {
   if (event.target.id === "syncSheetId") character.sheetId = event.target.value || character.sheetId;
   saveSyncSettings();
   persist();
+  if (event.target.id === "syncRole") renderSyncPanel();
 }
 
 async function connectCampaignSync() {
-  disconnectCampaignSync(false);
-  syncSettings.playerName = syncSettings.playerName || character.name;
-  syncSettings.sheetId = syncSettings.sheetId || character.sheetId || crypto.randomUUID();
-  character.sheetId = syncSettings.sheetId;
-  saveSyncSettings();
-  persist();
-
   const status = document.querySelector("#syncStatus");
   if (!syncSettings.campaignId || !syncSettings.firebaseConfigText) {
     status.textContent = "Add a campaign ID and Firebase web config first.";
     return;
   }
+  disconnectCampaignSync(false);
+  syncSettings.playerName = syncSettings.playerName || character.name;
+  syncSettings.sheetId = character.sheetId;
+  saveSyncSettings();
 
   try {
     status.textContent = "Connecting to campaign...";
@@ -547,6 +545,7 @@ function sendLocalItem(sheetId, equipmentItem) {
   const target = characterLibrary[sheetId];
   if (!target) return;
   target.equipment = [...(target.equipment || []), equipmentItem];
+  target.updatedAt = Date.now();
   characterLibrary[sheetId] = normalizeCharacter(target);
   if (character.sheetId === sheetId) character = normalizeCharacter(characterLibrary[sheetId]);
   saveCharacterLibrary();
@@ -593,12 +592,20 @@ function renderActivity(items) {
 }
 
 async function copySyncLink(role) {
-  syncSettings.role = role;
-  saveSyncSettings();
+  const status = document.querySelector("#syncStatus");
+  if (!syncSettings.campaignId) {
+    status.textContent = "Enter or generate a session code before sharing a link.";
+    return;
+  }
   const url = new URL(location.href);
-  url.searchParams.set("campaign", syncSettings.campaignId || "");
+  url.searchParams.set("campaign", syncSettings.campaignId);
   url.searchParams.set("role", role);
   if (role === "player") url.searchParams.set("sheet", syncSettings.sheetId || character.sheetId);
-  await navigator.clipboard.writeText(url.toString());
-  document.querySelector("#syncStatus").textContent = `${role === "dm" ? "DM" : "Player"} link copied.`;
+  const label = role === "dm" ? "DM" : "Player";
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    status.textContent = `${label} link copied.`;
+  } catch {
+    status.textContent = `Couldn't copy automatically. ${label} link: ${url}`;
+  }
 }

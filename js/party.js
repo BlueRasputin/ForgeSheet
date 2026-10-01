@@ -1,6 +1,7 @@
 function renderPartyDashboard() {
   const characters = Object.values(characterLibrary).map(normalizeCharacter).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  document.querySelector("#partyCount").textContent = `${characters.length} character${characters.length === 1 ? "" : "s"}`;
+  const where = syncState?.connected ? "" : " on this device";
+  document.querySelector("#partyCount").textContent = `${characters.length} character${characters.length === 1 ? "" : "s"}${where}`;
   renderPartySummary(characters);
   const root = document.querySelector("#partyDashboard");
   root.innerHTML = characters.map(item => {
@@ -9,7 +10,7 @@ function renderPartyDashboard() {
     const equipment = equipmentWeight(item);
     const capacity = carryingCapacity(item);
     const modules = (item.classOptions || []).filter(option => option.name).slice(0, 3).map(option => option.name).join(", ");
-    return `<article class="party-card"><strong>${escapeHtml(item.name || "Unnamed")}</strong><span>${escapeHtml(cls)} ${item.level || 1}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span><div><b>AC</b> ${item.ac || "-"} <b>HP</b> ${item.hp || "-"} / ${item.maxHp || item.hp || "-"} <b>Passive</b> ${passive}</div><div><b>Load</b> ${formatWeight(equipment)} / ${capacity} lb <b>Options</b> ${escapeHtml(modules || "-")}</div><p>${escapeHtml((item.conditions || []).join(", ") || "No conditions")}</p></article>`;
+    return `<article class="party-card"><strong>${escapeHtml(item.name || "Unnamed")}</strong><span>${escapeHtml(cls)} ${item.level || 1}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span><div><b>AC</b> ${item.ac || "-"} <b>HP</b> ${item.hp ?? "-"} / ${item.maxHp ?? "-"} <b>Passive</b> ${passive}</div><div><b>Load</b> ${formatWeight(equipment)} / ${capacity} lb <b>Options</b> ${escapeHtml(modules || "-")}</div><p>${escapeHtml((item.conditions || []).join(", ") || "No conditions")}</p></article>`;
   }).join("");
 }
 

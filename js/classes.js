@@ -225,21 +225,37 @@ function getClasses() {
   return { ...BUILT_IN_CLASSES, ...customClasses };
 }
 
-// Martial subclasses that turn their class into a third caster (INT, wizard list).
-const THIRD_CASTER_SUBCLASSES = new Set(["eldritch-knight", "arcane-trickster"]);
+// Cumulative spells known by class level for subclass-granted casting.
+const THIRD_CASTER_KNOWN = [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13];
+const PROFANE_SOUL_KNOWN = [0, 0, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 11];
+
+// Martial subclasses that make their class a caster.
+const SUBCLASS_CASTING = {
+  "eldritch-knight": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN },
+  "arcane-trickster": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN },
+  "profane-soul": { casterType: "pactThird", spellAbility: "int", preparedFormula: "known", spellSources: ["warlock"], knownTable: PROFANE_SOUL_KNOWN }
+};
 
 function currentClass() {
   const cls = getClasses()[character.classId] || BUILT_IN_CLASSES.artificer;
-  if (cls.casterType === "none" && THIRD_CASTER_SUBCLASSES.has(slug(character.subclassName || ""))) {
-    return { ...cls, casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"] };
-  }
-  return cls;
+  const casting = cls.casterType === "none" ? lookupBySubclass(SUBCLASS_CASTING) : null;
+  return casting ? { ...cls, ...casting } : cls;
+}
+
+function isPactCaster(cls = currentClass()) {
+  return cls.casterType === "warlock" || cls.casterType === "pactThird";
+}
+
+function knownSpellCap(cls = currentClass(), level = character.level) {
+  const table = cls.knownTable || KNOWN_SPELLS[cls.id];
+  return table ? table[level - 1] || 0 : null;
 }
 
 function spellSlotsFor(cls, level = character.level) {
   if (cls.casterType === "none") return [];
-  if (cls.casterType === "warlock") {
-    const pact = WARLOCK_SLOTS[level];
+  if (isPactCaster(cls)) {
+    // Profane Soul pact magic tracks the warlock table at a third of blood hunter level, starting at 3rd.
+    const pact = cls.casterType === "pactThird" ? (level < 3 ? null : WARLOCK_SLOTS[Math.ceil(level / 3)]) : WARLOCK_SLOTS[level];
     return pact ? Array.from({ length: pact.level }, (_, index) => index + 1 === pact.level ? pact.slots : 0) : [];
   }
   // PHB half/third casters match the full-caster table at ceil(level/2) / ceil(level/3),
@@ -261,7 +277,7 @@ function asiLevelsFor(cls = currentClass()) {
 
 function preparedLimitFor(cls, level = character.level) {
   if (cls.preparedFormula === "none") return 0;
-  if (cls.preparedFormula === "known") return character.spells.filter(row => row.index).length;
+  if (cls.preparedFormula === "known") return knownSpellCap(cls, level) ?? character.spells.filter(row => row.index).length;
   if (cls.preparedFormula === "levelPlusMod") return Math.max(1, level + mod(cls.spellAbility));
   if (cls.preparedFormula === "halfLevelPlusMod") return Math.max(1, Math.floor(level / 2) + mod(cls.spellAbility));
   return 0;
@@ -338,15 +354,17 @@ function saveCustomClass() {
   };
   localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
   saveClassToCloud(customClasses[id]);
-  if (creationDraft) {
+  const creating = creationDraft && document.querySelector("#createDialog").open;
+  if (creating) {
     creationDraft.classId = id;
   } else {
+    creationDraft = null;
     character.classId = id;
   }
   classBuilderDraft = null;
   const dialog = document.querySelector("#classBuilderDialog");
   if (dialog.open) dialog.close();
-  if (creationDraft) renderCreateStep();
+  if (creating) renderCreateStep();
   persistAndRender();
 }
 

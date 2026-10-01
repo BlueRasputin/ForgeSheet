@@ -95,6 +95,7 @@ function renderSheet() {
 
 function handleInput(event) {
   const id = event.target.id;
+  if (id === "levelInput") return;
   const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
   if (id === "classSelect" && value === CUSTOM_CLASS_VALUE) {
     startCustomClassDraft();
@@ -107,7 +108,7 @@ function handleInput(event) {
     featuresInput: "features", inventoryInput: "inventory", notesInput: "notes"
   };
   if (map[id]) {
-    character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), 1, map[id] === "level" ? 20 : 999) : value;
+    character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), map[id] === "hp" ? 0 : 1, map[id] === "level" ? 20 : 999) : value;
     if (id === "classSelect") {
       classBuilderDraft = null;
       const cls = currentClass();
@@ -168,6 +169,25 @@ function handleInput(event) {
     persist();
   }
   renderAll();
+}
+
+// Committed on change (blur/Enter) so typing "1" then "5" doesn't apply two level jumps.
+function applyLevelChange(value) {
+  const next = clamp(Number(value), 1, 20);
+  const delta = next - character.level;
+  if (!delta) {
+    renderAll();
+    return;
+  }
+  const cls = currentClass();
+  const perLevel = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con"));
+  character.level = next;
+  character.maxHp = Math.max(next, Number(character.maxHp || 0) + delta * perLevel);
+  character.hp = clamp(Number(character.hp || 0) + delta * perLevel, 0, character.maxHp);
+  character.hitDice = `${next}d${cls.hitDie}`;
+  character.hitDiceUsed = Math.min(Number(character.hitDiceUsed || 0), next);
+  persistAndRender();
+  showToast(`<strong>Level ${next}</strong> Max HP ${delta > 0 ? "+" : ""}${delta * perLevel} using the average (${perLevel}/level), hit dice ${next}d${cls.hitDie}. Edit Max HP if you rolled.`, { duration: 9000 });
 }
 
 function handleAbilityInput(event) {
@@ -309,7 +329,8 @@ function renderSearchResults() {
     ["Subclass", character.subclass.sections.map(section => `${section.title}: ${section.body}`).join("\n")],
     ["Class Options", character.classOptions.map(option => `${option.name}: ${option.notes}`).join("\n")],
     ["Actions", character.actions.map(action => `${action.name}: ${action.notes}`).join("\n")],
-    ["Spells", character.spells.map(spellDisplayName).join(", ")]
+    ["Spells", character.spells.map(spellDisplayName).join(", ")],
+    ["Note Sections", (character.noteSections || []).map(section => `${section.title}: ${section.body}`).join("\n")]
   ];
   const matches = haystacks.filter(([, text]) => String(text || "").toLowerCase().includes(query));
   root.classList.add("active");

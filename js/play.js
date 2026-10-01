@@ -279,7 +279,7 @@ function rollDie(sides) {
 
 function renderRestPreview() {
   const shortRefresh = [
-    ...(currentClass().casterType === "warlock" ? [{ name: "Pact magic slots" }] : []),
+    ...(isPactCaster() ? [{ name: "Pact magic slots" }] : []),
     ...character.resources.filter(item => item.reset === "short"),
     ...character.classOptions.filter(item => item.reset === "short")
   ].map(item => item.name).filter(Boolean);
@@ -306,7 +306,7 @@ function spendHitDie() {
 }
 
 function takeRest(type) {
-  if (type === "short" && currentClass().casterType === "warlock") {
+  if (type === "short" && isPactCaster()) {
     character.spellSlotUsage = {};
   }
   if (type === "long") {
