@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
-    <link rel="stylesheet" href="./styles.css?v=31">
+    <link rel="stylesheet" href="./styles.css?v=32">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to the sheet</a>
@@ -414,6 +414,13 @@
               </div>
             </div>
             <div id="actionRows" class="action-list"></div>
+            <label id="fightingStyleField" class="fighting-style" hidden>Fighting style
+              <select id="fightingStyleSelect">
+                <option value="">None chosen</option>
+                <option>Archery</option><option>Defense</option><option>Dueling</option>
+                <option>Great Weapon Fighting</option><option>Protection</option><option>Two-Weapon Fighting</option>
+              </select>
+            </label>
           </section>
 
           <section class="block resources-row">
@@ -967,20 +974,21 @@
       </article>
     </template>
 
-    <script src="./js/utils.js?v=27"></script>
-    <script src="./js/data.js?v=27"></script>
-    <script src="./js/classes.js?v=27"></script>
-    <script src="./js/character.js?v=27"></script>
-    <script src="./js/layout.js?v=27"></script>
-    <script src="./js/spells.js?v=27"></script>
-    <script src="./js/sheet.js?v=27"></script>
-    <script src="./js/builder.js?v=27"></script>
-    <script src="./js/play.js?v=27"></script>
-    <script src="./js/equipment.js?v=27"></script>
-    <script src="./js/party.js?v=27"></script>
-    <script src="./js/rules.js?v=27"></script>
-    <script src="./js/import.js?v=27"></script>
-    <script src="./js/sync.js?v=27"></script>
-    <script src="./js/main.js?v=27"></script>
+    <script src="./js/utils.js?v=28"></script>
+    <script src="./js/data.js?v=28"></script>
+    <script src="./js/expansions.js?v=28"></script>
+    <script src="./js/classes.js?v=28"></script>
+    <script src="./js/character.js?v=28"></script>
+    <script src="./js/layout.js?v=28"></script>
+    <script src="./js/spells.js?v=28"></script>
+    <script src="./js/sheet.js?v=28"></script>
+    <script src="./js/builder.js?v=28"></script>
+    <script src="./js/play.js?v=28"></script>
+    <script src="./js/equipment.js?v=28"></script>
+    <script src="./js/party.js?v=28"></script>
+    <script src="./js/rules.js?v=28"></script>
+    <script src="./js/import.js?v=28"></script>
+    <script src="./js/sync.js?v=28"></script>
+    <script src="./js/main.js?v=28"></script>
   </body>
 </html>

@@ -214,34 +214,40 @@ function handlePlannerClick(event) {
   persistAndRender();
 }
 
+// Multiclassing (PHB p.163): meet the new class's minimums AND your current class's. Each inner list is "any of".
+const MULTICLASS_REQUIREMENTS = {
+  artificer: [["int"]],
+  barbarian: [["str"]],
+  bloodhunter: [["str", "dex"], ["int"]],
+  bard: [["cha"]],
+  cleric: [["wis"]],
+  druid: [["wis"]],
+  fighter: [["str", "dex"]],
+  monk: [["dex"], ["wis"]],
+  paladin: [["str"], ["cha"]],
+  ranger: [["dex"], ["wis"]],
+  rogue: [["dex"]],
+  sorcerer: [["cha"]],
+  warlock: [["cha"]],
+  wizard: [["int"]]
+};
+
 function multiclassRequirements(classId) {
-  const reqs = {
-    artificer: [["int", 13]],
-    barbarian: [["str", 13]],
-    bloodhunter: [["dex", 13], ["int", 13]],
-    bard: [["cha", 13]],
-    cleric: [["wis", 13]],
-    druid: [["wis", 13]],
-    fighter: [["str", 13], ["dex", 13], "or"],
-    monk: [["dex", 13], ["wis", 13]],
-    paladin: [["str", 13], ["cha", 13]],
-    ranger: [["dex", 13], ["wis", 13]],
-    rogue: [["dex", 13]],
-    sorcerer: [["cha", 13]],
-    warlock: [["cha", 13]],
-    wizard: [["int", 13]]
+  const describe = id => {
+    const groups = MULTICLASS_REQUIREMENTS[id];
+    if (!groups) return null;
+    const parts = groups.map(group => {
+      const met = group.some(ability => Number(character.abilities[ability] || 0) >= 13);
+      return { met, text: `${group.map(ability => ability.toUpperCase()).join(" or ")} 13${met ? " ok" : " needed"}` };
+    });
+    return { met: parts.every(part => part.met), text: parts.map(part => part.text).join(", ") };
   };
-  const rule = reqs[classId];
-  if (!rule) return "Custom class: check DM prerequisites.";
-  const useOr = rule.includes("or");
-  const checks = rule.filter(Array.isArray).map(([ability, score]) => ({
-    ability,
-    score,
-    met: Number(character.abilities[ability] || 0) >= score
-  }));
-  const met = useOr ? checks.some(item => item.met) : checks.every(item => item.met);
-  const text = checks.map(item => `${item.ability.toUpperCase()} ${item.score}${item.met ? " ok" : " needed"}`).join(useOr ? " or " : ", ");
-  return `${text}. ${met ? "Prerequisites met." : "Prerequisites not met."}`;
+  const target = describe(classId);
+  if (!target) return "Custom class: check DM prerequisites.";
+  const current = currentClass();
+  const own = current.id !== classId ? describe(current.id) : null;
+  const met = target.met && (!own || own.met);
+  return `${getClasses()[classId]?.name || classId}: ${target.text}.${own ? ` Current class (${current.name}): ${own.text}.` : ""} ${met ? "Prerequisites met." : "Prerequisites not met."}`;
 }
 
 let pendingLevelSubclass = "";
@@ -286,9 +292,28 @@ function openLevelDialog() {
         ${["asiFirst", "asiSecond"].map(id => `<select id="${id}">${ABILITIES.map(([ability, label]) => `<option value="${ability}" ${Number(character.abilities[ability]) >= 20 ? "disabled" : ""}>${label} (${character.abilities[ability]})</option>`).join("")}</select>`).join("")}
       </div>
       <label class="inline-check"><input type="radio" name="asiMode" value="feat"> Take a feat instead
-        <select id="asiFeat">${FEAT_PRESETS.filter(name => name !== "Ability Score Improvement").map(name => `<option>${escapeHtml(name)}</option>`).join("")}</select>
+        <select id="asiFeat">${FEAT_PRESETS.filter(name => name !== "Ability Score Improvement").map(name => {
+          const blocked = featBlocked(name);
+          return `<option value="${escapeHtml(name)}" ${blocked ? "disabled" : ""}>${escapeHtml(name)}${blocked ? ` (${escapeHtml(blocked)})` : ""}</option>`;
+        }).join("")}</select>
+        <select id="asiFeatAbility" aria-label="Ability the feat raises" hidden></select>
       </label>
     </fieldset>` : "";
+  const featSelect = document.querySelector("#asiFeat");
+  if (featSelect) {
+    const firstOpen = [...featSelect.options].find(option => !option.disabled);
+    if (firstOpen) featSelect.value = firstOpen.value;
+    const syncAbility = () => {
+      const options = FEAT_RULES[featSelect.value]?.ability || [];
+      const pick = document.querySelector("#asiFeatAbility");
+      pick.hidden = !options.length;
+      pick.innerHTML = options.map(id => `<option value="${id}" ${Number(character.abilities[id]) >= 20 ? "disabled" : ""}>+1 ${id.toUpperCase()} (${character.abilities[id]})</option>`).join("");
+      const open = [...pick.options].find(option => !option.disabled);
+      if (open) pick.value = open.value;
+    };
+    featSelect.addEventListener("change", syncAbility);
+    syncAbility();
+  }
   renderLevelSummaryAndChoices();
   document.querySelector("#levelDialog").showModal();
 }
@@ -299,7 +324,7 @@ function renderLevelSummaryAndChoices() {
   const row = cls.table[nextLevel - 1] || {};
   const profNow = proficiencyBonus(character.level);
   const profNext = proficiencyBonus(nextLevel);
-  const hpGain = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + speciesHpPerLevel(character.species);
+  const hpGain = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp();
   document.querySelector("#levelSummary").innerHTML = `
     <div>Hit points: +${hpGain} (average), or edit Max HP after applying if you rolled.</div>
     <div>Hit dice: ${nextLevel}d${cls.hitDie} · Proficiency bonus: ${formatMod(profNext)}${profNext !== profNow ? ` (up from ${formatMod(profNow)})` : ""}</div>
@@ -355,8 +380,41 @@ function blankCreationDraft() {
     level: 1,
     subclass: "",
     skills: [],
+    speciesAbilities: [],
+    speciesSkills: [],
+    speciesCantrip: "",
+    speciesFeat: "",
+    speciesFeatAbility: "",
     abilities: Object.fromEntries(ABILITIES.map(([id]) => [id, 10]))
   };
+}
+
+// Species choices made at creation: Half-Elf and Variant Human +1s, bonus skills, a feat, a High Elf cantrip.
+function speciesChoices(species = creationDraft?.species) {
+  return SPECIES_GRANTS[species]?.choose || {};
+}
+
+// Chosen species increases, in pick order: [2, 1] means the first pick gets +2 and the second +1.
+function speciesBonusSteps(species) {
+  return speciesChoices(species).bonuses || [];
+}
+
+function chosenSpeciesBonus(draft, id) {
+  const index = (draft.speciesAbilities || []).indexOf(id);
+  return index < 0 ? 0 : speciesBonusSteps(draft.species)[index] || 0;
+}
+
+// Point buy (PHB p.13): scores 8-15, 27 points.
+const POINT_BUY_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
+
+function pointBuySpent(abilities) {
+  const scores = ABILITIES.map(([id]) => Number(abilities[id]));
+  return scores.every(score => score in POINT_BUY_COST) ? scores.reduce((sum, score) => sum + POINT_BUY_COST[score], 0) : null;
+}
+
+function pointBuyText() {
+  const spent = pointBuySpent(creationDraft.abilities);
+  return spent === null ? "Point buy: every score must be 8 to 15." : `Point buy: ${spent} of 27 points spent${spent > 27 ? ` (${spent - 27} over)` : ""}.`;
 }
 
 // A half-built character survives closing the wizard; "Start over" clears it.
@@ -403,17 +461,35 @@ function renderCreateIdentity() {
     <label class="create-name">Character Name
       <input data-create-field="name" value="${escapeHtml(creationDraft.name)}" autocomplete="off" maxlength="60" placeholder="Name your hero...">
     </label>
-    <div class="create-option-grid">
+    <p class="create-detail">${species ? `<strong>${species[0]}.</strong> ${species[2]}` : "Choose a species, or skip this screen and type a homebrew species on the sheet later."}</p>
+    ${renderCreateSpeciesExtras()}
+    <label class="create-name create-search">Find a species
+      <input type="search" data-create-species-search autocomplete="off" placeholder="Search ${SPECIES_PRESETS.length} species: aasimar, tortle, warforged...">
+    </label>
+    <div class="create-option-grid" id="createSpeciesGrid">
       ${SPECIES_PRESETS.map(([name, speed, , glyph]) => `
-        <button type="button" class="create-option-card ${name === creationDraft.species ? "is-selected" : ""}" data-create-option="species:${name}">
+        <button type="button" class="create-option-card ${name === creationDraft.species ? "is-selected" : ""}" data-create-option="species:${escapeHtml(name)}" data-species-name="${escapeHtml(name.toLowerCase())}">
           <span class="create-glyph">${icon(glyph)}</span>
-          <strong>${name}</strong>
+          <strong>${escapeHtml(name)}</strong>
           <span>${speed} ft speed</span>
         </button>
       `).join("")}
     </div>
-    <p class="create-detail">${species ? `<strong>${species[0]}.</strong> ${species[2]}` : "Choose a species, or skip this screen and type a homebrew species on the sheet later."}</p>
+    <p class="create-detail" id="createSpeciesEmpty" hidden>No species match that search.</p>
   `;
+}
+
+function renderCreateSpeciesExtras() {
+  const choose = speciesChoices();
+  const parts = [];
+  if (choose.cantripFrom) {
+    const cantrips = allSpells.filter(spell => spell.level === 0 && (spell.classes || []).some(item => item.index === choose.cantripFrom));
+    parts.push(`<label class="create-name">${escapeHtml(choose.cantripFrom.charAt(0).toUpperCase() + choose.cantripFrom.slice(1))} cantrip
+      <select data-create-field="speciesCantrip"><option value="">Choose later</option>${cantrips.map(spell => `<option value="${escapeHtml(spell.index)}" ${spell.index === creationDraft.speciesCantrip ? "selected" : ""}>${escapeHtml(spell.name)}</option>`).join("")}</select>
+    </label>`);
+  }
+  if (choose.feat) parts.push(`<p class="create-detail">${escapeHtml(creationDraft.species)} also takes a feat: pick it on the Abilities step, once your scores are set.</p>`);
+  return parts.join("");
 }
 
 function renderCreateClass() {
@@ -479,7 +555,7 @@ function classSkillPicks(cls) {
 function renderCreateSkillPicker() {
   const cls = draftClass();
   if (!cls) return `<p class="create-detail">Pick a class first to choose its skills.</p>`;
-  const fromBackground = new Set(backgroundSkills(creationDraft.background));
+  const fromBackground = new Set([...backgroundSkills(creationDraft.background), ...(SPECIES_GRANTS[creationDraft.species]?.skills || []), ...creationDraft.speciesSkills]);
   const allowed = CLASS_SKILL_CHOICES[cls.id] === "any" || !CLASS_SKILL_CHOICES[cls.id] ? SKILLS.map(([id]) => id) : CLASS_SKILL_CHOICES[cls.id];
   const picks = classSkillPicks(cls);
   return `
@@ -489,7 +565,24 @@ function renderCreateSkillPicker() {
         const label = SKILLS.find(([skill]) => skill === id)?.[1] || id;
         const owned = fromBackground.has(id);
         const chosen = creationDraft.skills.includes(id);
-        return `<button type="button" class="condition-chip ${chosen || owned ? "active" : ""}" data-create-skill="${id}" ${owned ? "disabled title=\"From your background\"" : ""}>${owned ? icon("check") : ""}${escapeHtml(label)}</button>`;
+        return `<button type="button" class="condition-chip ${chosen || owned ? "active" : ""}" data-create-skill="${id}" ${owned ? "disabled title=\"From your background or species\"" : ""}>${owned ? icon("check") : ""}${escapeHtml(label)}</button>`;
+      }).join("")}
+    </div>
+    ${renderCreateSpeciesSkills()}
+  `;
+}
+
+function renderCreateSpeciesSkills() {
+  const picks = speciesChoices().skills || 0;
+  if (!picks) return "";
+  const owned = new Set([...backgroundSkills(creationDraft.background), ...(SPECIES_GRANTS[creationDraft.species]?.skills || []), ...creationDraft.skills]);
+  return `
+    <h4 class="create-subtitle">${escapeHtml(creationDraft.species)} skills: choose ${picks} of any (${creationDraft.speciesSkills.length}/${picks})</h4>
+    <div class="create-skill-chips">
+      ${SKILLS.map(([id, label]) => {
+        const chosen = creationDraft.speciesSkills.includes(id);
+        const taken = owned.has(id);
+        return `<button type="button" class="condition-chip ${chosen || taken ? "active" : ""}" data-create-species-skill="${id}" ${taken ? "disabled" : ""}>${taken ? icon("check") : ""}${escapeHtml(label)}</button>`;
       }).join("")}
     </div>
   `;
@@ -518,9 +611,10 @@ function renderCreateBackground() {
   `;
 }
 
-function draftAbilitiesWithBonus() {
-  const bonus = SPECIES_PRESETS.find(([name]) => name === creationDraft.species)?.[4] || {};
-  return Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(creationDraft.abilities[id] || 10) + (bonus[id] || 0), 1, 30)]));
+function draftAbilitiesWithBonus(draft = creationDraft) {
+  const bonus = SPECIES_PRESETS.find(([name]) => name === draft.species)?.[4] || {};
+  const featAbility = FEAT_RULES[draft.speciesFeat]?.ability?.includes(draft.speciesFeatAbility) ? draft.speciesFeatAbility : "";
+  return Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10) + (bonus[id] || 0) + chosenSpeciesBonus(draft, id) + (featAbility === id ? 1 : 0), 1, 30)]));
 }
 
 function renderCreateAbilities() {
@@ -536,8 +630,48 @@ function renderCreateAbilities() {
         </div>
       `).join("")}
     </div>
-    <button type="button" class="secondary" data-create-standard>Use the standard array${cls ? ` for ${escapeHtml(cls.name)}` : ""}</button>
-    <p class="create-detail">Puts 15, 14, 13, 12, 10, 8 into the abilities your class leans on most. ${speciesBonusText(creationDraft.species) ? `${escapeHtml(creationDraft.species)} bonuses (${speciesBonusText(creationDraft.species)}) are added on top.` : ""}</p>
+    <div class="create-ability-methods">
+      <button type="button" class="secondary" data-create-standard>Use the standard array${cls ? ` for ${escapeHtml(cls.name)}` : ""}</button>
+      <button type="button" class="ghost" data-create-pointbuy>Start point buy</button>
+    </div>
+    <p class="create-detail" id="createPointBuy">${pointBuyText()}</p>
+    <p class="create-detail">The standard array puts 15, 14, 13, 12, 10, 8 into the abilities your class leans on most. ${speciesBonusText(creationDraft.species) ? `${escapeHtml(creationDraft.species)} bonuses (${speciesBonusText(creationDraft.species)}) are added on top.` : ""}</p>
+    ${renderCreateSpeciesAbilities()}
+  `;
+}
+
+function renderCreateSpeciesFeat() {
+  if (!speciesChoices().feat) return "";
+  const source = draftFeatSource();
+  const cls = draftClass() || { casterType: "none" };
+  const abilities = FEAT_RULES[creationDraft.speciesFeat]?.ability || [];
+  return `
+    <label class="create-name">${escapeHtml(creationDraft.species)} feat
+      <select data-create-field="speciesFeat"><option value="">Choose later</option>${FEAT_PRESETS.filter(name => name !== "Ability Score Improvement").map(name => {
+        const blocked = featBlocked(name, source, cls);
+        return `<option value="${escapeHtml(name)}" ${name === creationDraft.speciesFeat ? "selected" : ""} ${blocked ? "disabled" : ""}>${escapeHtml(name)}${blocked ? ` (${escapeHtml(blocked)})` : ""}</option>`;
+      }).join("")}</select>
+    </label>
+    ${abilities.length ? `<label class="create-name">Feat increase
+      <select data-create-field="speciesFeatAbility">${abilities.map(id => `<option value="${id}" ${id === creationDraft.speciesFeatAbility ? "selected" : ""}>+1 ${id.toUpperCase()}</option>`).join("")}</select>
+    </label>` : ""}
+  `;
+}
+
+function renderCreateSpeciesAbilities() {
+  const steps = speciesBonusSteps(creationDraft.species);
+  if (!steps.length) return renderCreateSpeciesFeat();
+  const excluded = new Set(speciesChoices().exclude || []);
+  const next = steps[creationDraft.speciesAbilities.length];
+  return `
+    <h4 class="create-subtitle">${escapeHtml(creationDraft.species)}: ${steps.map(step => `+${step}`).join(" and ")} to different abilities${next ? `, next pick gets +${next}` : ""} (${creationDraft.speciesAbilities.length}/${steps.length})</h4>
+    <div class="create-skill-chips">
+      ${ABILITIES.filter(([id]) => !excluded.has(id)).map(([id, label]) => {
+        const bonus = chosenSpeciesBonus(creationDraft, id);
+        return `<button type="button" class="condition-chip ${bonus ? "active" : ""}" data-create-species-ability="${id}">${escapeHtml(label)}${bonus ? ` +${bonus}` : ""}</button>`;
+      }).join("")}
+    </div>
+    ${renderCreateSpeciesFeat()}
   `;
 }
 
@@ -548,9 +682,9 @@ function renderCreateReview() {
   const abilities = draftAbilitiesWithBonus();
   const bonus = speciesRow?.[4] || {};
   const conMod = Math.floor((abilities.con - 10) / 2);
-  const hp = averageHpFor(cls, creationDraft.level, conMod) + speciesHpPerLevel(creationDraft.species) * creationDraft.level;
+  const hp = averageHpFor(cls, creationDraft.level, conMod) + extraHpPerLevel({ species: creationDraft.species, classId: cls.id, subclass: creationDraft.subclass, feats: [creationDraft.speciesFeat] }) * creationDraft.level;
   const subclass = officialSubclasses.find(item => item.index === creationDraft.subclass);
-  const skills = [...new Set([...backgroundSkills(creationDraft.background), ...creationDraft.skills, ...(SPECIES_GRANTS[creationDraft.species]?.skills || [])])]
+  const skills = [...new Set([...backgroundSkills(creationDraft.background), ...creationDraft.skills, ...creationDraft.speciesSkills, ...(SPECIES_GRANTS[creationDraft.species]?.skills || [])])]
     .map(id => SKILLS.find(([skill]) => skill === id)?.[1]).filter(Boolean);
   return `
     <h3 class="create-screen-title">Ready for adventure</h3>
@@ -560,7 +694,10 @@ function renderCreateReview() {
       <span>${escapeHtml([creationDraft.species, cls.name, subclass ? `(${subclass.name})` : ""].filter(Boolean).join(" "))} · ${escapeHtml(creationDraft.background || "No background")} · Level ${creationDraft.level}</span>
     </div>
     <div class="create-review-stats">
-      ${ABILITIES.map(([id]) => `<span><strong>${id.toUpperCase()}</strong> ${abilities[id]} (${formatMod(Math.floor((abilities[id] - 10) / 2))})${bonus[id] ? ` <em>+${bonus[id]}</em>` : ""}</span>`).join("")}
+      ${ABILITIES.map(([id]) => {
+        const extra = (bonus[id] || 0) + chosenSpeciesBonus(creationDraft, id);
+        return `<span><strong>${id.toUpperCase()}</strong> ${abilities[id]} (${formatMod(Math.floor((abilities[id] - 10) / 2))})${extra ? ` <em>+${extra}</em>` : ""}</span>`;
+      }).join("")}
       <span><strong>HP</strong> ${hp}</span>
       <span><strong>Hit Dice</strong> ${creationDraft.level}d${cls.hitDie}</span>
     </div>
@@ -584,17 +721,33 @@ function handleCreateFieldInput(event) {
   } else if (field) {
     creationDraft[field] = event.target.value;
   }
+  if (event.target.matches("[data-create-species-search]")) {
+    const query = event.target.value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll("#createSpeciesGrid [data-species-name]").forEach(card => {
+      card.hidden = Boolean(query) && !card.dataset.speciesName.includes(query);
+      if (!card.hidden) shown += 1;
+    });
+    document.querySelector("#createSpeciesEmpty").hidden = shown > 0;
+  }
   const ability = event.target.dataset.createAbility;
   if (ability) {
     creationDraft.abilities[ability] = wholeNumber(event.target.value, creationDraft.abilities[ability], 1, 30);
     const modLabel = event.target.closest(".create-ability-card")?.querySelector(".ability-mod");
     if (modLabel) modLabel.textContent = formatMod(Math.floor((creationDraft.abilities[ability] - 10) / 2));
+    const pointBuy = document.querySelector("#createPointBuy");
+    if (pointBuy) pointBuy.textContent = pointBuyText();
   }
 }
 
 // On commit (blur/Enter) the box shows the value that will actually be used.
 function handleCreateFieldChange(event) {
   if (!creationDraft) return;
+  if (event.target.dataset.createField === "speciesFeat") {
+    creationDraft.speciesFeatAbility = FEAT_RULES[creationDraft.speciesFeat]?.ability?.[0] || "";
+    renderCreateStep();
+    return;
+  }
   if (event.target.dataset.createField === "level") event.target.value = creationDraft.level;
   const ability = event.target.dataset.createAbility;
   if (ability) event.target.value = creationDraft.abilities[ability];
@@ -626,10 +779,42 @@ function handleCreateStepClick(event) {
     renderCreateStep();
     return;
   }
+  const speciesSkill = event.target.closest("[data-create-species-skill]");
+  if (speciesSkill) {
+    const id = speciesSkill.dataset.createSpeciesSkill;
+    const picks = speciesChoices().skills || 0;
+    if (creationDraft.speciesSkills.includes(id)) creationDraft.speciesSkills = creationDraft.speciesSkills.filter(item => item !== id);
+    else if (creationDraft.speciesSkills.length < picks) creationDraft.speciesSkills.push(id);
+    renderCreateStep();
+    return;
+  }
+  const speciesAbility = event.target.closest("[data-create-species-ability]");
+  if (speciesAbility) {
+    const id = speciesAbility.dataset.createSpeciesAbility;
+    const picks = speciesBonusSteps(creationDraft.species).length;
+    if (creationDraft.speciesAbilities.includes(id)) creationDraft.speciesAbilities = creationDraft.speciesAbilities.filter(item => item !== id);
+    else if (creationDraft.speciesAbilities.length < picks) creationDraft.speciesAbilities.push(id);
+    renderCreateStep();
+    return;
+  }
+  if (event.target.closest("[data-create-pointbuy]")) {
+    ABILITIES.forEach(([id]) => { creationDraft.abilities[id] = 8; });
+    renderCreateStep();
+    return;
+  }
   const option = event.target.closest("[data-create-option]");
   if (option) {
     const [field, ...value] = option.dataset.createOption.split(":");
     creationDraft[field] = value.join(":");
+    if (field === "species") {
+      creationDraft.speciesAbilities = [];
+      creationDraft.speciesSkills = [];
+      creationDraft.speciesCantrip = "";
+      creationDraft.speciesFeat = "";
+      creationDraft.speciesFeatAbility = "";
+      const granted = new Set(SPECIES_GRANTS[creationDraft.species]?.skills || []);
+      creationDraft.skills = creationDraft.skills.filter(id => !granted.has(id));
+    }
     if (field === "classId") {
       creationDraft.subclass = "";
       creationDraft.skills = [];
@@ -638,6 +823,7 @@ function handleCreateStepClick(event) {
       creationDraft.backgroundChosen = true;
       const owned = new Set(backgroundSkills(creationDraft.background));
       creationDraft.skills = creationDraft.skills.filter(id => !owned.has(id));
+      creationDraft.speciesSkills = creationDraft.speciesSkills.filter(id => !owned.has(id));
     }
     renderCreateStep();
     return;
@@ -674,8 +860,96 @@ function createStepNext() {
   finishCreation();
 }
 
+// Each level adds at least 1 HP, even with a CON penalty (PHB p.15).
 function averageHpFor(cls, level, conMod) {
-  return Math.max(level, cls.hitDie + conMod + (level - 1) * (Math.ceil(cls.hitDie / 2) + 1 + conMod));
+  return Math.max(1, cls.hitDie + conMod) + (level - 1) * Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + conMod);
+}
+
+// HP added every level on top of the class die: Hill Dwarf, the Tough feat, Draconic Resilience.
+function extraHpPerLevel({ species, classId, subclass, feats = [] }) {
+  return speciesHpPerLevel(species) + (feats.includes("Tough") ? 2 : 0) + (classId === "sorcerer" && lookupBySubclass({ draconic: true }, subclass) ? 1 : 0);
+}
+
+function sheetExtraHp() {
+  return extraHpPerLevel({ species: character.species, classId: currentClass().id, subclass: character.subclassName, feats: character.planner?.feats || [] });
+}
+
+// Feats with prerequisites, a +1 ability choice (half feats), or that can be taken more than once (PHB ch.6, XGtE).
+const FEAT_RULES = {
+  "Actor": { ability: ["cha"] },
+  "Athlete": { ability: ["str", "dex"] },
+  "Defensive Duelist": { needs: "DEX 13", ok: c => c.abilities.dex >= 13 },
+  "Durable": { ability: ["con"] },
+  "Elemental Adept": { needs: "spellcasting", ok: (c, cls) => cls.casterType !== "none", repeatable: true },
+  "Grappler": { needs: "STR 13", ok: c => c.abilities.str >= 13 },
+  "Heavily Armored": { ability: ["str"], needs: "medium armor", ok: c => /medium/i.test(c.backgroundDetails?.armor || "") },
+  "Heavy Armor Master": { ability: ["str"], needs: "heavy armor", ok: c => /heavy|all armor/i.test(c.backgroundDetails?.armor || "") },
+  "Inspiring Leader": { needs: "CHA 13", ok: c => c.abilities.cha >= 13 },
+  "Keen Mind": { ability: ["int"] },
+  "Lightly Armored": { ability: ["str", "dex"] },
+  "Linguist": { ability: ["int"] },
+  "Medium Armor Master": { needs: "medium armor", ok: c => /medium/i.test(c.backgroundDetails?.armor || "") },
+  "Moderately Armored": { ability: ["str", "dex"], needs: "light armor", ok: c => /light|medium|all armor/i.test(c.backgroundDetails?.armor || "") },
+  "Observant": { ability: ["int", "wis"] },
+  "Resilient": { ability: ["str", "dex", "con", "int", "wis", "cha"], saveProficiency: true },
+  "Ritual Caster": { needs: "INT or WIS 13", ok: c => c.abilities.int >= 13 || c.abilities.wis >= 13 },
+  "Skulker": { needs: "DEX 13", ok: c => c.abilities.dex >= 13 },
+  "Spell Sniper": { needs: "spellcasting", ok: (c, cls) => cls.casterType !== "none" },
+  "Tavern Brawler": { ability: ["str", "con"] },
+  "War Caster": { needs: "spellcasting", ok: (c, cls) => cls.casterType !== "none" },
+  "Weapon Master": { ability: ["str", "dex"] },
+  // Xanathar's racial feats.
+  "Bountiful Luck": { needs: "halfling", ok: c => /halfling/i.test(c.species) },
+  "Dragon Fear": { ability: ["str", "con", "cha"], needs: "dragonborn", ok: c => /dragonborn/i.test(c.species) },
+  "Dragon Hide": { ability: ["str", "con", "cha"], needs: "dragonborn", ok: c => /dragonborn/i.test(c.species) },
+  "Drow High Magic": { needs: "drow", ok: c => /drow/i.test(c.species) },
+  "Dwarven Fortitude": { ability: ["con"], needs: "dwarf", ok: c => /dwarf|duergar/i.test(c.species) },
+  "Elven Accuracy": { ability: ["dex", "int", "wis", "cha"], needs: "elf or half-elf", ok: c => /elf|eladrin|shadar-kai/i.test(c.species) },
+  "Fade Away": { ability: ["dex", "int"], needs: "gnome", ok: c => /gnome/i.test(c.species) },
+  "Fey Teleportation": { ability: ["int", "cha"], needs: "high elf", ok: c => /high elf/i.test(c.species) },
+  "Flames of Phlegethos": { ability: ["int", "cha"], needs: "tiefling", ok: c => /tiefling/i.test(c.species) },
+  "Infernal Constitution": { ability: ["con"], needs: "tiefling", ok: c => /tiefling/i.test(c.species) },
+  "Orcish Fury": { ability: ["str", "con"], needs: "half-orc", ok: c => /orc/i.test(c.species) },
+  "Prodigy": { needs: "half-elf, half-orc or human", ok: c => /half-elf|half-orc|human/i.test(c.species) },
+  "Second Chance": { ability: ["dex", "con", "cha"], needs: "halfling", ok: c => /halfling/i.test(c.species) },
+  "Squat Nimbleness": { ability: ["str", "dex"], needs: "dwarf or a Small species", ok: c => /dwarf|gnome|halfling|goblin|kobold/i.test(c.species) },
+  "Wood Elf Magic": { needs: "wood elf", ok: c => /wood elf/i.test(c.species) },
+  "Svirfneblin Magic": { needs: "deep gnome", ok: c => /deep gnome|svirfneblin/i.test(c.species) },
+  // Tasha's.
+  "Chef": { ability: ["con", "wis"] },
+  "Crusher": { ability: ["str", "con"] },
+  "Eldritch Adept": { needs: "spellcasting or Pact Magic", ok: (c, cls) => cls.casterType !== "none" },
+  "Fey Touched": { ability: ["int", "wis", "cha"] },
+  "Fighting Initiate": { needs: "martial weapons", ok: c => /martial/i.test(c.backgroundDetails?.weapons || "") },
+  "Gunner": { ability: ["dex"] },
+  "Metamagic Adept": { needs: "spellcasting or Pact Magic", ok: (c, cls) => cls.casterType !== "none" },
+  "Piercer": { ability: ["str", "dex"] },
+  "Shadow Touched": { ability: ["int", "wis", "cha"] },
+  "Skill Expert": { ability: ["str", "dex", "con", "int", "wis", "cha"] },
+  "Slasher": { ability: ["str", "dex"] },
+  "Telekinetic": { ability: ["int", "wis", "cha"] },
+  "Telepathic": { ability: ["int", "wis", "cha"] }
+};
+
+// Why a feat can't be taken right now, or "" when it can. Works for the sheet or a creation draft.
+function featBlocked(name, source = character, cls = currentClass()) {
+  const rule = FEAT_RULES[name] || {};
+  if (!rule.repeatable && hasFeat(name, source)) return "already taken";
+  if (rule.ok && !rule.ok(source, cls)) return `needs ${rule.needs}`;
+  return "";
+}
+
+// The draft as a character-shaped object, for feat prerequisites at creation.
+function draftFeatSource() {
+  const cls = draftClass();
+  const [armor, weapons] = CLASS_PROFICIENCIES[cls?.id] || ["", ""];
+  const grants = SPECIES_GRANTS[creationDraft.species] || {};
+  return {
+    abilities: draftAbilitiesWithBonus(),
+    species: creationDraft.species,
+    backgroundDetails: { armor: [armor, ...(grants.armor || [])].join(", "), weapons: [weapons, ...(grants.weapons || [])].join(", ") },
+    planner: { feats: [] }
+  };
 }
 
 function speciesHpPerLevel(species) {
@@ -684,7 +958,7 @@ function speciesHpPerLevel(species) {
 
 function speciesBonusText(species) {
   const bonus = SPECIES_PRESETS.find(([name]) => name === species)?.[4] || {};
-  return Object.entries(bonus).map(([id, value]) => `+${value} ${id.toUpperCase()}`).join(", ");
+  return Object.entries(bonus).map(([id, value]) => `${formatMod(value)} ${id.toUpperCase()}`).join(", ");
 }
 
 function finishCreation() {
@@ -697,8 +971,7 @@ function finishCreation() {
     return;
   }
   const speciesRow = SPECIES_PRESETS.find(([name]) => name === draft.species);
-  const speciesBonus = speciesRow?.[4] || {};
-  const abilities = Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10) + (speciesBonus[id] || 0), 1, 30)]));
+  const abilities = draftAbilitiesWithBonus(draft);
   const official = officialSubclasses.find(item => item.index === draft.subclass);
   const [armor, weapons, tools] = CLASS_PROFICIENCIES[cls.id] || [cls.armor || "", cls.weapons || "", ""];
   const featureLines = cls.table.slice(0, clamp(Number(draft.level || 1), 1, 20))
@@ -706,7 +979,7 @@ function finishCreation() {
     .map(row => `Level ${row.level}: ${row.features}`);
   const level = wholeNumber(draft.level, 1, 1, 20);
   const grants = SPECIES_GRANTS[draft.species] || {};
-  const hp = averageHpFor(cls, level, Math.floor((abilities.con - 10) / 2)) + speciesHpPerLevel(draft.species) * level;
+  const hp = averageHpFor(cls, level, Math.floor((abilities.con - 10) / 2)) + extraHpPerLevel({ species: draft.species, classId: cls.id, subclass: draft.subclass, feats: [draft.speciesFeat] }) * level;
   const joined = (...parts) => parts.flat().filter(Boolean).join(", ");
   character = {
     ...defaultCharacter(),
@@ -723,16 +996,17 @@ function finishCreation() {
     ac: 10 + Math.floor((abilities.dex - 10) / 2),
     speed: speciesRow ? speciesRow[1] : 30,
     hitDice: `${level}d${cls.hitDie}`,
-    saveProficiencies: CLASS_SAVES[cls.id] || cls.saves || [],
-    proficientSkills: [...new Set([...draft.skills, ...(grants.skills || [])])],
-    spells: (grants.cantrips || []).map(index => ({ id: crypto.randomUUID(), index, level: 0, prepared: false, racial: true })),
+    saveProficiencies: [...new Set([...(CLASS_SAVES[cls.id] || cls.saves || []), ...(FEAT_RULES[draft.speciesFeat]?.saveProficiency && draft.speciesFeatAbility ? [draft.speciesFeatAbility] : [])])],
+    proficientSkills: [...new Set([...draft.skills, ...draft.speciesSkills, ...(grants.skills || [])])],
+    spells: [...(grants.cantrips || []), draft.speciesCantrip].filter(Boolean).map(index => ({ id: crypto.randomUUID(), index, level: 0, prepared: false, racial: true })),
+    planner: { ...defaultCharacter().planner, feats: draft.speciesFeat ? [draft.speciesFeat] : [] },
     acAuto: true,
     equipment: [],
     resources: [],
     classOptions: [],
     actions: [],
     autoSpells: [],
-    features: [speciesRow ? `Species: ${draft.species}. ${speciesRow[2]}` : "", grants.feature || "", ...featureLines].filter(Boolean).join("\n"),
+    features: [speciesRow ? `Species: ${draft.species}. ${speciesRow[2]}` : "", grants.feature || "", draft.speciesFeat ? `Feat (${draft.species}): ${draft.speciesFeat}` : "", ...featureLines].filter(Boolean).join("\n"),
     backgroundDetails: {
       ...defaultCharacter().backgroundDetails,
       armor: joined(armor, grants.armor || []),
@@ -761,11 +1035,15 @@ function levelChecklist() {
   const conMod = mod("con");
   const classSkills = CLASS_PROFICIENCIES[cls.id]?.[3] || 2;
   const subclassUnlock = SUBCLASS_LEVEL[cls.id] || 3;
-  const expectedSkills = classSkills + (character.background ? 2 : 0);
+  const speciesGrant = SPECIES_GRANTS[character.species] || {};
+  const speciesSkills = (speciesGrant.skills || []).length + (speciesGrant.choose?.skills || 0);
+  const expectedSkills = classSkills + (character.background ? 2 : 0) + speciesSkills;
+  // Expertise: rogues 2 at 1st and 2 more at 6th; bards 2 at 3rd and 2 more at 10th.
+  const expertiseDue = cls.id === "rogue" ? (level >= 6 ? 4 : 2) : cls.id === "bard" ? (level >= 10 ? 4 : level >= 3 ? 2 : 0) : 0;
   const asiCount = [...asiLevelsFor(cls)].filter(asiLevel => asiLevel <= level).length;
   const featCount = (character.planner?.feats || []).length;
   // Lowest legal max HP: full first die, then a roll of 1 + CON (min 1) every level after.
-  const minHp = Math.max(level, cls.hitDie + conMod + (level - 1) * Math.max(1, 1 + conMod));
+  const minHp = Math.max(1, cls.hitDie + conMod) + (level - 1) * Math.max(1, 1 + conMod) + sheetExtraHp() * level;
   const averageHp = averageHpFor(cls, level, conMod);
   const caster = cls.casterType !== "none";
   const expectedSlots = caster ? spellSlotsFor(cls, level).some(Boolean) : false;
@@ -774,7 +1052,8 @@ function levelChecklist() {
     // ponytail: subclass required at level 3 for everyone; some classes pick at 1-2, refine per-class if it matters
     ["Subclass", level >= subclassUnlock ? "Choose and record your subclass." : `Chosen at level ${subclassUnlock}.`, level < subclassUnlock || Boolean(character.subclassName), "#officialSubclassSelect"],
     ["Ability scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
-    ["Skills", `Pick ${expectedSkills} skill proficiencies (${classSkills} from ${cls.name}${character.background ? ", 2 from your background" : ""}).`, (character.proficientSkills || []).length >= expectedSkills, "#skills"],
+    ["Skills", `Pick ${expectedSkills} skill proficiencies (${classSkills} from ${cls.name}${character.background ? ", 2 from your background" : ""}${speciesSkills ? `, ${speciesSkills} from your species` : ""}).`, (character.proficientSkills || []).length >= expectedSkills, "#skills"],
+    ...(expertiseDue ? [["Expertise", `Choose ${expertiseDue} skills to double your proficiency in (${(character.expertSkills || []).length} chosen).`, (character.expertSkills || []).length >= expertiseDue, "#skills"]] : []),
     ["Hit dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "#hitDiceInput"],
     ["Saving throws", "Mark your class's two saving throw proficiencies.", (character.saveProficiencies || []).length >= 2, "#abilities"],
     ["Hit points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
@@ -833,6 +1112,9 @@ function applyLevelUp(event) {
   if (pendingLevelSubclass) applyOfficialSubclass(pendingLevelSubclass, false);
   const cls = currentClass();
   const asiMode = document.querySelector('input[name="asiMode"]:checked')?.value;
+  const conBefore = mod("con");
+  const levelBefore = character.level;
+  let featNote = "";
   if (asiMode === "asi") {
     [document.querySelector("#asiFirst").value, document.querySelector("#asiSecond").value].forEach(ability => {
       character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, 20);
@@ -840,12 +1122,28 @@ function applyLevelUp(event) {
     character.planner.feats.push("Ability Score Improvement");
   } else if (asiMode === "feat") {
     const feat = document.querySelector("#asiFeat").value;
+    if (featBlocked(feat)) {
+      showToast(`<span class="toast-label">Can't take ${escapeHtml(feat)}</span><span>${escapeHtml(featBlocked(feat))}.</span>`, { tone: "fumble" });
+      return;
+    }
+    const rule = FEAT_RULES[feat] || {};
+    const ability = rule.ability ? document.querySelector("#asiFeatAbility")?.value : "";
+    if (ability) {
+      character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, 20);
+      featNote = ` +1 ${ability.toUpperCase()}`;
+      if (rule.saveProficiency && !character.saveProficiencies.includes(ability)) {
+        character.saveProficiencies.push(ability);
+        featNote += `, ${ability.toUpperCase()} save proficiency`;
+      }
+    }
     character.planner.feats.push(feat);
-    character.features = mergeLines(character.features, [`Feat (level ${nextLevel}): ${feat}`]);
+    character.features = mergeLines(character.features, [`Feat (level ${nextLevel}): ${feat}${featNote ? ` (${featNote.trim()})` : ""}`]);
   }
   if (asiMode) character.asiAcknowledgedLevel = nextLevel;
   character.level = nextLevel;
-  const gained = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + speciesHpPerLevel(character.species);
+  // A higher CON modifier raises HP for every earlier level too; Tough adds 2 per earlier level when taken.
+  const retro = (mod("con") - conBefore) * levelBefore + (asiMode === "feat" && document.querySelector("#asiFeat").value === "Tough" ? 2 * levelBefore : 0);
+  const gained = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp() + retro;
   character.maxHp = Number(character.maxHp || 0) + gained;
   character.hp = Number(character.hp || 0) + gained;
   character.hitDice = `${nextLevel}d${cls.hitDie}`;
@@ -861,5 +1159,5 @@ function applyLevelUp(event) {
   pendingLevelSubclass = "";
   document.querySelector("#levelDialog").close();
   persistAndRender();
-  showToast(`<span class="toast-label">Level ${nextLevel}</span><span>+${gained} max HP${asiMode === "asi" ? " · ability scores raised" : asiMode === "feat" ? " · feat recorded" : ""}</span>`);
+  showToast(`<span class="toast-label">Level ${nextLevel}</span><span>+${gained} max HP${retro ? ` (${formatMod(retro)} for earlier levels)` : ""}${asiMode === "asi" ? " · ability scores raised" : asiMode === "feat" ? ` · feat recorded${escapeHtml(featNote)}` : ""}</span>`);
 }

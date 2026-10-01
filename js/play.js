@@ -1,6 +1,7 @@
 // RAW uses and recharge timing for each class's core limited features (2014 rules).
 function classFeatureTrackers(cls = currentClass(), level = character.level) {
   const chaMod = Math.max(1, mod("cha"));
+  const prof = Math.ceil(level / 4) + 1;
   const byClass = {
     fighter: [
       ["Second Wind", 1, "short"],
@@ -8,22 +9,29 @@ function classFeatureTrackers(cls = currentClass(), level = character.level) {
       level >= 9 ? ["Indomitable", level >= 17 ? 3 : level >= 13 ? 2 : 1, "long"] : null
     ],
     monk: [level >= 2 ? ["Ki Points", level, "short"] : null],
-    druid: [level >= 2 ? ["Wild Shape", 2, "short"] : null],
+    // Archdruid (20): unlimited Wild Shape, so no tracker.
+    druid: [level >= 2 && level < 20 ? ["Wild Shape", 2, "short"] : null],
     cleric: [level >= 2 ? ["Channel Divinity", level >= 18 ? 3 : level >= 6 ? 2 : 1, "short"] : null],
     paladin: [
-      ["Divine Sense", chaMod + 1, "long"],
+      ["Divine Sense", Math.max(1, 1 + mod("cha")), "long"],
       ["Lay on Hands (HP pool)", level * 5, "long"],
       level >= 3 ? ["Channel Divinity", 1, "short"] : null
     ],
     bard: [["Bardic Inspiration", chaMod, level >= 5 ? "short" : "long"]],
     sorcerer: [level >= 2 ? ["Sorcery Points", level, "long"] : null],
-    barbarian: [["Rage", level >= 17 ? 6 : level >= 12 ? 5 : level >= 6 ? 4 : level >= 3 ? 3 : 2, "long"]],
+    // Primal Champion (20): unlimited rages, so no tracker.
+    barbarian: [level < 20 ? ["Rage", level >= 17 ? 6 : level >= 12 ? 5 : level >= 6 ? 4 : level >= 3 ? 3 : 2, "long"] : null],
+    rogue: [level >= 20 ? ["Stroke of Luck", 1, "short"] : null],
+    // Mystic Arcanum: one 6th/7th/8th/9th-level spell each per long rest, at 11/13/15/17.
+    warlock: [[11, 6], [13, 7], [15, 8], [17, 9]].filter(([gate]) => level >= gate).map(([, spellLevel]) => [`Mystic Arcanum (${ordinal(spellLevel)})`, 1, "long"]),
     wizard: [["Arcane Recovery", 1, "long"]],
     artificer: [level >= 7 ? ["Flash of Genius", Math.max(1, mod("int")), "long"] : null],
     bloodhunter: [["Blood Maledict", level >= 17 ? 4 : level >= 13 ? 3 : level >= 6 ? 2 : 1, "short"]]
   };
-  const extras = lookupBySubclass(SUBCLASS_EXTRAS)?.trackers?.(level) || [];
-  return [...(byClass[cls.id] || []), ...extras].filter(Boolean).map(([name, max, reset]) => ({ name, max, reset }));
+  const extras = lookupBySubclass(SUBCLASS_EXTRAS)?.trackers?.(level, prof) || [];
+  const feats = hasFeat("Lucky") ? [["Luck Points", 3, "long"]] : [];
+  if (cls.id === "druid" && level >= 2 && lookupBySubclass({ land: true })) extras.push(["Natural Recovery", 1, "long"]);
+  return [...(byClass[cls.id] || []), ...extras, ...feats].filter(Boolean).map(([name, max, reset]) => ({ name, max, reset }));
 }
 
 function ensureClassResources() {
@@ -109,7 +117,7 @@ function handleConcentrationPromptClick(event) {
   if (event.target.closest("[data-roll-concentration]")) {
     const dc = pendingConcentrationDc;
     pendingConcentrationDc = null;
-    const result = rollWithConditions(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`, "save", "con");
+    const result = rollWithConditions(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`, "save", "con", [], "concentration");
     if (!result) return;
     if (result.total >= dc) {
       showToast(`<span class="toast-label">Concentration held</span><span class="toast-roll"><b>${result.total}</b><small>vs DC ${dc} · still concentrating on ${escapeHtml(character.concentration)}</small></span>`, { tone: "crit" });
@@ -171,8 +179,17 @@ function dealDamage(amount, { label = `Took ${amount} damage`, clamped = false, 
   const before = vitalsSnapshot();
   const notes = clamped ? ["Capped at 999."] : [];
   let remaining = amount;
+  // Temporary HP soak damage first, then a Wild Shape form's HP, then your own.
+  const hadTemp = Number(character.tempHp || 0) > 0;
+  const absorbed = Math.min(Number(character.tempHp || 0), remaining);
+  character.tempHp = Number(character.tempHp || 0) - absorbed;
+  remaining -= absorbed;
+  if (hadTemp && character.agathys) {
+    notes.push(`Armor of Agathys: if a melee attack caused this, the attacker takes ${character.agathys} cold damage.`);
+    if (!character.tempHp) character.agathys = 0;
+  }
   const shape = character.wildShape;
-  if (shape && Number(shape.hp) > 0) {
+  if (shape && Number(shape.hp) > 0 && remaining > 0) {
     const taken = Math.min(Number(shape.hp), remaining);
     shape.hp = Number(shape.hp) - taken;
     remaining -= taken;
@@ -181,19 +198,20 @@ function dealDamage(amount, { label = `Took ${amount} damage`, clamped = false, 
       notes.push(`${shape.name || "Beast form"} drops to 0 HP and you revert${remaining ? `, taking ${remaining} more` : ""}.`);
     }
   }
-  const hadTemp = Number(character.tempHp || 0) > 0;
-  const absorbed = Math.min(Number(character.tempHp || 0), remaining);
-  const toHp = remaining - absorbed;
+  const toHp = remaining;
   const hpBefore = Number(character.hp || 0);
-  character.tempHp = Number(character.tempHp || 0) - absorbed;
-  if (hadTemp && character.agathys) {
-    notes.push(`Armor of Agathys: if a melee attack caused this, the attacker takes ${character.agathys} cold damage.`);
-    if (!character.tempHp) character.agathys = 0;
-  }
   character.hp = Math.max(0, hpBefore - toHp);
   if (hpBefore <= 0 && toHp > 0) {
-    character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3);
-    notes.push(character.deathSaveFailures >= 3 ? "Damage at 0 HP: third death save failure." : "Damage at 0 HP counts as a death save failure.");
+    // At 0 HP: massive damage kills outright; otherwise each hit is a failed death save (a stable creature starts over).
+    if (toHp >= effectiveMaxHp()) {
+      character.deathSaveFailures = 3;
+      notes.push("Massive damage at 0 HP: the damage equals your HP maximum, which is instant death.");
+    } else {
+      // Successes only start over if you were stable (PHB p.197).
+      if (character.deathSaveSuccesses >= 3) character.deathSaveSuccesses = 0;
+      character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3);
+      notes.push(character.deathSaveFailures >= 3 ? "Damage at 0 HP: third death save failure." : "Damage at 0 HP counts as a death save failure (two if it was a critical hit).");
+    }
   } else if (character.hp === 0 && toHp - hpBefore >= effectiveMaxHp()) {
     character.deathSaveFailures = 3;
     notes.push("Massive damage: the overflow equals your HP maximum, which is instant death.");
@@ -204,11 +222,19 @@ function dealDamage(amount, { label = `Took ${amount} damage`, clamped = false, 
     notes.push(`Concentration on ${character.concentration} ends.`);
     character.concentration = "";
   }
-  pendingConcentrationDc = character.concentration && remaining + absorbed > 0 ? Math.max(10, Math.floor(amount / 2)) : null;
+  if (character.hp === 0 && character.raging) {
+    character.raging = false;
+    notes.push("Your rage ends.");
+  }
+  pendingConcentrationDc = character.concentration ? Math.max(10, Math.floor(amount / 2)) : null;
   persistAndRender();
   lastDamage = { before, amount, sheetId: character.sheetId, halved };
   const actions = [{ label: "Undo", run: () => undoDamage(before) }];
-  if (!halved && currentClass().id === "rogue" && character.level >= 5) actions.push({ label: "Uncanny Dodge (halve)", run: halveLastDamage });
+  if (hpBefore <= 0 && toHp > 0 && toHp < effectiveMaxHp() && character.deathSaveFailures < 3) {
+    actions.push({ label: "It was a crit (+1 failure)", run: () => { character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3); persistAndRender(); } });
+  }
+  if (!halved && character.raging) actions.push({ label: "Rage: halve (B/P/S)", run: () => halveLastDamage("Rage resistance") });
+  if (!halved && currentClass().id === "rogue" && character.level >= 5) actions.push({ label: "Uncanny Dodge (halve)", run: () => halveLastDamage("Uncanny Dodge") });
   actions.push({ label: "Lower max HP too", run: () => reduceMaxHp(amount) });
   const temp = Number(character.tempHp || 0);
   const shapeLine = character.wildShape ? ` · ${character.wildShape.name || "Beast form"} ${character.wildShape.hp}/${character.wildShape.max}` : "";
@@ -226,13 +252,13 @@ function undoDamage(before) {
   showToast(`<span class="toast-label">Damage undone</span><span>${character.hp}/${effectiveMaxHp()} HP</span>`);
 }
 
-function halveLastDamage() {
+function halveLastDamage(reason = "Uncanny Dodge") {
   if (!lastDamage || lastDamage.sheetId !== character.sheetId) {
-    showToast(`<span class="toast-label">Uncanny Dodge</span><span>Use it right after an attack hits you: enter the damage first, then halve it.</span>`);
+    showToast(`<span class="toast-label">${escapeHtml(reason)}</span><span>Use it right after taking the hit: enter the damage first, then halve it.</span>`);
     return;
   }
   if (lastDamage.halved) {
-    showToast(`<span class="toast-label">Already halved</span><span>Uncanny Dodge applies once per hit.</span>`);
+    showToast(`<span class="toast-label">Already halved</span><span>Halving applies once per hit; resistance and Uncanny Dodge don't stack on the same damage twice.</span>`);
     return;
   }
   const { before, amount } = lastDamage;
@@ -240,11 +266,11 @@ function halveLastDamage() {
   lastDamage = null;
   const half = Math.floor(amount / 2);
   if (half > 0) {
-    dealDamage(half, { label: `Uncanny Dodge: took ${half} instead of ${amount}`, halved: true });
+    dealDamage(half, { label: `${reason}: took ${half} instead of ${amount}`, halved: true });
     return;
   }
   persistAndRender();
-  showToast(`<span class="toast-label">Uncanny Dodge</span><span>The hit is halved to 0 damage.</span>`, { tone: "crit" });
+  showToast(`<span class="toast-label">${escapeHtml(reason)}</span><span>The hit is halved to 0 damage.</span>`, { tone: "crit" });
 }
 
 // Life drain and similar effects: the maximum drops until a long rest.
@@ -274,8 +300,9 @@ function isDying() {
   return Number(character.hp) <= 0 && character.deathSaveFailures < 3 && character.deathSaveSuccesses < 3;
 }
 
+// Three failed death saves, or exhaustion level 6 (PHB p.291).
 function isDead() {
-  return Number(character.hp) <= 0 && character.deathSaveFailures >= 3;
+  return (Number(character.hp) <= 0 && character.deathSaveFailures >= 3) || Number(character.exhaustion || 0) >= 6;
 }
 
 function applyHeal(input = document.querySelector("#damageAmount")) {
@@ -369,12 +396,28 @@ function disadvantageSources(kind, ability = "") {
 }
 
 // Advantage and disadvantage cancel out (PHB p. 173) no matter how many sources of each.
-function rollModeFor(kind, ability = "") {
-  const chosen = document.querySelector("#rollMode").value;
+function rollModeFor(kind, ability = "", context = "") {
+  const feature = advantageSource(kind, ability, context);
+  const picked = document.querySelector("#rollMode").value;
   const sources = disadvantageSources(kind, ability);
-  if (!sources.length) return { mode: chosen, note: "" };
-  if (chosen === "advantage") return { mode: "normal", note: `${sources.join(", ")} cancels advantage` };
-  return { mode: "disadvantage", note: `${sources.join(", ")}: disadvantage` };
+  const advantage = Boolean(feature) || picked === "advantage";
+  const disadvantage = sources.length > 0 || picked === "disadvantage";
+  if (advantage && disadvantage) {
+    const against = sources.length ? sources.join(", ") : "chosen disadvantage";
+    return { mode: "normal", note: feature ? `${feature} advantage and ${against} cancel out` : `${against} cancels advantage` };
+  }
+  if (advantage) return { mode: "advantage", note: feature ? `${feature}: advantage` : "" };
+  if (sources.length) return { mode: "disadvantage", note: `${sources.join(", ")}: disadvantage` };
+  return { mode: picked, note: "" };
+}
+
+// Class features and feats that grant advantage on their own.
+function advantageSource(kind, ability, context) {
+  const active = character.conditions || [];
+  if (character.raging && ability === "str" && (kind === "check" || kind === "save")) return "Rage";
+  if (kind === "save" && ability === "dex" && currentClass().id === "barbarian" && character.level >= 2 && !["Blinded", "Deafened"].some(name => active.includes(name)) && !incapacitatedBy()) return "Danger Sense";
+  if (context === "concentration" && hasFeat("War Caster")) return "War Caster";
+  return "";
 }
 
 function autoFailCondition(ability) {
@@ -467,11 +510,11 @@ function rollDeathSave() {
 
 function rollAbilityCheck(ability) {
   const name = ABILITIES.find(([id]) => id === ability)?.[1] || ability;
-  rollWithConditions(`${name} check`, `1d20${formatMod(mod(ability) + jackOfAllTrades())}`, "check");
+  rollWithConditions(`${name} check`, `1d20${formatMod(mod(ability) + untrainedBonus(ability))}`, "check", ability);
 }
 
-function rollWithConditions(label, formula, kind, ability = "", actions = []) {
-  const { mode, note } = rollModeFor(kind, ability);
+function rollWithConditions(label, formula, kind, ability = "", actions = [], context = "") {
+  const { mode, note } = rollModeFor(kind, ability, context);
   return rollFromInput(note ? `${label} (${note})` : label, formula, mode, actions);
 }
 
@@ -490,11 +533,12 @@ function rollSavingThrow(ability, actions = []) {
 function rollSkillCheck(skill) {
   const [, name, ability] = SKILLS.find(([id]) => id === skill) || [];
   if (!name) return;
-  rollWithConditions(`${name} check`, `1d20${formatMod(skillBonus(skill, ability))}`, "check");
+  rollWithConditions(`${name} check`, `1d20${formatMod(skillBonus(skill, ability))}`, "check", ability);
 }
 
+// Initiative is a Dexterity check, so conditions and exhaustion apply to it.
 function rollInitiativeCheck() {
-  rollFromInput("Initiative", `1d20${formatMod(initiativeBonus())}`);
+  rollWithConditions("Initiative", `1d20${formatMod(initiativeBonus())}`, "check", "dex");
 }
 
 function combatActionHint(action) {
@@ -568,11 +612,16 @@ function rollFormula(formula, mode = "normal") {
   tokens.forEach(token => {
     const sign = token.startsWith("-") ? -1 : 1;
     const body = token.replace(/^[+-]/, "");
-    const dice = body.match(/^(\d*)d(\d+)$/);
+    // NdS, with an optional rN suffix that rerolls results of N or lower once (Great Weapon Fighting).
+    const dice = body.match(/^(\d*)d(\d+)(?:r(\d+))?$/);
     if (dice) {
       const count = clamp(Number(dice[1] || 1), 1, 100);
       const sides = clamp(Number(dice[2]), 2, 1000);
-      const rolls = Array.from({ length: count }, () => rollDie(sides));
+      const reroll = Number(dice[3] || 0);
+      const rolls = Array.from({ length: count }, () => {
+        const first = rollDie(sides);
+        return first <= reroll ? rollDie(sides) : first;
+      });
       const used = mode === "advantage" && count === 1 && sides === 20
         ? [Math.max(rolls[0], rollDie(20))]
         : mode === "disadvantage" && count === 1 && sides === 20
@@ -630,7 +679,12 @@ function spendHitDie() {
 }
 
 function takeRest(type) {
+  if (type === "long" && Number(character.hp) <= 0) {
+    showToast(`<span class="toast-label">Can't benefit from a long rest</span><span>A creature needs at least 1 hit point at the start of a long rest (PHB p.186). Heal or stabilize first.</span>`, { tone: "fumble" });
+    return;
+  }
   const before = structuredCloneSafe(character);
+  character.raging = false;
   if (type === "short" && isPactCaster()) {
     character.spellSlotUsage = {};
   }
@@ -643,11 +697,15 @@ function takeRest(type) {
     character.maxHpReduction = 0;
     character.wildShape = null;
     character.agathys = 0;
+    character.tempHp = 0;
+    character.mageArmor = false;
     (character.spells || []).forEach(row => { delete row.castLevel; });
+    // Exhaustion drops first so a level-4 max HP halving ends before HP refills.
+    character.exhaustion = Math.max(0, Number(character.exhaustion || 0) - 1);
     character.hp = effectiveMaxHp() || character.hp;
     character.spellSlotUsage = {};
-    character.conditions = (character.conditions || []).filter(condition => condition === "Exhaustion");
-    character.exhaustion = Math.max(0, Number(character.exhaustion || 0) - 1);
+    // Petrification needs magic to end; the rest wears off over 8 hours.
+    character.conditions = (character.conditions || []).filter(condition => condition === "Exhaustion" || condition === "Petrified");
     character.hitDiceUsed = Math.max(0, Number(character.hitDiceUsed || 0) - Math.max(1, Math.floor(character.level / 2)));
     character.concentration = "";
     (character.equipment || []).forEach(item => {
@@ -670,7 +728,7 @@ function takeRest(type) {
   }];
   const hitDiceLeft = character.level - character.hitDiceUsed;
   if (type === "short" && hitDiceLeft > 0 && character.hp < effectiveMaxHp()) actions.push({ label: `Spend a hit die (${hitDiceLeft} left)`, run: spendHitDie });
-  if (type === "short" && arcaneRecoveryPlan().length) actions.push({ label: "Arcane Recovery", run: useArcaneRecovery });
+  if (type === "short" && arcaneRecoveryPlan().length) actions.push({ label: recoveryFeatureName(), run: useArcaneRecovery });
   const changes = restChanges(before, character);
   const nothing = character.hp < effectiveMaxHp() && hitDiceLeft > 0 ? "No resources to recover. Spend hit dice to heal." : "Nothing needed recovering.";
   showToast(`<span class="toast-label">${name}</span><span>${escapeHtml(changes.join(" · ") || nothing)}</span>`, { actions, duration: 12000 });
@@ -695,6 +753,9 @@ function undoRest(before, after) {
   if (Number(before.maxHpReduction || 0) !== Number(after.maxHpReduction || 0)) character.maxHpReduction = before.maxHpReduction;
   if (before.wildShape && !after.wildShape && !character.wildShape) character.wildShape = before.wildShape;
   if (before.agathys && !after.agathys && !character.agathys) character.agathys = before.agathys;
+  if (Number(before.tempHp || 0) > Number(after.tempHp || 0) && !Number(character.tempHp || 0)) character.tempHp = before.tempHp;
+  if (before.mageArmor && !after.mageArmor) character.mageArmor = true;
+  if (before.raging && !after.raging) character.raging = true;
   (before.spells || []).forEach(old => {
     const row = (character.spells || []).find(entry => entry.id === old.id);
     if (row && old.castLevel && !row.castLevel) row.castLevel = old.castLevel;
@@ -755,11 +816,19 @@ function restChanges(before, after) {
   return changes;
 }
 
-// Arcane Recovery (wizard, once per day after a short rest): recover spent slots totalling up to
-// half your wizard level (rounded up), none 6th level or higher. Highest slots first.
+// Arcane Recovery (wizard) and Natural Recovery (Circle of the Land), once per day after a short rest:
+// recover spent slots totalling up to half your level (rounded up), none 6th level or higher. Highest slots first.
+function recoveryFeatureName() {
+  const id = currentClass().id;
+  if (id === "wizard") return "Arcane Recovery";
+  if (id === "druid" && lookupBySubclass({ land: true })) return "Natural Recovery";
+  return "";
+}
+
 function arcaneRecoveryPlan() {
-  if (currentClass().id !== "wizard") return [];
-  const feature = character.resources.find(item => item.name === "Arcane Recovery");
+  const name = recoveryFeatureName();
+  if (!name) return [];
+  const feature = character.resources.find(item => item.name === name);
   if (!feature || Number(feature.current) < 1) return [];
   let budget = Math.ceil(character.level / 2);
   const plan = [];
@@ -777,17 +846,18 @@ function arcaneRecoveryPlan() {
 function useArcaneRecovery() {
   const plan = arcaneRecoveryPlan();
   if (!plan.length) {
-    showToast(`<span class="toast-label">Arcane Recovery</span><span>No spent slots to recover, or it's already used today.</span>`);
+    showToast(`<span class="toast-label">${escapeHtml(recoveryFeatureName() || "Arcane Recovery")}</span><span>No spent slots to recover, or it's already used today.</span>`);
     return;
   }
-  const before = { usage: { ...character.spellSlotUsage }, feature: character.resources.find(item => item.name === "Arcane Recovery").current };
+  const name = recoveryFeatureName();
+  const before = { usage: { ...character.spellSlotUsage }, feature: character.resources.find(item => item.name === name).current };
   plan.forEach(level => {
     character.spellSlotUsage[level] = Math.max(0, Number(character.spellSlotUsage[level] || 0) - 1);
   });
-  const feature = character.resources.find(item => item.name === "Arcane Recovery");
+  const feature = character.resources.find(item => item.name === name);
   feature.current = Number(feature.current) - 1;
   persistAndRender();
-  showToast(`<span class="toast-label">Arcane Recovery</span><span>Recovered ${plan.map(level => `a ${ordinal(level)}-level slot`).join(", ")}.</span>`, {
+  showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>Recovered ${plan.map(level => `a ${ordinal(level)}-level slot`).join(", ")}.</span>`, {
     tone: "crit",
     actions: [{ label: "Undo", run: () => { character.spellSlotUsage = before.usage; feature.current = before.feature; persistAndRender(); } }]
   });
@@ -1001,11 +1071,22 @@ function handleActionFilterClick(event) {
 // Actions made by Generate Actions remember what they came from and recompute as scores and levels change.
 function refreshGeneratedActions() {
   character.actions.forEach(action => {
+    // Rows saved before actions tracked their source: relink one that still matches an equipped weapon's dice.
+    if (!action.source) {
+      const item = (character.equipment || []).find(entry => (entry.equipped || entry.container === "equipped") && entry.name === action.name);
+      const die = String(item?.notes || "").match(/\b(\d+d\d+)\b/)?.[1];
+      if (item && die && String(action.damage || "").startsWith(die)) action.source = { weapon: item.id, grip: "" };
+    }
     if (!action.source) return;
     let fresh = null;
+    if (action.source.edited) return;
     if (action.source.weapon) {
       const item = (character.equipment || []).find(entry => entry.id === action.source.weapon);
-      fresh = item ? weaponAction(item) : null;
+      fresh = item ? weaponActions(item).find(entry => entry.source.grip === (action.source.grip || "")) : null;
+      if (fresh) {
+        action.notes = fresh.notes;
+        action.source = { ...action.source, ability: fresh.source.ability };
+      }
     } else if (action.source.spell) {
       const row = character.spells.find(entry => entry.index === action.source.spell);
       fresh = row ? spellAction(row) : null;
@@ -1058,7 +1139,8 @@ function handleActionInput(event) {
   if (!action) return;
   if (event.target.classList.contains("action-name")) action.name = event.target.value;
   if (event.target.classList.contains("action-type")) action.type = event.target.value;
-  if (event.target.classList.contains("action-attack") || event.target.classList.contains("action-damage")) delete action.source;
+  // Hand edits stop automatic refreshes but keep what the row came from (a spell stays a spell).
+  if ((event.target.classList.contains("action-attack") || event.target.classList.contains("action-damage")) && action.source) action.source = { ...action.source, edited: true };
   if (event.target.classList.contains("action-attack")) action.attack = event.target.value;
   if (event.target.classList.contains("action-damage")) action.damage = event.target.value;
   if (event.target.classList.contains("action-notes")) action.notes = event.target.value;
@@ -1079,7 +1161,7 @@ function syncActionButtons(node, action) {
 }
 
 function actionDamageFormula(action) {
-  return String(action.damage || "").replace(/\s+/g, "").match(/^\d*d\d+(?:[+-]\d*d?\d+)*/i)?.[0] || "";
+  return String(action.damage || "").replace(/\s+/g, "").match(/^\d*d\d+(?:r\d+)?(?:[+-]\d*d?\d+(?:r\d+)?)*/i)?.[0] || "";
 }
 
 function doubleDice(formula) {
@@ -1121,18 +1203,48 @@ function rollActionAttack(action, suffix = "", confirmed = false) {
   }
   const label = `${action.type === "Free" ? name : `${name} to hit`}${suffix}`;
   const { mode, note } = rollModeFor("attack");
-  const weapon = !action.source?.spell;
-  rollFromInput(note ? `${label} (${note})` : label, `1d20${formatMod(Number(bonus))}`, mode, result => damageFollowUps(name, damage, naturalD20(result), { weapon }));
+  const traits = actionTraits(action);
+  rollFromInput(note ? `${label} (${note})` : label, `1d20${formatMod(Number(bonus))}`, mode, result => damageFollowUps(name, damage, naturalD20(result), traits));
 }
 
-// Damage that rides on a hit: Hex, Hunter's Mark, Hexblade's Curse, Sneak Attack. Each gets its own button
+// What kind of attack an action row is, from its source weapon or its own text.
+function actionTraits(action) {
+  if (action.source?.spell) return { weapon: false };
+  const item = action.source?.weapon && (character.equipment || []).find(entry => entry.id === action.source.weapon);
+  const text = `${action.name || ""} ${action.notes || ""} ${item ? `${item.name} ${item.notes || ""}` : ""}`.toLowerCase();
+  const traits = weaponTraits(text);
+  return {
+    weapon: true,
+    melee: !traits.ranged || traits.thrown,
+    ranged: traits.ranged,
+    finesse: traits.finesse,
+    strength: action.source?.ability ? action.source.ability === "str" : !traits.ranged && !traits.finesse
+  };
+}
+
+function weaponTraits(text) {
+  return {
+    ranged: /\branged\b|ammunition|crossbow|\bbow\b|longbow|shortbow|sling|\bdart|blowgun/.test(text) && !/\bthrown\b/.test(text),
+    thrown: /\bthrown\b/.test(text),
+    finesse: /finesse/.test(text),
+    heavy: /\bheavy\b/.test(text),
+    twoHanded: /two-handed/.test(text),
+    light: /\blight\b/.test(text)
+  };
+}
+
+// Damage that rides on a hit: Rage, Hex, Hunter's Mark, Hexblade's Curse, Sneak Attack. Each gets its own button
 // so the player decides whether it applies to this target and turn.
-function damageRiders({ weapon = false } = {}) {
+function damageRiders(options = {}) {
   const riders = [];
+  if (character.raging && options.melee && options.strength) {
+    riders.push({ name: "Rage", formula: String(character.level >= 16 ? 4 : character.level >= 9 ? 3 : 2), flat: true });
+  }
   if (character.concentration === "Hex") riders.push({ name: "Hex", formula: "1d6" });
-  if (weapon && character.concentration === "Hunter's Mark") riders.push({ name: "Hunter's Mark", formula: "1d6" });
-  if (hexbladeCurseActive()) riders.push({ name: "Curse", formula: String(proficiencyBonus()) });
-  if (weapon && currentClass().id === "rogue") riders.push({ name: "Sneak Attack", formula: `${Math.ceil(character.level / 2)}d6` });
+  if (options.weapon && character.concentration === "Hunter's Mark") riders.push({ name: "Hunter's Mark", formula: "1d6" });
+  if (hexbladeCurseActive()) riders.push({ name: "Curse", formula: String(proficiencyBonus()), flat: true });
+  // Sneak Attack needs a finesse or ranged weapon (PHB p.96).
+  if (options.weapon && (options.finesse || options.ranged) && currentClass().id === "rogue") riders.push({ name: "Sneak Attack", formula: `${Math.ceil(character.level / 2)}d6` });
   return riders;
 }
 
@@ -1142,47 +1254,152 @@ function hexbladeCurseActive() {
   return Boolean(curse) && Number(curse.current) < Number(curse.max);
 }
 
-// Hexblade's Curse widens the crit range against the cursed target to 19-20.
+// Champion: Improved Critical (19-20) at 3rd, Superior Critical (18-20) at 15th (PHB p.72).
 function critThreshold() {
-  return hexbladeCurseActive() ? 19 : 20;
+  if (currentClass().id === "fighter" && lookupBySubclass({ champion: true })) {
+    if (character.level >= 15) return 18;
+    if (character.level >= 3) return 19;
+  }
+  return 20;
+}
+
+// Brutal Critical: extra weapon damage dice on a melee crit (1/2/3 at 9/13/17).
+function brutalCriticalDice() {
+  if (currentClass().id !== "barbarian") return 0;
+  return character.level >= 17 ? 3 : character.level >= 13 ? 2 : character.level >= 9 ? 1 : 0;
 }
 
 function damageFollowUps(name, formula, natural, options = {}) {
   if (!formula) return [];
-  const crit = Number(natural) >= critThreshold();
-  const viaCurse = crit && Number(natural) < 20;
-  const base = crit ? doubleDice(formula) : formula;
-  const riders = damageRiders(options).map(rider => ({ ...rider, formula: crit ? doubleDice(rider.formula) : rider.formula }));
-  const label = crit ? `Roll crit damage${viaCurse ? " (19, cursed target)" : ""}` : "Roll damage";
-  const title = `${name} ${crit ? "critical " : ""}damage`;
-  const actions = [{ label, run: () => rollFromInput(title, base, "normal") }];
-  riders.forEach(rider => actions.push({ label: `${label} + ${rider.name}`, run: () => rollFromInput(`${title} + ${rider.name}`, `${base}+${rider.formula}`, "normal") }));
-  if (riders.length > 1) {
-    actions.push({ label: `${label} + all`, run: () => rollFromInput(`${title} + ${riders.map(rider => rider.name).join(" + ")}`, [base, ...riders.map(rider => rider.formula)].join("+"), "normal") });
-  }
+  // A natural 1 always misses (PHB p.194).
+  if (Number(natural) === 1) return [];
+  // Improved/Superior Critical cover weapon attacks only; Hexblade's Curse covers any attack.
+  const crit = Number(natural) >= (options.weapon ? critThreshold() : 20);
+  const curseCrit = !crit && Number(natural) >= 19 && hexbladeCurseActive();
+  const build = isCrit => {
+    let base = isCrit ? doubleDice(formula) : formula;
+    const extra = isCrit && options.melee ? brutalCriticalDice() : 0;
+    const die = formula.match(/\d*d(\d+)/i)?.[1];
+    if (extra && die) base = `${base}+${extra}d${die}`;
+    const riders = damageRiders(options).map(rider => ({ ...rider, formula: isCrit && !rider.flat ? doubleDice(rider.formula) : rider.formula }));
+    return { base, riders };
+  };
+  const actions = [];
+  const add = (isCrit, labelText) => {
+    const { base, riders } = build(isCrit);
+    const title = `${name} ${isCrit ? "critical " : ""}damage`;
+    actions.push({ label: labelText, run: () => rollFromInput(title, base, "normal") });
+    riders.forEach(rider => actions.push({ label: `${labelText} + ${rider.name}`, run: () => rollFromInput(`${title} + ${rider.name}`, `${base}+${rider.formula}`, "normal") }));
+    if (riders.length > 1) {
+      actions.push({ label: `${labelText} + all`, run: () => rollFromInput(`${title} + ${riders.map(rider => rider.name).join(" + ")}`, [base, ...riders.map(rider => rider.formula)].join("+"), "normal") });
+    }
+    smiteActions(isCrit, options).forEach(action => actions.push(action));
+  };
+  add(crit, crit ? `Roll crit damage${Number(natural) < 20 ? ` (${natural})` : ""}` : "Roll damage");
+  if (curseCrit) add(true, "Crit damage (19, cursed target)");
   return actions;
 }
 
-function weaponAction(item) {
+// Divine Smite (PHB p.85): after a melee weapon hit, spend a slot for 2d8 radiant +1d8 per slot level above 1st (max 5d8).
+function smiteActions(isCrit, options) {
+  if (currentClass().id !== "paladin" || character.level < 2 || !options.weapon || !options.melee) return [];
+  const slots = spellSlotsFor(currentClass(), character.level);
+  const open = slots.map((count, index) => index + 1).filter(level => slotRemaining(level, slots[level - 1] || 0) > 0);
+  if (!open.length) return [];
+  const choices = [...new Set([open[0], open[open.length - 1]])];
+  return choices.map(level => {
+    const dice = Math.min(5, level + 1);
+    const formula = `${isCrit ? dice * 2 : dice}d8`;
+    return {
+      label: `Divine Smite (${ordinal(level)} slot)`,
+      run: () => {
+        const max = slots[level - 1] || 0;
+        const used = Number(character.spellSlotUsage?.[level] || 0);
+        if (used >= max) return;
+        character.spellSlotUsage[level] = used + 1;
+        persistAndRender();
+        rollFromInput(`Divine Smite (${ordinal(level)}-level slot)`, formula, "normal", [], "Radiant damage. Add 1d8 (2d8 on a crit) if the target is undead or a fiend.");
+      }
+    };
+  });
+}
+
+// Fighter/paladin/ranger fighting styles that change numbers (PHB p.72).
+const FIGHTING_STYLES = ["Archery", "Defense", "Dueling", "Great Weapon Fighting", "Protection", "Two-Weapon Fighting"];
+
+function extraAttacks() {
+  const cls = currentClass().id;
+  const level = character.level;
+  if (cls === "fighter") return level >= 20 ? 4 : level >= 11 ? 3 : level >= 5 ? 2 : 1;
+  if (["barbarian", "monk", "paladin", "ranger"].includes(cls) && level >= 5) return 2;
+  // Subclass Extra Attack: Valor/Swords bards and Bladesingers at 6th, Battle Smith/Armorer artificers at 5th.
+  if (level >= 6 && lookupBySubclass({ valor: true, swords: true, bladesinging: true })) return 2;
+  if (level >= 5 && lookupBySubclass({ "battle-smith": true, armorer: true })) return 2;
+  return 1;
+}
+
+// One generated action per way of wielding the weapon (versatile weapons get a two-handed row).
+function weaponActions(item) {
   const notes = String(item.notes || "");
   const die = notes.match(/\b(\d+d\d+)\b/)?.[1];
-  if (!die) return null;
+  if (!die) return [];
   const text = `${item.name} ${notes}`.toLowerCase();
-  const ranged = /ranged|ammunition|crossbow|\bbow\b|longbow|shortbow|sling|dart/.test(text);
-  const finesse = /finesse/.test(text);
-  let abilityMod = ranged ? mod("dex") : finesse ? Math.max(mod("str"), mod("dex")) : mod("str");
-  // Hex Warrior: a Hexblade attacks with Charisma using any one-handed weapon (or pact weapon).
-  const hexWarrior = lookupBySubclass({ hexblade: true }) && !/two-handed/.test(text) && mod("cha") > abilityMod;
-  if (hexWarrior) abilityMod = mod("cha");
+  const versatile = notes.match(/versatile\s*\(?\s*(\d+d\d+)/i)?.[1];
+  const grips = [{ grip: "", die }];
+  if (versatile) grips.push({ grip: "two-handed", die: versatile });
+  return grips.map(entry => weaponAction(item, entry.grip, entry.die, text)).filter(Boolean);
+}
+
+function weaponAction(item, grip = "", die = "", text = `${item.name} ${item.notes || ""}`.toLowerCase()) {
+  const notes = String(item.notes || "");
+  die = die || notes.match(/\b(\d+d\d+)\b/)?.[1];
+  if (!die) return null;
+  const traits = weaponTraits(text);
+  const notes2 = [];
+  let ability = traits.ranged ? "dex" : traits.finesse && mod("dex") > mod("str") ? "dex" : "str";
+  // Martial Arts: monk weapons (simple melee or shortsword, not heavy/two-handed) use DEX and the Martial Arts die.
+  const monkWeapon = currentClass().id === "monk" && !traits.ranged && !traits.heavy && !traits.twoHanded && (/simple/.test(text) || /shortsword/.test(text));
+  if (monkWeapon) {
+    if (mod("dex") > mod(ability)) ability = "dex";
+    const martial = character.level >= 17 ? 10 : character.level >= 11 ? 8 : character.level >= 5 ? 6 : 4;
+    const [count, sides] = die.split("d").map(Number);
+    if (count === 1 && sides < martial) die = `1d${martial}`;
+    notes2.push("Martial Arts.");
+  }
+  // Hex Warrior: a Hexblade uses Charisma with a one-handed weapon.
+  const hexWarrior = lookupBySubclass({ hexblade: true }) && !traits.twoHanded && mod("cha") > mod(ability);
+  if (hexWarrior) {
+    ability = "cha";
+    notes2.push("Hex Warrior: uses Charisma.");
+  }
+  const magic = itemMagicBonus(item);
+  let toHit = proficiencyBonus() + mod(ability) + magic;
+  let damageBonus = mod(ability) + magic;
+  let rerolls = "";
+  const style = fightingStyle();
+  if (style === "Archery" && traits.ranged) {
+    toHit += 2;
+    notes2.push("Archery +2.");
+  }
+  if (style === "Dueling" && !traits.ranged && !traits.twoHanded && grip !== "two-handed") {
+    damageBonus += 2;
+    notes2.push("Dueling +2 (no other weapon in hand).");
+  }
+  if (style === "Great Weapon Fighting" && !traits.ranged && (traits.twoHanded || grip === "two-handed")) {
+    rerolls = "r2";
+    notes2.push("Great Weapon Fighting: reroll 1s and 2s once.");
+  }
+  const attacks = extraAttacks();
+  if (attacks > 1) notes2.push(`Attack action: ${attacks} attacks.`);
   const damageType = notes.match(/\d+d\d+\s+([a-z]+)/i)?.[1] || "";
   return {
     id: crypto.randomUUID(),
-    name: item.name || "Weapon",
+    name: `${item.name || "Weapon"}${grip ? ` (${grip})` : ""}`,
     type: "Action",
-    attack: formatMod(proficiencyBonus() + abilityMod),
-    damage: `${die}${formatMod(abilityMod)}${damageType ? ` ${damageType}` : ""}`,
-    notes: `${hexWarrior ? "Hex Warrior: uses Charisma. " : ""}Assumes proficiency. ${notes}`.trim(),
-    source: { weapon: item.id }
+    attack: formatMod(toHit),
+    damage: `${die}${rerolls}${formatMod(damageBonus)}${damageType ? ` ${damageType}` : ""}`,
+    notes: `${notes2.join(" ")} Assumes proficiency. ${notes}`.trim(),
+    source: { weapon: item.id, grip, ability }
   };
 }
 
@@ -1193,6 +1410,10 @@ function featureActions() {
   const prof = proficiencyBonus();
   const actions = [];
   const add = (key, fields) => actions.push({ id: crypto.randomUUID(), attack: "", damage: "", notes: "", ...fields, source: { feature: key } });
+  if (cls.id === "barbarian") {
+    const bonus = level >= 16 ? 4 : level >= 9 ? 3 : 2;
+    add("rage", { name: "Rage", type: "Bonus Action", notes: `+${bonus} STR melee damage, resistance to bludgeoning, piercing and slashing, advantage on STR checks and saves. 1 minute.`, use: { cost: level >= 20 ? null : ["Rage", 1], kind: "rage" } });
+  }
   if (cls.id === "monk") {
     const die = level >= 17 ? 10 : level >= 11 ? 8 : level >= 5 ? 6 : 4;
     const ability = Math.max(mod("str"), mod("dex"));
@@ -1291,6 +1512,25 @@ function useFeatureAction(action, confirmed = false) {
     showToast(`<span class="toast-label">Cunning Action</span><span>Dash, Disengage, or Hide as a bonus action.</span>`, { actions: [{ label: "Hide (Stealth)", run: () => rollSkillCheck("stealth") }] });
     return;
   }
+  if (use.kind === "rage") {
+    if (character.raging) {
+      refund();
+      character.raging = false;
+      persistAndRender();
+      showToast(`<span class="toast-label">Rage ends</span><span>No longer raging.</span>`);
+      return;
+    }
+    if (character.concentration) {
+      refund();
+      persistAndRender();
+      showToast(`<span class="toast-label">Can't rage while concentrating</span><span>You're concentrating on ${escapeHtml(character.concentration)}. Raging would end it, and you can't cast or concentrate on spells while raging.</span>`, { tone: "fumble", actions: [{ label: "Drop it and rage", run: () => { character.concentration = ""; useFeatureAction(action, true); } }] });
+      return;
+    }
+    character.raging = true;
+    persistAndRender();
+    showToast(`<span class="toast-label">Raging</span><span>${escapeHtml(action.notes)}${status ? ` ${escapeHtml(status)}.` : ""}</span>`, { actions: [...undo.map(item => ({ ...item, run: () => { character.raging = false; item.run(); } })), { label: "End rage", run: () => { character.raging = false; persistAndRender(); } }], duration: 9000 });
+    return;
+  }
   if (use.kind === "uncanny") {
     halveLastDamage();
     return;
@@ -1307,11 +1547,22 @@ function useFeatureAction(action, confirmed = false) {
     character.wildShape = { name: "Beast form", hp: 0, max: 0 };
     persistAndRender();
     document.querySelector('[data-wild-shape="max"]')?.focus();
-    showToast(`<span class="toast-label">Wild Shape</span><span>Enter the beast's hit points in the Beast form row under Hit points. ${escapeHtml(status)}.</span>`, {
+    showToast(`<span class="toast-label">Wild Shape</span><span>${escapeHtml(wildShapeLimit())} Enter the beast's hit points in the Beast form row under Hit points. ${escapeHtml(status)}.</span>`, {
       actions: [{ label: "Undo", run: () => { refund(); character.wildShape = null; persistAndRender(); } }],
       duration: 9000
     });
   }
+}
+
+// Beast Shapes (PHB p.66) and Circle Forms (Moon): the highest CR and movement a druid can take.
+function wildShapeLimit() {
+  const level = character.level;
+  const moon = lookupBySubclass({ moon: true });
+  const base = level >= 8 ? 1 : level >= 4 ? 0.5 : 0.25;
+  const cr = moon ? Math.max(1, Math.floor(level / 3)) : base;
+  const label = cr === 0.25 ? "1/4" : cr === 0.5 ? "1/2" : String(cr);
+  const movement = level >= 8 ? "any movement" : level >= 4 ? "no flying speed" : "no flying or swimming speed";
+  return `Max CR ${label}, ${movement}. Lasts up to ${Math.floor(level / 2)} hours.`;
 }
 
 function sorceryPoints() {
@@ -1356,7 +1607,8 @@ function flexibleCastingMenu() {
   const actions = [];
   Object.entries(SLOT_POINT_COST).forEach(([level, cost]) => {
     const spent = Number(character.spellSlotUsage?.[level] || 0);
-    if (spent > 0 && cost <= Number(points.current)) {
+    // A created slot can exceed the normal maximum; it's gone after a long rest (PHB p.101).
+    if (slots[Number(level) - 1] > 0 && cost <= Number(points.current)) {
       actions.push({ label: `Make a ${ordinal(Number(level))}-level slot (${cost})`, run: () => {
         points.current = Number(points.current) - cost;
         character.spellSlotUsage[level] = spent - 1;
@@ -1378,14 +1630,55 @@ function flexibleCastingMenu() {
   showToast(`<span class="toast-label">Flexible Casting</span><span>${points.current}/${points.max} sorcery points.${actions.length ? "" : " Nothing to convert right now."}</span>`, { actions, duration: 15000 });
 }
 
-// Speed shown in play mode: the stored base plus monk Unarmored Movement while unarmored.
+// Speed shown in play mode: the stored base plus class and feat bonuses, then conditions and exhaustion.
 function effectiveSpeed() {
+  return speedBreakdown().speed;
+}
+
+function speedBreakdown() {
   const base = Number(character.speed || 0);
   const level = Number(character.level || 1);
-  if (currentClass().id !== "monk" || level < 2) return base;
+  const cls = currentClass().id;
   const worn = (character.equipment || []).filter(item => item.equipped || item.container === "equipped");
-  if (worn.some(item => /\bAC\s+\d+/i.test(item.notes || "") || /shield/i.test(item.name || ""))) return base;
-  return base + (level >= 18 ? 30 : level >= 14 ? 25 : level >= 10 ? 20 : level >= 6 ? 15 : 10);
+  const armor = worn.find(item => /\bAC\s+\d+/i.test(item.notes || "") && !/shield/i.test(item.name || ""));
+  const notes = [];
+  let speed = base;
+  if (cls === "monk" && level >= 2 && !armor && !worn.some(item => /shield/i.test(item.name || ""))) {
+    const bonus = level >= 18 ? 30 : level >= 14 ? 25 : level >= 10 ? 20 : level >= 6 ? 15 : 10;
+    speed += bonus;
+    notes.push(`+${bonus} ft Unarmored Movement`);
+  }
+  if (cls === "barbarian" && level >= 5 && !/heavy/i.test(armor?.notes || "")) {
+    speed += 10;
+    notes.push("+10 ft Fast Movement");
+  }
+  if (hasFeat("Mobile")) {
+    speed += 10;
+    notes.push("+10 ft Mobile");
+  }
+  const conditions = character.conditions || [];
+  const exhaustion = Number(character.exhaustion || 0);
+  if (["Grappled", "Restrained", "Paralyzed", "Petrified", "Stunned", "Unconscious"].some(name => conditions.includes(name)) || exhaustion >= 5) {
+    notes.push(exhaustion >= 5 ? "0 ft: exhaustion 5" : "0 ft: condition");
+    return { speed: 0, base, notes };
+  }
+  if (exhaustion >= 2) {
+    speed = Math.floor(speed / 2);
+    notes.push("halved: exhaustion 2");
+  }
+  return { speed, base, notes };
+}
+
+// Fighting style chosen on the sheet, or named in features ("Fighting Style: Archery").
+function fightingStyle() {
+  if (character.fightingStyle) return character.fightingStyle;
+  const text = `${character.features || ""}\n${(character.classOptions || []).map(item => item.name).join("\n")}`;
+  return FIGHTING_STYLES.find(style => new RegExp(`fighting style[^\\n]*${style}`, "i").test(text)) || "";
+}
+
+function hasFightingStyle() {
+  const cls = currentClass().id;
+  return (cls === "fighter") || (["paladin", "ranger"].includes(cls) && character.level >= 2) || (cls === "bard" && character.level >= 3 && lookupBySubclass({ swords: true }));
 }
 
 function spellAction(row) {
@@ -1418,7 +1711,7 @@ function generateActions() {
     generated.push(action);
   };
   featureActions().forEach(add);
-  (character.equipment || []).filter(item => item.equipped || item.container === "equipped").forEach(item => add(weaponAction(item)));
+  (character.equipment || []).filter(item => item.equipped || item.container === "equipped").forEach(item => weaponActions(item).forEach(add));
   character.spells.filter(spellRowHasSpell).forEach(row => add(spellAction(row)));
   character.actions.push(...generated);
   persistAndRender();

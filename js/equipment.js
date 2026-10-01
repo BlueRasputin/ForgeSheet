@@ -122,7 +122,8 @@ function equipmentFromItemCard(item) {
     name: item.name,
     quantity: item.quantity || 1,
     weight: Number(item.weight || 0),
-    container: item.container || (item.index === "bag-of-holding" ? "bagOfHolding" : "carried"),
+    // The bag itself weighs 15 lb wherever it is; only what's inside it stops counting.
+    container: item.container || "carried",
     equipped: item.container === "equipped",
     attuned: /attunement/i.test(item.notes || ""),
     notes: [item.type, item.rarity, item.notes].filter(Boolean).join(" - ")

@@ -16,7 +16,10 @@ function renderHeader() {
   setValue("acInput", character.ac);
   const speed = effectiveSpeed();
   setValue("speedInput", character.identityLocked ? speed : character.speed);
-  document.querySelector("#speedInput").title = speed > Number(character.speed || 0) ? `${character.speed} ft base + ${speed - character.speed} ft Unarmored Movement` : "";
+  const { notes: speedNotes } = speedBreakdown();
+  document.querySelector("#speedInput").title = speedNotes.length ? `${character.speed} ft base, ${speedNotes.join(", ")}` : "";
+  document.querySelector("#fightingStyleField").hidden = !hasFightingStyle();
+  setValue("fightingStyleSelect", fightingStyle());
   document.querySelector("#profBonus").textContent = formatMod(proficiencyBonus());
   document.querySelector("#initiativeValue").textContent = formatMod(initiativeBonus());
   const armorClass = calculatedArmorClass();
@@ -253,7 +256,7 @@ function switchClassTo(classId) {
   character.hitDice = `${character.level}d${cls.hitDie}`;
   if (previousHitDie !== cls.hitDie) {
     const missing = Number(character.maxHp || 0) - Number(character.hp || 0);
-    character.maxHp = averageHpFor(cls, character.level, mod("con")) + speciesHpPerLevel(character.species) * character.level;
+    character.maxHp = averageHpFor(cls, character.level, mod("con")) + sheetExtraHp() * character.level;
     character.hp = clamp(character.maxHp - missing, 0, character.maxHp);
   }
   rebuildClassFeatureLines(cls, character.level);
@@ -285,7 +288,7 @@ function applyLevelChange(value) {
     return;
   }
   const cls = currentClass();
-  const perLevel = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + speciesHpPerLevel(character.species);
+  const perLevel = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp();
   character.level = next;
   rebuildClassFeatureLines(cls, next);
   character.maxHp = Math.max(next, Number(character.maxHp || 0) + delta * perLevel);
@@ -297,12 +300,33 @@ function applyLevelChange(value) {
 }
 
 function handleAbilityInput(event) {
-  character.abilities[event.target.dataset.ability] = clamp(Number(event.target.value), 1, 30);
+  const ability = event.target.dataset.ability;
+  const before = mod(ability);
+  character.abilities[ability] = clamp(Number(event.target.value), 1, 30);
+  // CON changes HP at every level you have, not just the next one (PHB p.177).
+  const change = ability === "con" ? (mod("con") - before) * character.level : 0;
+  if (change) {
+    character.maxHp = Math.max(character.level, Number(character.maxHp || 0) + change);
+    character.hp = clamp(Number(character.hp || 0) + change, 0, character.maxHp);
+  }
   persistAndRender();
+  if (change) showToast(`<span class="toast-label">Constitution ${formatMod(mod("con"))}</span><span>Max HP ${formatMod(change)} (${formatMod(change / character.level)} for each of your ${character.level} levels).</span>`);
 }
 
 function saveBonus(ability) {
-  return mod(ability) + (character.saveProficiencies.includes(ability) ? proficiencyBonus() : 0);
+  return mod(ability) + (character.saveProficiencies.includes(ability) ? proficiencyBonus() : 0) + itemSaveBonus() + auraOfProtection();
+}
+
+// "+1 AC and saving throws" (Cloak/Ring of Protection) on equipped, attuned items.
+function itemSaveBonus() {
+  return (character.equipment || [])
+    .filter(item => (item.equipped || item.container === "equipped") && (!/attunement/i.test(item.notes || "") || item.attuned))
+    .reduce((sum, item) => sum + Number(String(item.notes || "").match(/\+(\d+)[^.]*saving throws/i)?.[1] || 0), 0);
+}
+
+// Paladin 6+: add your CHA modifier (minimum +1) to your saving throws while conscious.
+function auraOfProtection() {
+  return currentClass().id === "paladin" && character.level >= 6 && Number(character.hp) > 0 ? Math.max(1, mod("cha")) : 0;
 }
 
 function renderSavingThrows() {
@@ -326,22 +350,29 @@ function handleSaveInput(event) {
 function renderSenses() {
   const senses = [["perception", "Passive Perception"], ["investigation", "Passive Investigation"], ["insight", "Passive Insight"]];
   document.querySelector("#senses").innerHTML = senses.map(([skill, label]) => {
-    const ability = SKILLS.find(([id]) => id === skill)[2];
-    return `<div class="sense-row"><strong>${10 + skillBonus(skill, ability)}</strong><span>${label}</span></div>`;
+    return `<div class="sense-row"><strong>${passiveScore(skill)}</strong><span>${label}</span></div>`;
   }).join("") + specialSensesHtml();
+}
+
+// 10 + the skill bonus; Observant adds 5 to passive Perception and Investigation.
+function passiveScore(skill) {
+  const ability = SKILLS.find(([id]) => id === skill)[2];
+  return 10 + skillBonus(skill, ability) + (hasFeat("Observant") && ["perception", "investigation"].includes(skill) ? 5 : 0);
 }
 
 // Darkvision from the species preset (60 ft) or any "Darkvision N ft" written in features.
 function specialSensesHtml() {
   const written = String(character.features || "").match(/darkvision\D{0,12}(\d+)/i);
   const preset = SPECIES_PRESETS.find(([name]) => name === character.species);
-  const range = written ? Number(written[1]) : preset && /darkvision/i.test(preset[2]) ? 60 : 0;
+  const presetRange = preset?.[2].match(/darkvision\D{0,4}(\d+)/i);
+  const range = written ? Number(written[1]) : presetRange ? Number(presetRange[1]) : preset && /darkvision/i.test(preset[2]) ? 60 : 0;
   return range ? `<p class="special-senses">${icon("eye")}Darkvision ${range} ft</p>` : "";
 }
 
 function speciesSize(species) {
-  if (!SPECIES_PRESETS.some(([name]) => name === species)) return "";
-  return /gnome|halfling/i.test(species) ? "Small" : "Medium";
+  const preset = SPECIES_PRESETS.find(([name]) => name === species);
+  if (!preset) return "";
+  return preset[5] || (/gnome|halfling/i.test(species) ? "Small" : "Medium");
 }
 
 function renderDeathSaves() {

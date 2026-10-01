@@ -91,6 +91,10 @@ const ITEM_CATALOG = [
   itemCard("arrows", "Arrows (20)", "Ammunition", 1, "Ammunition", "For shortbows and longbows. Recover half after a battle."),
   itemCard("crossbow-bolts", "Crossbow Bolts (20)", "Ammunition", 1.5, "Ammunition", "For crossbows. Recover half after a battle."),
   itemCard("shield", "Shield", "Armor", 6, "Adventuring gear", "+2 AC while wielded."),
+  itemCard("padded-armor", "Padded Armor", "Armor", 8, "Light armor", "AC 11 + Dexterity modifier. Disadvantage on Stealth."),
+  itemCard("hide-armor", "Hide Armor", "Armor", 12, "Medium armor", "AC 12 + Dex modifier, max 2."),
+  itemCard("ring-mail", "Ring Mail", "Armor", 40, "Heavy armor", "AC 14. Disadvantage on Stealth."),
+  itemCard("splint-armor", "Splint Armor", "Armor", 60, "Heavy armor", "AC 17. Requires Strength 15. Disadvantage on Stealth."),
   itemCard("leather-armor", "Leather Armor", "Armor", 10, "Light armor", "AC 11 + Dexterity modifier."),
   itemCard("studded-leather", "Studded Leather", "Armor", 13, "Light armor", "AC 12 + Dexterity modifier."),
   itemCard("chain-shirt", "Chain Shirt", "Armor", 20, "Medium armor", "AC 13 + Dex modifier, max 2."),
@@ -110,7 +114,8 @@ const ITEM_CATALOG = [
   itemCard("potion-of-healing", "Potion of Healing", "Potion", 0.5, "Common magic item", "Regain 2d4 + 2 hit points."),
   itemCard("bag-of-holding", "Bag of Holding", "Wondrous Item", 15, "Uncommon magic item", "Extradimensional storage. Contents usually do not count against carried weight here."),
   itemCard("wand-of-magic-missiles", "Wand of Magic Missiles", "Wand", 1, "Uncommon magic item", "7 charges. Cast magic missile; regains charges daily."),
-  itemCard("cloak-of-protection", "Cloak of Protection", "Wondrous Item", 1, "Uncommon magic item", "+1 AC and saving throws. Requires attunement.")
+  itemCard("cloak-of-protection", "Cloak of Protection", "Wondrous Item", 1, "Uncommon magic item", "+1 AC and saving throws. Requires attunement."),
+  itemCard("ring-of-protection", "Ring of Protection", "Ring", 0, "Rare magic item", "+1 AC and saving throws. Requires attunement.")
 ];
 
 const SPECIES_PRESETS = [
@@ -119,11 +124,14 @@ const SPECIES_PRESETS = [
   ["Mountain Dwarf", 25, "Darkvision, dwarven resilience, and light and medium armor training.", "mountains", { str: 2, con: 2 }],
   ["High Elf", 30, "Darkvision, keen senses, fey ancestry, trance, elf weapon training, and one wizard cantrip.", "moon-stars", { dex: 2, int: 1 }],
   ["Wood Elf", 35, "Darkvision, keen senses, fey ancestry, trance, elf weapon training, and Mask of the Wild.", "tree-evergreen", { dex: 2, wis: 1 }],
-  ["Gnome", 25, "Darkvision and advantage on mental saves against magic.", "gear", { int: 2 }],
+  ["Forest Gnome", 25, "Darkvision, gnome cunning, the minor illusion cantrip, and Speak with Small Beasts.", "gear", { int: 2, dex: 1 }],
+  ["Rock Gnome", 25, "Darkvision, gnome cunning, artificer's lore, and tinker's tools.", "gear", { int: 2, con: 1 }],
   ["Half-Elf", 30, "Darkvision, fey ancestry, and two extra skill proficiencies. +1 to two other abilities of your choice.", "moon", { cha: 2 }],
   ["Half-Orc", 30, "Darkvision, relentless endurance, and savage critical hits.", "barbell", { str: 2, con: 1 }],
-  ["Halfling", 25, "Lucky rerolls on 1s, brave, and nimble through larger creatures' spaces.", "clover", { dex: 2 }],
+  ["Lightfoot Halfling", 25, "Lucky, brave, halfling nimbleness, and Naturally Stealthy.", "clover", { dex: 2, cha: 1 }],
+  ["Stout Halfling", 25, "Lucky, brave, halfling nimbleness, and Stout Resilience against poison.", "clover", { dex: 2, con: 1 }],
   ["Human", 30, "+1 to every ability score.", "user", { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 }],
+  ["Variant Human", 30, "+1 to two abilities of your choice, one skill, and one feat.", "user-plus", {}],
   ["Tiefling", 30, "Darkvision, fire resistance, and infernal legacy spells.", "flame", { cha: 2, int: 1 }]
 ];
 
@@ -172,13 +180,18 @@ const SPECIES_GRANTS = {
   "Hill Dwarf": { ...DWARF_GRANTS, hpPerLevel: 1 },
   "Mountain Dwarf": { ...DWARF_GRANTS, armor: ["Light armor, medium armor"] },
   Elf: { languages: ["Common", "Elvish"], skills: ["perception"] },
-  "High Elf": ELF_GRANTS,
+  "High Elf": { ...ELF_GRANTS, languages: ["Common", "Elvish", "one extra language"], choose: { cantripFrom: "wizard" } },
   "Wood Elf": ELF_GRANTS,
   Gnome: { languages: ["Common", "Gnomish"] },
-  "Half-Elf": { languages: ["Common", "Elvish", "one extra language"] },
+  "Forest Gnome": { languages: ["Common", "Gnomish"], cantrips: ["minor-illusion"] },
+  "Rock Gnome": { languages: ["Common", "Gnomish"], tools: ["Tinker's tools"] },
+  "Half-Elf": { languages: ["Common", "Elvish", "one extra language"], choose: { bonuses: [1, 1], skills: 2, exclude: ["cha"] } },
   "Half-Orc": { languages: ["Common", "Orc"], skills: ["intimidation"] },
   Halfling: { languages: ["Common", "Halfling"] },
+  "Lightfoot Halfling": { languages: ["Common", "Halfling"] },
+  "Stout Halfling": { languages: ["Common", "Halfling"] },
   Human: { languages: ["Common", "one extra language"] },
+  "Variant Human": { languages: ["Common", "one extra language"], choose: { bonuses: [1, 1], skills: 1, feat: true } },
   Tiefling: {
     languages: ["Common", "Infernal"],
     cantrips: ["thaumaturgy"],
@@ -212,6 +225,16 @@ const SUBCLASS_EXTRAS = {
   hexblade: { armor: ["Medium armor, shields"], weapons: ["Martial weapons"], trackers: () => [["Hexblade's Curse", 1, "short"]] },
   "eldritch-knight": {},
   champion: {},
+  "arcane-archer": { trackers: level => level >= 3 ? [["Arcane Shot", 2, "short"]] : [] },
+  samurai: { trackers: level => level >= 3 ? [["Fighting Spirit", 3, "long"]] : [] },
+  // Psionic Energy dice: twice your proficiency bonus, all back on a long rest, one back on a short rest (Tasha's).
+  "psi-warrior": { trackers: (level, prof) => level >= 3 ? [["Psionic Energy Dice", prof * 2, "long"]] : [] },
+  soulknife: { trackers: (level, prof) => level >= 3 ? [["Psionic Energy Dice", prof * 2, "long"]] : [] },
+  "rune-knight": { trackers: (level, prof) => level >= 3 ? [["Giant's Might", prof, "long"]] : [] },
+  "echo-knight": { trackers: () => [["Unleash Incarnation", Math.max(1, mod("con")), "long"]] },
+  "wild-magic": { trackers: () => [["Tides of Chaos", 1, "long"]] },
+  stars: { trackers: (level, prof) => [["Star Map Guiding Bolt", prof, "long"]] },
+  peace: { trackers: (level, prof) => [["Emboldening Bond", prof, "long"]] },
   "war-magic": {},
   "life": { armor: ["Heavy armor"] },
   "war": { armor: ["Heavy armor"], weapons: ["Martial weapons"] },
@@ -219,7 +242,8 @@ const SUBCLASS_EXTRAS = {
   "forge": { armor: ["Heavy armor"] },
   "valor": { armor: ["Medium armor, shields"], weapons: ["Martial weapons"] },
   "swords": { armor: ["Medium armor"], weapons: ["Scimitar"] },
-  "bladesinging": { armor: ["Light armor"], weapons: ["One one-handed melee weapon"] }
+  // Bladesong: proficiency bonus uses per long rest (Tasha's).
+  "bladesinging": { armor: ["Light armor"], weapons: ["One one-handed melee weapon"], trackers: (level, prof) => [["Bladesong", prof, "long"]] }
 };
 
 // Level at which each class picks its subclass.
@@ -406,8 +430,8 @@ const SUBCLASS_SPELLS = {
   oathbreaker: { 3: ["hellish-rebuke", "inflict-wounds"], 5: ["crown-of-madness", "darkness"], 9: ["animate-dead", "bestow-curse"], 13: ["blight", "confusion"], 17: ["contagion", "dominate-person"] },
   wildfire: { 2: ["burning-hands", "cure-wounds"], 3: ["flaming-sphere", "scorching-ray"], 5: ["plant-growth", "revivify"], 7: ["aura-of-life", "fire-shield"], 9: ["flame-strike", "mass-cure-wounds"] },
   spores: { 2: ["chill-touch"], 3: ["blindness-deafness", "gentle-repose"], 5: ["animate-dead", "gaseous-form"], 7: ["blight", "confusion"], 9: ["cloudkill", "contagion"] },
-  "aberrant-mind": { 1: ["arms-of-hadar", "dissonant-whispers", "mind-sliver"], 3: ["calm-emotions", "detect-thoughts"], 5: ["hunger-of-hadar", "sending"], 7: ["black-tentacles", "telekinesis"], 9: ["telepathic-bond"] },
-  "clockwork-soul": { 1: ["alarm", "protection-from-evil-and-good"], 3: ["aid", "lesser-restoration"], 5: ["dispel-magic", "protection-from-energy"], 7: ["freedom-of-movement", "fabricate"], 9: ["greater-restoration", "wall-of-force"] },
+  "aberrant-mind": { 1: ["arms-of-hadar", "dissonant-whispers", "mind-sliver"], 3: ["calm-emotions", "detect-thoughts"], 5: ["hunger-of-hadar", "sending"], 7: ["black-tentacles", "summon-aberration"], 9: ["telepathic-bond", "telekinesis"] },
+  "clockwork-soul": { 1: ["alarm", "protection-from-evil-and-good"], 3: ["aid", "lesser-restoration"], 5: ["dispel-magic", "protection-from-energy"], 7: ["freedom-of-movement", "summon-construct"], 9: ["greater-restoration", "wall-of-force"] },
   "gloom-stalker": { 3: ["disguise-self"], 5: ["rope-trick"], 9: ["fear"], 13: ["greater-invisibility"], 17: ["seeming"] },
   "horizon-walker": { 3: ["protection-from-evil-and-good"], 5: ["misty-step"], 9: ["haste"], 13: ["banishment"], 17: ["teleportation-circle"] },
   "monster-slayer": { 3: ["protection-from-evil-and-good"], 5: ["zone-of-truth"], 9: ["magic-circle"], 13: ["banishment"], 17: ["hold-monster"] },

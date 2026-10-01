@@ -309,6 +309,11 @@ function bindEvents() {
   document.querySelector("#classOptionRows").addEventListener("click", handleClassOptionClick);
   document.querySelector("#conditionGrid").addEventListener("click", handleConditionClick);
   document.querySelector("#addActionButton").addEventListener("click", addAction);
+  document.querySelector("#fightingStyleSelect").addEventListener("change", event => {
+    character.fightingStyle = event.target.value;
+    refreshGeneratedActions();
+    persistAndRender();
+  });
   document.querySelector("#generateActionsButton").addEventListener("click", generateActions);
   document.querySelector("#actionRows").addEventListener("input", handleActionInput);
   document.querySelector("#actionRows").addEventListener("click", handleActionClick);

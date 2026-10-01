@@ -81,24 +81,24 @@ const BUILT_IN_CLASSES = {
     table: makeTable({
       1: ["Magical tinkering, spellcasting", 0, 2],
       2: ["Infusions", 0, 0],
-      3: ["Specialist feature, tool expertise", 0, 0],
+      3: ["Artificer specialist, the right tool for the job", 0, 0],
       4: ["Ability score improvement", 0, 0],
       5: ["Specialist feature", 0, 0],
-      6: ["Tool expertise improvement", 0, 0],
+      6: ["Tool expertise", 0, 0],
       7: ["Flash of genius", 0, 0],
       8: ["Ability score improvement", 0, 0],
       9: ["Specialist feature", 0, 0],
       10: ["Magic item adept", 0, 1],
       11: ["Spell-storing item", 0, 0],
       12: ["Ability score improvement", 0, 0],
-      13: ["Feature improvement", 0, 0],
+      13: ["", 0, 0],
       14: ["Magic item savant", 0, 1],
       15: ["Specialist feature", 0, 0],
       16: ["Ability score improvement", 0, 0],
-      17: ["Feature improvement", 0, 0],
+      17: ["", 0, 0],
       18: ["Magic item master", 0, 0],
       19: ["Ability score improvement", 0, 0],
-      20: ["Capstone feature", 0, 0]
+      20: ["Soul of artifice", 0, 0]
     })
   },
   wizard: classDef("wizard", "Wizard", 6, "full", "int", "levelPlusMod", ["wizard"]),
@@ -304,7 +304,10 @@ function spellSlotsFor(cls, level = character.level) {
 }
 
 function maxSpellLevelFor(cls, level) {
-  return spellSlotsFor(cls, level).reduce((highest, count, index) => count > 0 ? index + 1 : highest, 0);
+  const slotted = spellSlotsFor(cls, level).reduce((highest, count, index) => count > 0 ? index + 1 : highest, 0);
+  // Mystic Arcanum: warlocks pick a 6th/7th/8th/9th-level spell at 11/13/15/17.
+  const arcanum = cls.id === "warlock" ? (level >= 17 ? 9 : level >= 15 ? 8 : level >= 13 ? 7 : level >= 11 ? 6 : 0) : 0;
+  return Math.max(slotted, arcanum);
 }
 
 function asiLevelsFor(cls = currentClass()) {
@@ -315,7 +318,9 @@ function preparedLimitFor(cls, level = character.level) {
   if (cls.preparedFormula === "none") return 0;
   if (cls.preparedFormula === "known") return knownSpellCap(cls, level) ?? character.spells.filter(row => row.index).length;
   if (cls.preparedFormula === "levelPlusMod") return Math.max(1, level + mod(cls.spellAbility));
-  if (cls.preparedFormula === "halfLevelPlusMod") return Math.max(1, Math.floor(level / 2) + mod(cls.spellAbility));
+  // Artificers round half their level up (ERLW p.58); paladins round down and prepare nothing before 2nd level.
+  if (cls.preparedFormula === "halfLevelPlusMod" && cls.id === "artificer") return Math.max(1, Math.ceil(level / 2) + mod(cls.spellAbility));
+  if (cls.preparedFormula === "halfLevelPlusMod") return level < 2 ? 0 : Math.max(1, Math.floor(level / 2) + mod(cls.spellAbility));
   return 0;
 }
 

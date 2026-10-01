@@ -424,7 +424,48 @@ function syncCharacterSummary() {
       reset: option.reset
     })),
     preparedSpells: prepared,
-    preparedSignature: prepared.join("|")
+    preparedSignature: prepared.join("|"),
+    partyStatus: partyStatusPayload()
+  };
+}
+
+// Live table state other apps (Cartomancer) read from campaigns/{campaignId}/sheets/{sheetId}.partyStatus.
+// The shape is versioned; see INTEGRATION.md. Add fields freely, never rename or repurpose one without bumping the version.
+function partyStatusPayload() {
+  const hp = Number(character.hp || 0);
+  const failures = Number(character.deathSaveFailures || 0);
+  const successes = Number(character.deathSaveSuccesses || 0);
+  const maxHp = effectiveMaxHp();
+  return {
+    schema: "forgesheet.partyStatus",
+    version: 1,
+    name: character.name || "",
+    playerName: syncSettings.playerName || "",
+    ownerUid: syncState.user?.uid || null,
+    level: Number(character.level || 1),
+    classLabel: [currentClass().name, character.subclassName].filter(Boolean).join(" · "),
+    species: character.species || "",
+    hp,
+    maxHp,
+    baseMaxHp: Number(character.maxHp || 0),
+    tempHp: Number(character.tempHp || 0),
+    ac: Number(character.ac || 10),
+    speed: effectiveSpeed(),
+    initiativeBonus: initiativeBonus(),
+    initiative: latestInitiative(character),
+    state: hp > 0 ? (hp <= maxHp / 2 ? "bloodied" : "healthy") : failures >= 3 ? "dead" : successes >= 3 ? "stable" : "down",
+    deathSaves: { successes, failures },
+    conditions: [...(character.conditions || [])],
+    exhaustion: Number(character.exhaustion || 0),
+    concentration: character.concentration || null,
+    raging: Boolean(character.raging),
+    inspiration: Number(character.inspiration || 0),
+    passives: { perception: passiveScore("perception"), investigation: passiveScore("investigation"), insight: passiveScore("insight") },
+    saves: Object.fromEntries(ABILITIES.map(([id]) => [id, saveBonus(id)])),
+    spellSave: currentClass().casterType !== "none" && ABILITIES.some(([id]) => id === currentClass().spellAbility) ? 8 + proficiencyBonus() + mod(currentClass().spellAbility) : null,
+    resources: (character.resources || []).map(item => ({ name: item.name, current: Number(item.current), max: Number(item.max), reset: item.reset })),
+    spellSlots: spellSlotsFor(currentClass(), character.level).map((count, index) => ({ level: index + 1, max: count, remaining: slotRemaining(index + 1, count) })).filter(slot => slot.max > 0),
+    updatedAtMs: Date.now()
   };
 }
 

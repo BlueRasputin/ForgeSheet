@@ -185,7 +185,7 @@ function handleSlotUsageClick(event) {
   const delta = Number(button.dataset.slotDelta);
   const max = spellSlotsFor(currentClass(), character.level)[Number(level) - 1] || 0;
   const currentUsed = Number(character.spellSlotUsage[level] || 0);
-  character.spellSlotUsage[level] = clamp(currentUsed - delta, 0, max);
+  character.spellSlotUsage[level] = clamp(currentUsed - delta, Math.min(0, currentUsed), max);
   persistAndRender();
 }
 
@@ -205,11 +205,31 @@ function castSpellRow(row, confirmed = {}, overrideLevel = null) {
   const grantingItem = itemForSpellRow(row);
   const cls = currentClass();
   const retry = flag => castSpellRow(row, { ...confirmed, [flag]: true }, overrideLevel);
-  if (!grantingItem && baseLevel > 0 && ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula) && !row.prepared && !spellAlwaysPrepared(row)) {
+  const ritual = ritualCastable(row);
+  // Wizards can ritual-cast any ritual in their spellbook without preparing it (PHB p.114).
+  const ritualOnly = !grantingItem && baseLevel > 0 && ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula) && !row.prepared && !spellAlwaysPrepared(row);
+  if (ritualOnly && !(ritual && cls.id === "wizard")) {
     showToast(`<span class="toast-label">${escapeHtml(name)} isn't prepared</span><span>Tick Prepared on its row to cast it.</span>`);
     return;
   }
   if (!confirmed.incapacitated && blockedByIncapacitation(() => retry("incapacitated"))) return;
+  if (!confirmed.rage && character.raging) {
+    showToast(`<span class="toast-label">You're raging</span><span>You can't cast spells or concentrate on them while raging.</span>`, {
+      tone: "fumble",
+      actions: [{ label: "End rage and cast", run: () => { character.raging = false; retry("rage"); } }]
+    });
+    return;
+  }
+  if (ritual && !grantingItem && !confirmed.ritual && !confirmed.slot) {
+    showToast(`<span class="toast-label">${escapeHtml(name)} is a ritual</span><span>As a ritual it takes 10 minutes longer and spends no slot.</span>`, {
+      actions: [
+        { label: "Cast as ritual", run: () => retry("ritual") },
+        ...(ritualOnly ? [] : [{ label: "Spend a slot", run: () => retry("slot") }])
+      ],
+      duration: 12000
+    });
+    return;
+  }
   if (!confirmed.wildShape && character.wildShape) {
     showToast(`<span class="toast-label">You're in beast form</span><span>Beasts can't cast spells (druids gain Beast Spells at 18th level).</span>`, {
       actions: [{ label: "Cast anyway", run: () => retry("wildShape") }]
@@ -227,7 +247,17 @@ function castSpellRow(row, confirmed = {}, overrideLevel = null) {
   }
   let castLevel = baseLevel;
   let status = "Cantrip";
-  if (grantingItem) {
+  const arcanum = !grantingItem && arcanumFor(row);
+  if (confirmed.ritual) {
+    status = "Ritual: 10 minutes longer, no slot spent";
+  } else if (arcanum) {
+    if (Number(arcanum.current) <= 0) {
+      showToast(`<span class="toast-label">${escapeHtml(arcanum.name)} used</span><span>It recharges on a long rest.</span>`, { tone: "fumble" });
+      return;
+    }
+    arcanum.current = Number(arcanum.current) - 1;
+    status = `${arcanum.name}: recharges on a long rest`;
+  } else if (grantingItem) {
     const uses = Number(grantingItem.grantUses || 0);
     if (uses && Number(grantingItem.grantUsed || 0) >= uses) {
       showToast(`<span class="toast-label">${escapeHtml(grantingItem.name)} is spent</span><span>It recharges on a long rest.</span>`);
@@ -256,8 +286,9 @@ function castSpellRow(row, confirmed = {}, overrideLevel = null) {
     const left = max - used - 1;
     status = `${left} ${ordinal(castLevel)}-level slot${left === 1 ? "" : "s"} left`;
   }
-  const previous = { concentration: character.concentration, tempHp: character.tempHp, agathys: character.agathys || 0 };
+  const previous = { concentration: character.concentration, tempHp: character.tempHp, agathys: character.agathys || 0, mageArmor: Boolean(character.mageArmor) };
   if (concentration) character.concentration = concentration;
+  if (row.index === "mage-armor") character.mageArmor = true;
   character.lastCastLevel = Math.max(1, castLevel);
   const grant = spellTempHpGrant(row, castLevel);
   if (grant) {
@@ -266,7 +297,10 @@ function castSpellRow(row, confirmed = {}, overrideLevel = null) {
   }
   persistAndRender();
   const undo = () => {
-    if (grantingItem) grantingItem.grantUsed = Math.max(0, Number(grantingItem.grantUsed || 0) - 1);
+    if (confirmed.ritual) {
+      // Nothing was spent.
+    } else if (arcanum) arcanum.current = Number(arcanum.current) + 1;
+    else if (grantingItem) grantingItem.grantUsed = Math.max(0, Number(grantingItem.grantUsed || 0) - 1);
     else if (baseLevel > 0) character.spellSlotUsage[castLevel] = Math.max(0, Number(character.spellSlotUsage[castLevel] || 0) - 1);
     Object.assign(character, previous);
     persistAndRender();
@@ -283,6 +317,24 @@ function castSpellRow(row, confirmed = {}, overrideLevel = null) {
   actions.push({ label: "Undo", run: undo });
   const extra = grant ? ` · +${grant.amount} temp HP${grant.retaliation ? `, melee attackers take ${grant.retaliation} cold` : ""}` : "";
   showToast(`<span class="toast-label">Cast ${escapeHtml(name)}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${escapeHtml(status)}${concentration ? " · concentrating" : ""}${escapeHtml(extra)}</span>`, { actions, duration: 10000 });
+}
+
+// Warlock Mystic Arcanum: one spell each of 6th-9th level, cast once per long rest without a slot.
+function arcanumFor(row) {
+  const level = spellLevelForRow(row);
+  if (currentClass().id !== "warlock" || level < 6) return null;
+  return character.resources.find(item => item.name === `Mystic Arcanum (${ordinal(level)})`) || null;
+}
+
+// Classes with Ritual Casting can cast a ritual-tagged spell without a slot (bard, cleric, druid, wizard, artificer;
+// warlocks with Book of Ancient Secrets).
+function ritualCastable(row) {
+  const spell = allSpells.find(item => item.index === row.index) || {};
+  const detail = row.custom || spellDetails[row.index] || spell;
+  if (!detail.ritual && !spell.ritual && !/ritual/i.test(detail.casting_time || "")) return false;
+  const id = currentClass().id;
+  if (["bard", "cleric", "druid", "wizard", "artificer"].includes(id)) return true;
+  return id === "warlock" && /book of ancient secrets/i.test(`${character.features || ""} ${(character.classOptions || []).map(item => item.name).join(" ")}`);
 }
 
 // The closest level with a free slot: higher first (an upcast), then down to the spell's own level.
@@ -370,12 +422,20 @@ function spellEffectRoll(row, castLevel) {
   let projectiles = projectileMatch ? NUMBER_WORDS[projectileMatch[1].toLowerCase()] || Number(projectileMatch[1]) : 1;
   const noun = projectileMatch ? projectileMatch[2].toLowerCase() : "";
   if (projectileMatch && /one (?:more|additional) (dart|ray|beam|bolt)/i.test(higher)) projectiles += upcast;
-  const perSlot = higher.match(/(\d+)d(\d+)\s+for each slot level above/i);
-  if (perSlot && Number(perSlot[2]) === sides && upcast) count += Number(perSlot[1]) * upcast;
+  // "4d6 fire damage and 4d6 radiant damage" (Flame Strike, Ice Storm): two dice groups in one effect.
+  const pair = text.match(/\b\d+d\d+\s+\w+\s+damage\s+and\s+(\d+)d(\d+)\s+\w+\s+damage/i);
+  let second = pair ? { count: Number(pair[1]), sides: Number(pair[2]) } : null;
+  // "1d6 for each slot level above", "per slot level above", "1d8 for every two slot levels above" (Spiritual Weapon).
+  const perSlot = higher.match(/(\d+)d(\d+)\s+(?:for each|per|for every)\s+(two\s+)?slot levels? above/i);
+  if (perSlot && upcast) {
+    const steps = perSlot[3] ? Math.floor(upcast / 2) : upcast;
+    if (Number(perSlot[2]) === sides) count += Number(perSlot[1]) * steps;
+    else if (second && Number(perSlot[2]) === second.sides) second = { ...second, count: second.count + Number(perSlot[1]) * steps };
+  }
   const tiers = [5, 11, 17].filter(level => character.level >= level).length;
   let beams = 0;
   if (baseLevel === 0 && /more than one beam/i.test(`${text} ${higher}`)) beams = 1 + tiers;
-  else if (baseLevel === 0 && /5th level/i.test(`${text} ${higher}`)) count *= 1 + tiers;
+  else if (baseLevel === 0 && /5th level|5th\/11th|damage scales/i.test(`${text} ${higher}`)) count *= 1 + tiers;
   const healing = /regains?\s+(a number of\s+)?hit points/i.test(text);
   const pool = /the total is how many hit points/i.test(text);
   const tempHp = !healing && /temporary hit points/i.test(text);
@@ -384,9 +444,9 @@ function spellEffectRoll(row, castLevel) {
   const ability = currentClass().spellAbility;
   // Agonizing Blast adds Charisma to each Eldritch Blast beam when the invocation is recorded.
   const agonizing = row.index === "eldritch-blast" && /agonizing blast/i.test(`${character.features || ""} ${(character.classOptions || []).map(option => `${option.name} ${option.notes || ""}`).join(" ")}`);
-  const modifier = agonizing ? mod("cha") : /spellcasting ability modifier/i.test(text) && ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
+  const modifier = agonizing ? mod("cha") : /spellcasting (?:ability )?modifier/i.test(text) && ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
   const attack = /spell attack/i.test(text);
-  const each = `${count}d${sides}${flat + modifier ? formatMod(flat + modifier) : ""}`;
+  const each = `${count}d${sides}${second ? `+${second.count}d${second.sides}` : ""}${flat + modifier ? formatMod(flat + modifier) : ""}`;
   // Darts that always hit roll as one total; rays and beams roll per attack.
   const autoHit = projectiles > 1 && !attack;
   const formula = autoHit ? `${count * projectiles}d${sides}${flat * projectiles + modifier ? formatMod(flat * projectiles + modifier) : ""}` : each;
@@ -825,7 +885,7 @@ function spellAlwaysPrepared(row) {
 }
 
 function knownSpellCount() {
-  return character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !spellAlwaysPrepared(row) && !row.itemId).length;
+  return character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !spellAlwaysPrepared(row) && !row.itemId && !arcanumFor(row)).length;
 }
 
 function quickCastState(row, level) {
@@ -837,9 +897,15 @@ function quickCastState(row, level) {
     return { label: "Cast", disabled: Boolean(spent), title: spent ? "Recharges on a long rest" : `From ${grantingItem.name}` };
   }
   if (level === 0) return { label: "Cast", disabled: false, title: "Cantrip" };
+  const arcanum = arcanumFor(row);
+  if (arcanum) return { label: "Cast", disabled: Number(arcanum.current) <= 0, title: Number(arcanum.current) > 0 ? `${arcanum.name}: once per long rest` : "Recharges on a long rest" };
   const cls = currentClass();
   const preparedCaster = ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula);
-  if (preparedCaster && !row.prepared && !spellAlwaysPrepared(row)) return { label: "Cast", disabled: true, title: "Prepare this spell to cast it" };
+  if (preparedCaster && !row.prepared && !spellAlwaysPrepared(row)) {
+    return cls.id === "wizard" && ritualCastable(row)
+      ? { label: "Ritual", disabled: false, title: "Unprepared: cast it as a ritual from your spellbook" }
+      : { label: "Cast", disabled: true, title: "Prepare this spell to cast it" };
+  }
   const slots = spellSlotsFor(cls, character.level);
   const options = castLevelOptions(level, slots);
   const selected = options.includes(Number(row.castLevel || level)) ? Number(row.castLevel || level) : options[0];

@@ -233,8 +233,10 @@ function persistAndRender() {
 }
 
 // Max HP after temporary reductions (life drain and similar), which a long rest clears.
+// Exhaustion 4+ halves the maximum (PHB p.291).
 function effectiveMaxHp(target = character) {
-  return Math.max(0, Number(target.maxHp || 0) - Number(target.maxHpReduction || 0));
+  const max = Math.max(0, Number(target.maxHp || 0) - Number(target.maxHpReduction || 0));
+  return Number(target.exhaustion || 0) >= 4 ? Math.floor(max / 2) : max;
 }
 
 function duplicateCharacter() {
@@ -385,19 +387,40 @@ function proficiencyBonus(level = character.level) {
   return Math.ceil(level / 4) + 1;
 }
 
+function hasFeat(name, source = character) {
+  return (source.planner?.feats || []).includes(name);
+}
+
 // Bards from 2nd level add half proficiency to any ability check they aren't proficient in.
 function jackOfAllTrades() {
   return currentClass().id === "bard" && character.level >= 2 ? Math.floor(proficiencyBonus() / 2) : 0;
 }
 
+// Champion 7+: half proficiency, rounded up, to STR, DEX and CON checks you aren't proficient in.
+function remarkableAthlete(ability) {
+  return currentClass().id === "fighter" && character.level >= 7 && lookupBySubclass({ champion: true }) && ["str", "dex", "con"].includes(ability)
+    ? Math.ceil(proficiencyBonus() / 2)
+    : 0;
+}
+
+// The bonus an untrained ability check gets (the two features don't stack; the higher applies).
+function untrainedBonus(ability) {
+  return Math.max(jackOfAllTrades(), remarkableAthlete(ability));
+}
+
 function skillBonus(skill, ability) {
   const proficient = character.proficientSkills.includes(skill);
   const expert = (character.expertSkills || []).includes(skill);
-  return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : jackOfAllTrades());
+  return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : untrainedBonus(ability));
 }
 
 function initiativeBonus() {
-  return mod("dex") + jackOfAllTrades();
+  return mod("dex") + untrainedBonus("dex") + (hasFeat("Alert") ? 5 : 0);
+}
+
+// "+1 Longsword", "Shield +2": a magic bonus written in the item name.
+function itemMagicBonus(item) {
+  return Number(String(item?.name || "").match(/(?:^|\s)\+(\d)(?:\s|$)/)?.[1] || 0);
 }
 
 // AC from equipped gear: body armor ("AC 14 + Dex modifier, max 2"), shields and magic "+N AC" bonuses.
@@ -412,22 +435,37 @@ function calculatedArmorClass() {
     const base = Number(notes.match(/\bAC\s+(\d+)/i)[1]);
     const addsDex = /\+\s*Dex/i.test(notes);
     const cap = notes.match(/max\s+(\d+)/i);
-    ac = base + (addsDex ? (cap ? Math.min(dex, Number(cap[1])) : dex) : 0);
+    ac = base + (addsDex ? (cap ? Math.min(dex, Number(cap[1])) : dex) : 0) + itemMagicBonus(armor);
+    if (typeof fightingStyle === "function" && fightingStyle() === "Defense") ac += 1;
   } else {
     const shield = worn.some(item => /shield/i.test(item.name || ""));
     const id = currentClass().id;
-    ac = 10 + dex + (id === "barbarian" ? mod("con") : id === "monk" && !shield ? mod("wis") : 0);
+    // Unarmored options don't stack; take the best one the character qualifies for.
+    const options = [10 + dex];
+    if (id === "barbarian") options.push(10 + dex + mod("con"));
+    if (id === "monk" && !shield) options.push(10 + dex + mod("wis"));
+    if (id === "sorcerer" && lookupBySubclass({ draconic: true })) options.push(13 + dex);
+    if (character.mageArmor) options.push(13 + dex);
+    // Natural armor (VGtM, ERLW, Locathah Rising): a base that still allows a shield.
+    const natural = { Tortle: 17, Lizardfolk: 13 + dex, Loxodon: 12 + mod("con"), Locathah: 12 + dex }[character.species];
+    if (natural) options.push(natural);
+    ac = Math.max(...options);
   }
-  worn.filter(item => item !== armor && usable(item)).forEach(item => {
+  worn.filter(usable).forEach(item => {
     const bonus = String(item.notes || "").match(/\+(\d+)\s*AC/i);
     if (bonus) ac += Number(bonus[1]);
+    if (item !== armor && /shield/i.test(item.name || "")) ac += itemMagicBonus(item);
   });
   return ac;
 }
 
+// Works for any stored character (Party and sync views), not only the open sheet.
 function passivePerception(source = character) {
   const wisdom = source.abilities?.wis ?? 10;
   const wisMod = Math.floor((wisdom - 10) / 2);
+  const proficient = source.proficientSkills?.includes("perception");
   const multiplier = source.expertSkills?.includes("perception") ? 2 : 1;
-  return 10 + wisMod + (source.proficientSkills?.includes("perception") ? proficiencyBonus(source.level) * multiplier : 0);
+  const prof = proficiencyBonus(source.level);
+  const jack = !proficient && source.classId === "bard" && source.level >= 2 ? Math.floor(prof / 2) : 0;
+  return 10 + wisMod + (proficient ? prof * multiplier : jack) + (hasFeat("Observant", source) ? 5 : 0);
 }

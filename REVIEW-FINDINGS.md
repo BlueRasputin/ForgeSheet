@@ -504,6 +504,92 @@ All 11 bugs and every item under "Rules gaps" are fixed and verified in the brow
 - The short-rest toast recharges resources and chains "Spend a hit die", with Undo.
 - Passive Perception and Dying / Concentrating badges on party cards answer DM questions without opening sheets.
 
+## Round 6: mechanics audit and 2014 expansion data (2026-10-01)
+
+Four player agents audited the rules (martial, core, creation, spellcasting). A rules-lawyer agent then reviewed the fix diff and found 8 more problems, all fixed. Each fix was verified with scripted rolls in the browser, using backed-up and then restored localStorage.
+
+**Combat**
+- Weapon rows are generated per grip; versatile weapons get a two-handed row.
+- Weapon math covers:
+  - magic +N on attack and damage
+  - finesse and ranged ability choice
+  - Martial Arts die and DEX for monk weapons
+  - Hex Warrior with any weapon lacking the two-handed property
+  - fighting styles: Archery +2, Dueling +2, Great Weapon Fighting rerolls (`r2` dice syntax), Defense +1 in armor
+  - the Extra Attack count, including Valor/Swords bards, Bladesingers, Battle Smiths and Armorers
+- Crits and misses:
+  - A natural 1 offers no damage.
+  - Champion crit range (19 at 3rd, 18 at 15th) applies to weapon attacks only.
+  - Hexblade's Curse offers 19-20 crits as a choice.
+  - Brutal Critical adds extra dice on melee crits.
+- Rage:
+  - It is an action that toggles on and off.
+  - It adds +2/+3/+4 damage on STR melee hits, halves B/P/S damage, and gives advantage on STR checks and saves.
+  - It blocks spellcasting and concentration.
+  - It is unlimited at 20th level.
+- Damage riders and smites:
+  - Sneak Attack applies only with finesse or ranged weapons.
+  - Divine Smite spends a slot from the hit toast for 2d8 + 1d8 per slot level (max 5d8), doubled on a crit.
+- Advantage and disadvantage cancel correctly across all sources. Advantage sources are Rage, Danger Sense, and War Caster on concentration saves.
+- Speed: Fast Movement (not in heavy armor), Mobile, exhaustion 2 halves it, exhaustion 5 and grappled/restrained/paralyzed/stunned/unconscious/petrified set it to 0. The tooltip says why.
+- Saves: Cloak and Ring of Protection (when attuned) and Aura of Protection (paladin 6+, minimum +1).
+- Initiative: Alert +5, and Jack of All Trades or Remarkable Athlete.
+- Damage at 0 HP keeps earlier death save successes. A long rest lowers exhaustion before refilling HP.
+
+**Characters**
+- HP:
+  - At least 1 per level.
+  - A CON change re-scores HP for every level, on the sheet and at level-up.
+  - Tough (+2 per level, retroactive), Draconic Resilience and Hill Dwarf.
+- Feats:
+  - Prerequisites are enforced for PHB, Xanathar's racial and Tasha's feats. Unmet feats are disabled with a reason.
+  - A feat can't be taken twice unless it's repeatable.
+  - Half-feats ask which ability gets +1. Resilient adds the save proficiency.
+  - Lucky tracks Luck Points.
+- Creation:
+  - Half-Elf (+1/+1, not CHA, plus 2 skills), Variant Human (+1/+1, a skill and a feat), Custom Lineage, and +2/+1 choice for later lineages.
+  - High Elf cantrip and extra language.
+  - Forest/Rock Gnome and Lightfoot/Stout Halfling subraces.
+  - Point buy with a 27-point counter.
+  - Species skills count as already owned.
+  - A species search box.
+- Checklist: expertise for rogues (2, then 4 at 6th) and bards (2 at 3rd, 4 at 10th), and species skills counted toward the skill total.
+- Multiclass: the prerequisites of both the new class and the current class are checked. Blood Hunter needs STR or DEX 13 and INT 13.
+- AC:
+  - Mage Armor sets AC on cast and ends on a long rest.
+  - Natural armor for Tortle, Lizardfolk, Loxodon and Locathah.
+  - Padded, hide, ring mail and splint armor in the catalog.
+  - The Bag of Holding itself weighs 15 lb.
+
+**Spellcasting**
+- Mystic Arcanum: 6th to 9th level warlock spells can be picked and are cast once per long rest without a slot. They don't count against spells known.
+- Rituals:
+  - Bards, clerics, druids, wizards and artificers can cast a ritual without a slot. So can warlocks with Book of Ancient Secrets.
+  - Wizards can ritual-cast unprepared spellbook spells.
+- Prepared counts: artificers round up; paladins round down and prepare nothing at 1st level.
+- Spell parsing:
+  - Two-dice spells (Flame Strike, Ice Storm) roll both groups and upcast the right one.
+  - Spiritual Weapon scales every two slot levels.
+  - Cantrip scaling and spellcasting-modifier wording from the local summaries are read correctly.
+- Flexible Casting can create a slot above the normal maximum.
+- Natural Recovery for Circle of the Land.
+- Aberrant Mind and Clockwork Soul spell lists are corrected (Summon Aberration, Telekinesis at 9th, Summon Construct).
+- Wild Shape shows the CR and movement limits for the druid's level and circle.
+- New trackers: Arcane Shot, Fighting Spirit, Psionic Energy Dice, Giant's Might, Unleash Incarnation, Tides of Chaos, Bladesong, Star Map, Emboldening Bond, Stroke of Luck.
+
+**Expansion data** (`js/expansions.js`, skips anything already defined)
+- 87 species/lineages (Volo's, Mordenkainen's, SCAG, Eberron, Ravnica, Theros, Wildemount, Tasha's, Van Richten's, Spelljammer, Fizban's and others), each with its size.
+- 63 backgrounds.
+- 82 feats.
+- 107 non-SRD spells (PHB extras, Xanathar's, Tasha's, Fizban's, Strixhaven, Wildemount dunamancy and others).
+- 14 items.
+- Totals in the app are now 98 species, 69 backgrounds, 104 feats and 511 spells, with no duplicates.
+
+**Cartomancer**
+- Each synced sheet now carries a versioned `partyStatus` object: HP and effective max, temp HP, AC, speed, initiative, state, death saves, conditions, exhaustion, concentration, passives, saves, spell DC, resources, slots and owner uid.
+- The contract and a reader snippet are in `INTEGRATION.md`.
+- The Cartomancer repository isn't reachable from this machine's GitHub account, so nothing has been wired on the Cartomancer side.
+
 ## Still to do
 
 - Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley
