@@ -37,7 +37,7 @@ function buildStaticControls() {
   const abilities = document.querySelector("#abilities");
   abilities.innerHTML = ABILITIES.map(([id, name]) => `
     <div class="ability-box">
-      <span class="ability-name">${name}</span>
+      <span class="ability-name"><span class="ability-long">${name}</span><span class="ability-short">${id.toUpperCase()}</span></span>
       <button type="button" class="ability-mod" id="${id}Mod" data-roll-ability="${id}" title="Roll ${name} check">+0</button>
       <input data-ability="${id}" type="number" min="1" max="30" aria-label="${name} score">
     </div>
@@ -131,11 +131,14 @@ function bindEvents() {
   document.querySelector("#applyDamageButton").addEventListener("click", applyDamage);
   document.querySelector("#applyHealButton").addEventListener("click", applyHeal);
   document.querySelector("#concentrationPrompt").addEventListener("click", handleConcentrationPromptClick);
+  document.querySelector("#dyingPrompt").addEventListener("click", event => {
+    if (event.target.closest("[data-dying-roll]")) rollDeathSave();
+  });
   document.querySelector("#spellRows").addEventListener("click", event => {
     const button = event.target.closest("[data-add-spell-level]");
     if (button) {
       const level = Number(button.dataset.addSpellLevel);
-      character.spells.push({ id: crypto.randomUUID(), index: "", level, prepared: level > 0 });
+      character.spells.push({ id: crypto.randomUUID(), index: "", level, prepared: level > 0 && preparedSpellCount() < preparedLimitFor(currentClass()) });
       persistAndRender();
       return;
     }

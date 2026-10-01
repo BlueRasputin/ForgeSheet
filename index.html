@@ -92,7 +92,8 @@
             </label>
             <label>
               Subclass
-              <input id="subclassName" autocomplete="off" placeholder="Armorer">
+              <input id="subclassName" autocomplete="off" placeholder="Armorer" list="subclassOptions">
+              <datalist id="subclassOptions"></datalist>
             </label>
             <label>
               Level
@@ -159,6 +160,7 @@
             </div>
           </div>
           <div id="concentrationPrompt" class="concentration-prompt"></div>
+          <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
         </section>
 
         <div class="sheet-layout">
@@ -345,29 +347,30 @@
           </div>
           <section class="block">
             <div class="block-head">
-              <h2>Combat Dashboard</h2>
-              <span id="combatSummary" class="muted">Ready</span>
+              <h2>Actions</h2>
+              <div id="actionFilter" class="action-filter">
+                <button type="button" data-action-filter="all" class="active">All</button>
+                <button type="button" data-action-filter="Action">Actions</button>
+                <button type="button" data-action-filter="Bonus Action">Bonus</button>
+                <button type="button" data-action-filter="Reaction">Reactions</button>
+                <button type="button" data-action-filter="Free">Other</button>
+              </div>
             </div>
-            <div id="combatDashboard" class="combat-dashboard"></div>
+            <div id="actionRows" class="action-list"></div>
           </section>
           <div class="two-col">
             <section class="block">
               <div class="block-head">
-                <h2>Combat</h2>
+                <h2>Resources</h2>
               </div>
-              <div class="field-grid compact">
-                <label>Hit Dice <input id="hitDiceInput" autocomplete="off"></label>
-              </div>
-              <div class="death-saves-block">
-                <span class="field-title">Death Saves</span>
-                <div id="deathSaveTracker" class="death-saves"></div>
-              </div>
+              <div id="resourceRows" class="tracker-list"></div>
             </section>
             <section class="block">
               <div class="block-head">
-                <h2>Attacks</h2>
+                <h2>Conditions</h2>
               </div>
-              <textarea id="attacksInput" rows="6" placeholder="Weapon attacks, to-hit bonuses, damage..."></textarea>
+              <div id="conditionGrid" class="condition-grid"></div>
+              <label>Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
             </section>
           </div>
           <section class="block">
@@ -389,45 +392,44 @@
             </div>
             <div id="rollHistory" class="roll-history"></div>
           </section>
-          <section class="block">
-            <div class="block-head">
-              <h2>Rest Automation</h2>
-              <span id="restSummary" class="muted">Ready</span>
-            </div>
-            <div class="hit-dice-controls">
-              <span id="hitDiceSummary" class="muted">Hit dice ready</span>
-              <button id="spendHitDieButton" class="secondary" type="button">Spend Hit Die</button>
-            </div>
-            <div id="restPreview" class="rest-preview"></div>
-          </section>
           <div class="two-col">
             <section class="block">
               <div class="block-head">
-                <h2>Resources</h2>
+                <h2>Combat</h2>
               </div>
-              <div id="resourceRows" class="tracker-list"></div>
+              <div class="field-grid compact">
+                <label>Hit Dice <input id="hitDiceInput" autocomplete="off"></label>
+              </div>
+              <div class="death-saves-block">
+                <span class="field-title">Death Saves</span>
+                <div id="deathSaveTracker" class="death-saves"></div>
+              </div>
             </section>
             <section class="block">
               <div class="block-head">
-                <h2>Conditions</h2>
+                <h2>Rest</h2>
+                <span id="restSummary" class="muted">Ready</span>
               </div>
-              <div id="conditionGrid" class="condition-grid"></div>
-              <label>Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
+              <div class="hit-dice-controls">
+                <span id="hitDiceSummary" class="muted">Hit dice ready</span>
+                <button id="spendHitDieButton" class="secondary" type="button">Spend Hit Die</button>
+              </div>
+              <div id="restPreview" class="rest-preview"></div>
             </section>
           </div>
           <section class="block">
             <div class="block-head">
-              <h2>Actions</h2>
-              <div id="actionFilter" class="action-filter">
-                <button type="button" data-action-filter="all" class="active">All</button>
-                <button type="button" data-action-filter="Action">Actions</button>
-                <button type="button" data-action-filter="Bonus Action">Bonus</button>
-                <button type="button" data-action-filter="Reaction">Reactions</button>
-                <button type="button" data-action-filter="Free">Other</button>
-              </div>
+              <h2>Attack Notes</h2>
             </div>
-            <div id="actionRows" class="action-list"></div>
+            <textarea id="attacksInput" rows="4" placeholder="Freeform notes: weapon properties, ammo counts, riders..."></textarea>
           </section>
+          <details class="block turn-reference">
+            <summary class="block-head">
+              <h2>Turn Reference</h2>
+              <span id="combatSummary" class="muted">Ready</span>
+            </summary>
+            <div id="combatDashboard" class="combat-dashboard"></div>
+          </details>
         </section>
 
         <section id="inventory" class="panel">
@@ -473,8 +475,9 @@
                 <div><span>Ability</span><strong id="spellAbility">-</strong></div>
                 <div><span>Save DC</span><strong id="spellDc">-</strong></div>
                 <div><span>Attack</span><strong id="spellAttack">-</strong></div>
-                <div><span>Prepared</span><strong id="preparedCount">0 / 0</strong></div>
+                <div><span id="preparedLabel">Prepared</span><strong id="preparedCount">0 / 0</strong></div>
               </div>
+              <p id="preparedWarning" class="prepared-warning" hidden></p>
               <div class="concentration-box">
                 <label>Concentration <input id="concentrationInput" autocomplete="off" placeholder="No active concentration"></label>
                 <button id="clearConcentrationButton" class="ghost" type="button">Clear</button>
@@ -808,6 +811,7 @@
         <button class="spell-expand" type="button" aria-label="Toggle spell details">▸</button>
         <select class="spell-select"></select>
         <span class="spell-summary"></span>
+        <button class="secondary cast-spell quick-cast" type="button">Cast</button>
         <label class="prepare-toggle"><input type="checkbox" class="prepared-toggle"> Prepared</label>
         <button class="ghost remove-spell" type="button">Remove</button>
         <div class="custom-spell-fields">
@@ -835,9 +839,11 @@
     <template id="resourceRowTemplate">
       <article class="tracker-row">
         <input class="resource-name" placeholder="Resource name">
+        <button class="ghost resource-step" type="button" data-step="-1" aria-label="Use one">−</button>
         <input class="resource-current" type="number" min="0" aria-label="Current uses">
         <span>/</span>
         <input class="resource-max" type="number" min="0" aria-label="Maximum uses">
+        <button class="ghost resource-step" type="button" data-step="1" aria-label="Regain one">+</button>
         <select class="resource-reset">
           <option value="manual">Manual</option>
           <option value="short">Short rest</option>
@@ -910,8 +916,9 @@
         </select>
         <input class="action-attack" placeholder="+7 to hit / DC 15">
         <input class="action-damage" placeholder="1d8+3 lightning">
-        <textarea class="action-notes" rows="3" placeholder="Range, save, riders, ammo, charges..."></textarea>
-        <button class="secondary roll-action" type="button">Roll</button>
+        <textarea class="action-notes" rows="2" placeholder="Range, save, riders, ammo, charges..."></textarea>
+        <button class="secondary roll-attack" type="button">Attack</button>
+        <button class="secondary roll-damage" type="button">Damage</button>
         <button class="ghost remove-action" type="button">Remove</button>
       </article>
     </template>

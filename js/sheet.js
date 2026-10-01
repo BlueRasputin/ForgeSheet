@@ -22,6 +22,11 @@ function renderHeader() {
   ["speedInput", "acInput", "hpInput", "maxHpInput", "tempHpInput"].forEach(id => {
     document.querySelector(`#${id}`).disabled = character.identityLocked;
   });
+  const hpRatio = character.maxHp ? Number(character.hp) / Number(character.maxHp) : 1;
+  document.querySelector(".hp-box").dataset.state = Number(character.hp) <= 0 ? "down" : hpRatio <= 0.25 ? "critical" : hpRatio <= 0.5 ? "bloodied" : "healthy";
+  document.querySelector("#subclassOptions").innerHTML = officialSubclasses
+    .filter(item => item.classIndex === character.classId)
+    .map(item => `<option value="${escapeHtml(item.name)}"></option>`).join("");
   renderIdentityDisplay();
   renderAsiBanner();
 }

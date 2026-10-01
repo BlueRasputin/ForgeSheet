@@ -96,8 +96,8 @@ function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
   `;
   toast.onclick = event => {
     const button = event.target.closest("[data-toast-action]");
-    if (button) actions[Number(button.dataset.toastAction)].run();
     if (button || event.target.closest(".app-toast-close")) hideToast();
+    if (button) actions[Number(button.dataset.toastAction)].run();
   };
   toast.classList.add("is-visible");
   clearTimeout(toastTimer);

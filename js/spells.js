@@ -12,16 +12,20 @@ function spellSummaryHtml(row) {
   const attack = /spell attack/i.test(text);
   const dice = text.match(/\b\d+d\d+\b/)?.[0];
   const cast = castingShorthand(row.custom ? row.custom.castingTime : detail.casting_time);
+  const concentration = row.custom ? /concentration/i.test(row.custom.duration || "") : detail.concentration;
   const parts = [
     level === 0 ? "Cantrip" : ordinal(level),
     cast,
     save ? `${save.slice(0, 3).toUpperCase()} save` : attack ? "Spell attack" : "No save",
-    dice || ""
+    dice || "",
+    concentration ? "C" : "",
+    detail.ritual ? "R" : ""
   ].filter(Boolean);
-  return parts.map(part => `<span title="${escapeHtml(CAST_SHORTHAND_TITLES[part] || "")}">${escapeHtml(part)}</span>`).join("");
+  return `<strong class="spell-print-name">${escapeHtml(spellDisplayName(row))}</strong>` +
+    parts.map(part => `<span title="${escapeHtml(CAST_SHORTHAND_TITLES[part] || "")}">${escapeHtml(part)}</span>`).join("");
 }
 
-const CAST_SHORTHAND_TITLES = { A: "Action", B: "Bonus action", R: "Reaction" };
+const CAST_SHORTHAND_TITLES = { A: "Action", B: "Bonus action", R: "Reaction", C: "Concentration" };
 
 function castingShorthand(time) {
   const text = String(time || "").toLowerCase();
@@ -98,8 +102,15 @@ function renderSpells() {
   const cls = currentClass();
   const ability = cls.spellAbility;
   const spellMod = ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
+  const knownCaster = cls.preparedFormula === "known";
   const preparedLimit = preparedLimitFor(cls);
-  const preparedUsed = preparedSpellCount();
+  const preparedUsed = knownCaster ? knownSpellCount() : preparedSpellCount();
+  document.querySelector("#preparedLabel").textContent = knownCaster ? "Known" : "Prepared";
+  document.querySelector("#spellRows").classList.toggle("known-caster", knownCaster);
+  const over = preparedUsed - preparedLimit;
+  const warning = document.querySelector("#preparedWarning");
+  warning.hidden = over <= 0;
+  warning.textContent = over > 0 ? `${over} ${knownCaster ? "known" : "prepared"} spell${over === 1 ? "" : "s"} over your limit of ${preparedLimit}.` : "";
   document.querySelector("#spellAbility").textContent = ability === "none" ? "-" : ability.toUpperCase();
   document.querySelector("#spellDc").textContent = ability === "none" ? "-" : 8 + proficiencyBonus() + spellMod;
   document.querySelector("#spellAttack").textContent = ability === "none" ? "-" : formatMod(proficiencyBonus() + spellMod);
@@ -153,6 +164,9 @@ function handleSpellCastClick(event) {
   if (!button) return;
   const row = spellRowForElement(button);
   if (!row || !spellRowHasSpell(row)) return;
+  const incoming = spellConcentrationLabel(row);
+  if (incoming && character.concentration && character.concentration !== incoming
+    && !confirm(`You're concentrating on ${character.concentration}. Casting ${incoming} ends it. Cast anyway?`)) return;
   const grantingItem = itemForSpellRow(row);
   if (grantingItem) {
     const uses = Number(grantingItem.grantUses || 0);
@@ -182,6 +196,8 @@ function handleSpellCastClick(event) {
   const concentration = spellConcentrationLabel(row);
   if (concentration) character.concentration = concentration;
   persistAndRender();
+  const left = max - used - 1;
+  showToast(`<span class="toast-label">Cast ${escapeHtml(spellDisplayName(row))}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${left} ${ordinal(castLevel)}-level slot${left === 1 ? "" : "s"} left${concentration ? ` · concentrating` : ""}</span>`);
 }
 
 function spellRowForElement(element) {
@@ -238,6 +254,14 @@ function renderSpellRows() {
       });
       const always = spellAlwaysPrepared(row);
       const grantingItem = itemForSpellRow(row);
+      const quick = node.querySelector(".quick-cast");
+      const quickState = quickCastState(row, level);
+      quick.style.visibility = quickState ? "visible" : "hidden";
+      if (quickState) {
+        quick.textContent = quickState.label;
+        quick.disabled = quickState.disabled;
+        quick.title = quickState.title;
+      }
       prepared.checked = always || (level > 0 && row.prepared && !grantingItem);
       prepared.disabled = level === 0 || always || Boolean(grantingItem);
       if (level === 0) prepared.closest("label").classList.add("is-disabled");
@@ -498,7 +522,7 @@ async function hydrateSpells() {
     const response = await fetch(`${API_BASE.replace("/api/2014", "")}/graphql`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: "{ spells(limit: 500) { index name level concentration casting_time range duration material components desc higher_level classes { index name } } }" })
+      body: JSON.stringify({ query: "{ spells(limit: 500) { index name level concentration ritual casting_time range duration material components desc higher_level classes { index name } } }" })
     });
     const payload = await response.json();
     const spells = payload?.data?.spells;
@@ -586,4 +610,32 @@ function preparedSpellCount() {
 
 function spellAlwaysPrepared(row) {
   return Boolean(row.index) && (character.autoSpells || []).includes(row.index);
+}
+
+function knownSpellCount() {
+  const always = new Set(character.autoSpells || []);
+  return character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !always.has(row.index) && !row.itemId).length;
+}
+
+function quickCastState(row, level) {
+  if (!spellRowHasSpell(row)) return null;
+  const grantingItem = itemForSpellRow(row);
+  if (grantingItem) {
+    const uses = Number(grantingItem.grantUses || 0);
+    const spent = uses && Number(grantingItem.grantUsed || 0) >= uses;
+    return { label: "Cast", disabled: Boolean(spent), title: spent ? "Recharges on a long rest" : `From ${grantingItem.name}` };
+  }
+  if (level === 0) return { label: "Cast", disabled: false, title: "Cantrip" };
+  const cls = currentClass();
+  const preparedCaster = ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula);
+  if (preparedCaster && !row.prepared && !spellAlwaysPrepared(row)) return { label: "Cast", disabled: true, title: "Prepare this spell to cast it" };
+  const slots = spellSlotsFor(cls, character.level);
+  const options = castLevelOptions(level, slots);
+  const selected = normalizeCastLevel(row, level, options);
+  const remaining = slotRemaining(selected, slots[selected - 1] || 0);
+  return {
+    label: `Cast ${ordinal(selected)}`,
+    disabled: remaining <= 0,
+    title: remaining > 0 ? `${remaining} ${ordinal(selected)}-level slot${remaining === 1 ? "" : "s"} left` : "No slots left at this level"
+  };
 }
