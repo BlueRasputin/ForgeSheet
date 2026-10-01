@@ -235,6 +235,48 @@ Phone: the tab bar and attacks come first and the tab bar stays pinned; saves an
 the panel (1.5–2 screens down). The browser pane's phone emulation renders at 714 CSS px, so
 exact phone numbers need a real device.
 
+## Round 3: 10-player trial (Matt DM + 9 players, new characters, shared encounter)
+
+Each player built a new character through a different path (level-1 + Level Up ×4, hand-typed
+scores + step jumping, start at 7 + checklist-only, abandon/duplicate, wizard abuse on phone,
+header-editor class/level edits, subclass switching, homebrew class from the wizard, text import)
+and ran the same 3-round encounter, logging clicks/scroll/seconds. 10 shared-storage tabs: no data
+loss. The pane's 9-tab cap blocked one tester until a slot was freed; Aabria tested the import
+parser offline instead.
+
+Fixed in 02aa939, 11de32e, b54981b, 11dbc9b (verified in the browser):
+- Phone layout was 714px wide on a 375px screen (main column sized to the tab row) — buttons and
+  every toast were off-screen; now 375px
+- Combat scrolling (5 reports, 600–2,100px per cast/hit): pinned combat strip with HP, damage/heal,
+  conditions, concentration; dying/concentration prompts float under it (no layout shift); toasts
+  stack; the header Conditions tile opens conditions. Re-measured: 0px to take a hit while 2,472px
+  deep in the spell list
+- Dead characters: healing at 3 failed saves refused with explicit Revive; Party shows Dead/Stable
+- Wizard: whole-number levels (1.5 made a 1.5d6 character), inputs show the value used, class
+  required (no longer pre-filled), Enter only advances from the name, ticks follow data, drafts
+  survive X with Start over, subclass picker under level, class skill picks from PHB lists, Review
+  shows final scores/HP/subclass/skills, species grants (languages, skills, training, Wood/High Elf,
+  Hill/Mountain Dwarf, Tiefling legacy), AC from gear incl. Unarmored Defense
+- Leveling: subclass picker in Level Up, spell picks for AT/EK/Profane Soul, ASI controls that change
+  scores, prepared limit respected, proficiency line, header level rejects >20 and rebuilds
+  features, class change swaps saves/training/HP/features, repeatable ASIs, exact checklist
+- Subclass extras: Battle Master dice, Hexblade training + Curse, AT Mage Hand, heavy/martial
+  training for domains/oaths/colleges; typed subclass names link to the catalog; granted spells no
+  longer delete the player's own copy on subclass switch; granted cantrips don't count
+- Spell rolls: flat bonuses and projectiles (Magic Missile 3d4+3, Scorching Ray per ray, Eldritch
+  Blast per beam), cantrip scaling everywhere, spell attack rolls, Apply healing, cast Undo;
+  conditions/exhaustion impose disadvantage; generated actions stay current; Monk unarmed strike,
+  Rogue Sneak Attack; 15 missing catalog spells (renames + local summaries)
+- Rest Undo persists in the Rest panel; honest short-rest wording; equip re-renders AC
+- Custom classes: no input wipe, live preview, edit existing, saves/training fields, merge-save across
+  tabs, CSV commas; Import: any-class levels, alignment, skills/saves lines, weapon lines, max HP,
+  whole-word spells; Party: grid, initiative, Down/Concentrating tiles, switching never re-saves;
+  DM item tools refresh; Rules focus/ranking/Combat; in-page Delete/Reset confirms
+
+Still open: searchable spell picker (spells take ~3 interactions each), initiative tracker / enemy HP
+/ round counter for the DM, Arcane Recovery slot helper, school limits for Arcane Trickster and
+Eldritch Knight, starting equipment packs, per-tab DM role.
+
 ## Still to do
 
 - Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley
