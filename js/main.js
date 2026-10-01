@@ -125,6 +125,7 @@ function bindEvents() {
   document.querySelector("#deathSaveTracker").addEventListener("click", handleDeathSaveClick);
   document.querySelector("#rollInitiative").addEventListener("click", rollInitiativeCheck);
   document.querySelector("#acHint").addEventListener("click", () => {
+    character.acAuto = true;
     character.ac = calculatedArmorClass();
     persistAndRender();
   });
@@ -148,9 +149,24 @@ function bindEvents() {
   document.querySelector("#identityDisplay").addEventListener("dblclick", toggleIdentityLock);
   document.querySelector("#backgroundUpload").addEventListener("click", handleBackgroundButton);
   document.querySelector("#backgroundFile").addEventListener("change", handleBackgroundFile);
-  document.querySelector("#applyDamageButton").addEventListener("click", applyDamage);
-  document.querySelector("#applyHealButton").addEventListener("click", applyHeal);
+  document.querySelector("#applyDamageButton").addEventListener("click", () => applyDamage());
+  document.querySelector("#applyHealButton").addEventListener("click", () => applyHeal());
   document.querySelector("#concentrationPrompt").addEventListener("click", handleConcentrationPromptClick);
+  document.querySelector("#quickVitals").addEventListener("click", handleQuickVitalsClick);
+  document.querySelector("#quickVitals").addEventListener("keydown", event => {
+    if (event.key === "Enter" && event.target.id === "quickAmount") {
+      event.preventDefault();
+      applyDamage(event.target);
+    }
+  });
+  const conditionsTile = document.querySelector("#conditionsTile");
+  conditionsTile.addEventListener("click", () => goToTarget("#conditionGrid"));
+  conditionsTile.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      goToTarget("#conditionGrid");
+    }
+  });
   document.querySelector("#dyingPrompt").addEventListener("click", event => {
     if (event.target.closest("[data-dying-roll]")) rollDeathSave();
   });
@@ -189,18 +205,16 @@ function bindEvents() {
   document.querySelector("#resetCharacter").addEventListener("click", resetCharacter);
   document.querySelector("#newCharacterButton").addEventListener("click", openCreateDialog);
   document.querySelector("#createBack").addEventListener("click", createStepBack);
-  document.querySelector("#createDialog").addEventListener("close", () => {
-    creationDraft = null;
-  });
   document.querySelector("#levelInput").addEventListener("change", event => applyLevelChange(event.target.value));
   document.querySelector("#createNext").addEventListener("click", createStepNext);
   document.querySelector("#createStepBody").addEventListener("input", handleCreateFieldInput);
+  document.querySelector("#createStepBody").addEventListener("change", handleCreateFieldChange);
   document.querySelector("#createDialog").addEventListener("click", handleCreateStepClick);
   document.querySelector("#createDialog").addEventListener("keydown", event => {
-    if (event.key === "Enter" && event.target.tagName === "INPUT") {
-      event.preventDefault();
-      createStepNext();
-    }
+    if (event.key !== "Enter" || event.target.tagName !== "INPUT") return;
+    event.preventDefault();
+    if (event.target.dataset.createField === "name") createStepNext();
+    else event.target.blur();
   });
   document.querySelector("#duplicateCharacterButton").addEventListener("click", duplicateCharacter);
   document.querySelector("#deleteCharacterButton").addEventListener("click", deleteCharacter);

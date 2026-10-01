@@ -72,40 +72,51 @@ function structuredCloneSafe(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-let toastTimer = null;
-
+// Toasts stack (newest at the bottom, max 3) so a result or an Undo isn't replaced by the next toast.
 function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
-  let toast = document.querySelector("#appToast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "appToast";
-    toast.className = "app-toast";
-    toast.setAttribute("role", "status");
-    toast.setAttribute("aria-live", "polite");
-    document.body.appendChild(toast);
-    toast.addEventListener("mouseenter", () => clearTimeout(toastTimer));
-    toast.addEventListener("mouseleave", () => {
-      toastTimer = setTimeout(hideToast, 2500);
-    });
+  let stack = document.querySelector("#toastStack");
+  if (!stack) {
+    stack = document.createElement("div");
+    stack.id = "toastStack";
+    stack.className = "toast-stack";
+    stack.setAttribute("role", "status");
+    stack.setAttribute("aria-live", "polite");
+    document.body.appendChild(stack);
   }
+  const toast = document.createElement("div");
+  toast.className = "app-toast";
   toast.dataset.tone = tone;
   toast.innerHTML = `
     <div class="app-toast-body">${html}</div>
     ${actions.map((action, index) => `<button type="button" class="secondary" data-toast-action="${index}">${escapeHtml(action.label)}</button>`).join("")}
     <button type="button" class="ghost app-toast-close" aria-label="Dismiss">×</button>
   `;
-  toast.onclick = event => {
-    const button = event.target.closest("[data-toast-action]");
-    if (button || event.target.closest(".app-toast-close")) hideToast();
-    if (button) actions[Number(button.dataset.toastAction)].run();
+  let timer = null;
+  const close = () => {
+    clearTimeout(timer);
+    toast.classList.remove("is-visible");
+    setTimeout(() => toast.remove(), 200);
   };
-  toast.classList.add("is-visible");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, duration);
+  const arm = ms => {
+    clearTimeout(timer);
+    timer = setTimeout(close, ms);
+  };
+  toast.addEventListener("mouseenter", () => clearTimeout(timer));
+  toast.addEventListener("mouseleave", () => arm(2500));
+  toast.addEventListener("click", event => {
+    const button = event.target.closest("[data-toast-action]");
+    if (button || event.target.closest(".app-toast-close")) close();
+    if (button) actions[Number(button.dataset.toastAction)].run();
+  });
+  stack.appendChild(toast);
+  while (stack.children.length > 3) stack.firstElementChild.remove();
+  requestAnimationFrame(() => toast.classList.add("is-visible"));
+  arm(duration);
+  return toast;
 }
 
 function hideToast() {
-  document.querySelector("#appToast")?.classList.remove("is-visible");
+  document.querySelectorAll("#toastStack .app-toast").forEach(toast => toast.remove());
 }
 
 // "Oath of Devotion", "Life Domain", "Gloomstalker" and "gloom-stalker" all resolve to the same table key.

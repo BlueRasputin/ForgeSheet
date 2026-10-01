@@ -55,6 +55,7 @@ function ensureClassResources() {
 
 function renderPlayTools() {
   ensureClassResources();
+  renderQuickVitals();
   renderCombatDashboard();
   renderDiceRoller();
   renderRestPreview();
@@ -139,8 +140,8 @@ function handleConcentrationPromptClick(event) {
   }
 }
 
-function applyDamage() {
-  const amount = clamp(Number(document.querySelector("#damageAmount").value), 0, 999);
+function applyDamage(input = document.querySelector("#damageAmount")) {
+  const amount = clamp(Math.round(Number(input.value)), 0, 999);
   if (!amount) return;
   const absorbed = Math.min(Number(character.tempHp || 0), amount);
   const toHp = amount - absorbed;
@@ -160,7 +161,7 @@ function applyDamage() {
     character.concentration = "";
   }
   pendingConcentrationDc = character.concentration ? Math.max(10, Math.floor(amount / 2)) : null;
-  document.querySelector("#damageAmount").value = "";
+  input.value = "";
   persistAndRender();
   if (note) showToast(`<span class="toast-label">Took ${amount} damage</span><span>${escapeHtml(note)}</span>`, { tone: "fumble", duration: 9000 });
 }
@@ -169,17 +170,63 @@ function isDying() {
   return Number(character.hp) <= 0 && character.deathSaveFailures < 3 && character.deathSaveSuccesses < 3;
 }
 
-function applyHeal() {
-  const amount = clamp(Number(document.querySelector("#damageAmount").value), 0, 999);
+function isDead() {
+  return Number(character.hp) <= 0 && character.deathSaveFailures >= 3;
+}
+
+function applyHeal(input = document.querySelector("#damageAmount")) {
+  const amount = clamp(Math.round(Number(input.value)), 0, 999);
   if (!amount) return;
-  const wasDown = Number(character.hp || 0) === 0;
-  character.hp = Math.min(Number(character.maxHp || 0), Number(character.hp || 0) + amount);
-  if (wasDown) {
-    character.deathSaveSuccesses = 0;
-    character.deathSaveFailures = 0;
+  if (isDead()) {
+    showToast(`<span class="toast-label">${escapeHtml(character.name || "This character")} is dead</span><span>Ordinary healing can't help. Revivify, Raise Dead and similar magic bring a character back.</span>`, {
+      tone: "fumble",
+      actions: [{ label: "Revive at 1 HP", run: reviveCharacter }],
+      duration: 12000
+    });
+    return;
   }
-  document.querySelector("#damageAmount").value = "";
+  character.hp = Math.min(Number(character.maxHp || 0), Number(character.hp || 0) + amount);
+  input.value = "";
   persistAndRender();
+  showToast(`<span class="toast-label">Healed ${amount}</span><span>${character.hp}/${character.maxHp} HP</span>`, { tone: "crit" });
+}
+
+function reviveCharacter() {
+  character.deathSaveFailures = 0;
+  character.deathSaveSuccesses = 0;
+  character.hp = 1;
+  persistAndRender();
+  showToast(`<span class="toast-label">${escapeHtml(character.name || "Character")} returns at 1 HP</span>`, { tone: "crit" });
+}
+
+function renderQuickVitals() {
+  const root = document.querySelector("#quickVitals");
+  const temp = Number(character.tempHp || 0);
+  const ratio = character.maxHp ? Number(character.hp) / Number(character.maxHp) : 1;
+  const state = isDead() ? "dead" : Number(character.hp) <= 0 ? "down" : ratio <= 0.25 ? "critical" : ratio <= 0.5 ? "bloodied" : "healthy";
+  const conditions = (character.conditions || []).filter(condition => condition !== "Concentrating");
+  const typed = root.querySelector("#quickAmount")?.value || "";
+  root.dataset.state = state;
+  root.innerHTML = `
+    <span class="quick-hp"><b>${character.hp}</b>/${character.maxHp} HP${temp ? ` <em>+${temp}</em>` : ""}</span>
+    <span class="quick-ac">AC ${character.ac}</span>
+    <span class="quick-hp-controls">
+      <input id="quickAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Damage or healing amount" value="${escapeHtml(typed)}">
+      <button type="button" class="damage" data-quick="damage">Damage</button>
+      <button type="button" class="heal" data-quick="heal">Heal</button>
+    </span>
+    <button type="button" class="ghost quick-conditions" data-quick="conditions" title="Open conditions">${conditions.length ? escapeHtml(conditions.join(", ")) : "No conditions"}</button>
+    ${character.concentration ? `<span class="quick-concentration">◉ ${escapeHtml(character.concentration)}</span>` : ""}
+  `;
+}
+
+function handleQuickVitalsClick(event) {
+  const button = event.target.closest("[data-quick]");
+  if (!button) return;
+  const input = document.querySelector("#quickAmount");
+  if (button.dataset.quick === "damage") applyDamage(input);
+  if (button.dataset.quick === "heal") applyHeal(input);
+  if (button.dataset.quick === "conditions") goToTarget("#conditionGrid");
 }
 
 function gainInspiration() {

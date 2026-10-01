@@ -147,7 +147,7 @@
                 <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
                 <button type="button" id="acHint" class="ac-hint" hidden></button>
               </div>
-              <div class="stat-tile conditions-tile">
+              <div class="stat-tile conditions-tile" id="conditionsTile" role="button" tabindex="0" title="Open conditions">
                 <span><span class="label-long">Conditions</span><span class="label-short">Cond.</span></span>
                 <p id="conditionsMini">None</p>
               </div>
@@ -166,8 +166,7 @@
               </div>
             </div>
           </div>
-          <div id="concentrationPrompt" class="concentration-prompt"></div>
-          <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
+
         </section>
 
         <div class="sheet-layout">
@@ -206,6 +205,8 @@
           </section>
 
           <div class="sheet-main">
+            <div class="sticky-head">
+            <div id="quickVitals" class="quick-vitals" aria-label="Quick hit points"></div>
             <nav class="tabs" aria-label="Character sections">
               <button class="tab active" data-tab="actions">Actions</button>
               <button class="tab" data-tab="spells">Spells</button>
@@ -217,6 +218,11 @@
               <button class="tab" data-tab="party">Party</button>
               <button class="tab" data-tab="campaign">Campaign</button>
             </nav>
+            <div class="sticky-alerts">
+              <div id="concentrationPrompt" class="concentration-prompt"></div>
+              <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
+            </div>
+            </div>
 
             <div class="deck-shell">
             <div id="panelDeck" class="panel-deck">

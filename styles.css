@@ -3932,3 +3932,184 @@ body[data-theme="dark"] .tab.active {
 .action-row .action-buttons {
   order: 6;
 }
+
+/* ===== Combat strip: HP, damage/heal and conditions stay pinned with the tabs ===== */
+.sheet-main .tabs {
+  position: static;
+}
+
+.sticky-head {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.sticky-head .tabs {
+  margin-top: 0;
+}
+
+.quick-vitals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+}
+
+.quick-hp b {
+  font-size: 1.15rem;
+}
+
+.quick-vitals[data-state="bloodied"] .quick-hp b {
+  color: #b7791f;
+}
+
+.quick-vitals[data-state="critical"] .quick-hp b,
+.quick-vitals[data-state="down"] .quick-hp b,
+.quick-vitals[data-state="dead"] .quick-hp b {
+  color: var(--accent);
+}
+
+.quick-hp em {
+  font-style: normal;
+  color: var(--muted);
+}
+
+.quick-hp-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.quick-hp-controls input {
+  width: 4.5rem;
+  min-height: 28px;
+  padding: 2px 6px;
+  text-align: center;
+}
+
+.quick-hp-controls button,
+.quick-conditions {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+
+.quick-hp-controls .damage {
+  border-color: var(--accent);
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+}
+
+.quick-hp-controls .heal {
+  border-color: var(--green);
+  color: color-mix(in srgb, var(--green) 62%, var(--ink));
+}
+
+.quick-concentration {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+/* Dying and concentration prompts float under the strip instead of pushing the page down. */
+.sticky-alerts {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 6px;
+  padding-top: 6px;
+  pointer-events: none;
+}
+
+.sticky-alerts > :not(:empty) {
+  pointer-events: auto;
+  box-shadow: var(--shadow);
+  background: var(--panel);
+}
+
+.sticky-alerts > :empty {
+  display: none;
+}
+
+.conditions-tile {
+  cursor: pointer;
+}
+
+/* ===== Toast stack ===== */
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 1000;
+  display: grid;
+  gap: 8px;
+  width: min(460px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast-stack .app-toast {
+  position: static;
+  max-width: none;
+  pointer-events: none;
+}
+
+.toast-stack .app-toast.is-visible {
+  pointer-events: auto;
+}
+
+/* ===== Phones: the main column fills the screen instead of growing to the tab row's width ===== */
+@media screen and (max-width: 980px) {
+  .sheet-layout {
+    align-items: stretch;
+  }
+
+  .sheet-main {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sticky-head {
+    min-width: 0;
+  }
+}
+
+.create-title-row {
+  padding-right: 52px;
+}
+
+.create-subtitle {
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
+}
+
+.create-skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.create-skill-chips .condition-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.create-start-over {
+  margin-top: auto;
+  font-size: 0.8rem;
+}
+
+.create-review-stats em {
+  color: var(--green);
+  font-style: normal;
+  font-size: 0.8em;
+}

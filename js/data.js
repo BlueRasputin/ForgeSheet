@@ -115,8 +115,10 @@ const ITEM_CATALOG = [
 
 const SPECIES_PRESETS = [
   ["Dragonborn", 30, "Draconic ancestry grants a breath weapon and resistance to its damage type.", "🐲", { str: 2, cha: 1 }],
-  ["Dwarf", 25, "Darkvision, advantage against poison, and tool proficiency.", "⚒️", { con: 2 }],
-  ["Elf", 30, "Darkvision, keen senses, fey ancestry, and trance instead of sleep.", "🌙", { dex: 2 }],
+  ["Hill Dwarf", 25, "Darkvision, dwarven resilience against poison, and +1 HP per level (Dwarven Toughness).", "⚒️", { con: 2, wis: 1 }],
+  ["Mountain Dwarf", 25, "Darkvision, dwarven resilience, and light and medium armor training.", "⛰️", { str: 2, con: 2 }],
+  ["High Elf", 30, "Darkvision, keen senses, fey ancestry, trance, elf weapon training, and one wizard cantrip.", "🌙", { dex: 2, int: 1 }],
+  ["Wood Elf", 35, "Darkvision, keen senses, fey ancestry, trance, elf weapon training, and Mask of the Wild.", "🌲", { dex: 2, wis: 1 }],
   ["Gnome", 25, "Darkvision and advantage on mental saves against magic.", "⚙️", { int: 2 }],
   ["Half-Elf", 30, "Darkvision, fey ancestry, and two extra skill proficiencies. +1 to two other abilities of your choice.", "🌓", { cha: 2 }],
   ["Half-Orc", 30, "Darkvision, relentless endurance, and savage critical hits.", "💪", { str: 2, con: 1 }],
@@ -159,6 +161,47 @@ const CLASS_ABILITY_PRIORITY = {
   sorcerer: ["cha", "con", "dex", "wis", "int", "str"],
   warlock: ["cha", "con", "dex", "wis", "int", "str"],
   wizard: ["int", "con", "dex", "wis", "cha", "str"]
+};
+
+// What each species grants beyond ability scores (2014 PHB).
+const DWARF_GRANTS = { languages: ["Common", "Dwarvish"], weapons: ["Battleaxe, handaxe, light hammer, warhammer"], tools: ["Smith's tools, brewer's supplies, or mason's tools (choose one)"] };
+const ELF_GRANTS = { languages: ["Common", "Elvish"], skills: ["perception"], weapons: ["Longsword, shortsword, shortbow, longbow"] };
+const SPECIES_GRANTS = {
+  Dragonborn: { languages: ["Common", "Draconic"] },
+  Dwarf: DWARF_GRANTS,
+  "Hill Dwarf": { ...DWARF_GRANTS, hpPerLevel: 1 },
+  "Mountain Dwarf": { ...DWARF_GRANTS, armor: ["Light armor, medium armor"] },
+  Elf: { languages: ["Common", "Elvish"], skills: ["perception"] },
+  "High Elf": ELF_GRANTS,
+  "Wood Elf": ELF_GRANTS,
+  Gnome: { languages: ["Common", "Gnomish"] },
+  "Half-Elf": { languages: ["Common", "Elvish", "one extra language"] },
+  "Half-Orc": { languages: ["Common", "Orc"], skills: ["intimidation"] },
+  Halfling: { languages: ["Common", "Halfling"] },
+  Human: { languages: ["Common", "one extra language"] },
+  Tiefling: {
+    languages: ["Common", "Infernal"],
+    cantrips: ["thaumaturgy"],
+    feature: "Infernal Legacy: Thaumaturgy; Hellish Rebuke as a 2nd-level spell once per long rest from 3rd level; Darkness once per long rest from 5th level (CHA)."
+  }
+};
+
+// Skills each class may choose from at 1st level (2014 PHB); "any" for bards.
+const CLASS_SKILL_CHOICES = {
+  artificer: ["arcana", "history", "investigation", "medicine", "nature", "perception", "sleightOfHand"],
+  barbarian: ["animalHandling", "athletics", "intimidation", "nature", "perception", "survival"],
+  bard: "any",
+  bloodhunter: ["acrobatics", "arcana", "athletics", "history", "insight", "investigation", "religion", "survival"],
+  cleric: ["history", "insight", "medicine", "persuasion", "religion"],
+  druid: ["arcana", "animalHandling", "insight", "medicine", "nature", "perception", "religion", "survival"],
+  fighter: ["acrobatics", "animalHandling", "athletics", "history", "insight", "intimidation", "perception", "survival"],
+  monk: ["acrobatics", "athletics", "history", "insight", "religion", "stealth"],
+  paladin: ["athletics", "insight", "intimidation", "medicine", "persuasion", "religion"],
+  ranger: ["animalHandling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"],
+  rogue: ["acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleightOfHand", "stealth"],
+  sorcerer: ["arcana", "deception", "insight", "intimidation", "persuasion", "religion"],
+  warlock: ["arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"],
+  wizard: ["arcana", "history", "insight", "investigation", "medicine", "religion"]
 };
 
 // Level at which each class picks its subclass.

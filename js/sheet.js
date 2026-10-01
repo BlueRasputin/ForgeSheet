@@ -18,6 +18,10 @@ function renderHeader() {
   document.querySelector("#profBonus").textContent = formatMod(proficiencyBonus());
   document.querySelector("#initiativeValue").textContent = formatMod(initiativeBonus());
   const armorClass = calculatedArmorClass();
+  if (character.acAuto && Number(character.ac) !== armorClass) {
+    character.ac = armorClass;
+    setValue("acInput", armorClass);
+  }
   const acHint = document.querySelector("#acHint");
   acHint.hidden = armorClass === Number(character.ac);
   acHint.textContent = `Gear: ${armorClass}`;
@@ -64,12 +68,13 @@ function toggleIdentityLock() {
 }
 
 function renderAsiBanner() {
-  const banner = document.querySelector("#asiBanner");
-  const show = asiLevelsFor(currentClass()).has(character.level) && character.asiAcknowledgedLevel !== character.level;
-  banner.classList.toggle("visible", show);
-  banner.textContent = show
-    ? `Level ${character.level}: Ability Score Improvement or feat available — record it in the Builder tab.`
-    : "";
+  const due = asiLevelsFor(currentClass()).has(character.level) && character.asiAcknowledgedLevel !== character.level;
+  if (!due) return;
+  character.asiAcknowledgedLevel = character.level;
+  showToast(`<span class="toast-label">Level ${character.level}: Ability Score Improvement</span><span>Raise one score by 2 or two by 1, or take a feat.</span>`, {
+    actions: [{ label: "Open checklist", run: () => document.querySelector("#checklistDialog").showModal() }],
+    duration: 10000
+  });
 }
 
 function renderSheet() {
@@ -118,6 +123,7 @@ function handleInput(event) {
     featuresInput: "features", inventoryInput: "inventory", notesInput: "notes"
   };
   if (map[id]) {
+    if (id === "acInput") character.acAuto = false;
     character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), map[id] === "hp" ? 0 : 1, map[id] === "level" ? 20 : 999) : value;
     if (id === "classSelect") {
       classBuilderDraft = null;

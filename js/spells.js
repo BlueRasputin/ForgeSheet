@@ -310,7 +310,7 @@ function renderSpellRows() {
       if (always) {
         const label = prepared.closest("label");
         label.classList.add("is-always");
-        label.lastChild.textContent = " Always prepared";
+        label.lastChild.textContent = row.racial ? ` From ${character.species || "species"}` : " Always prepared";
         remove.style.display = "none";
       }
       if (grantingItem) {
@@ -657,7 +657,7 @@ function preparedSpellCount() {
 }
 
 function spellAlwaysPrepared(row) {
-  return Boolean(row.index) && (character.autoSpells || []).includes(row.index);
+  return Boolean(row.index) && (Boolean(row.racial) || (character.autoSpells || []).includes(row.index));
 }
 
 function knownSpellCount() {

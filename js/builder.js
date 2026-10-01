@@ -58,6 +58,8 @@ function goToTarget(target) {
   }
   const element = document.querySelector(target);
   if (!element) return;
+  const panel = element.closest(".panel");
+  if (panel && !panel.classList.contains("active") && panel.id) activateTab(panel.id);
   element.scrollIntoView({ behavior: "smooth", block: "center" });
   element.classList.remove("flash-target");
   void element.offsetWidth;
@@ -292,29 +294,51 @@ function spellChoicesForLevelChoice(kind) {
 let creationDraft = null;
 const CREATE_STEP_LABELS = ["Identity", "Class", "Background", "Abilities", "Review"];
 
-function openCreateDialog() {
-  ensureCharacterInLibrary();
-  creationDraft = {
+function blankCreationDraft() {
+  return {
     step: 0,
     name: "",
     species: "",
-    classId: currentClass().id,
+    classId: "",
     background: "",
+    backgroundChosen: false,
     level: 1,
     subclass: "",
+    skills: [],
     abilities: Object.fromEntries(ABILITIES.map(([id]) => [id, 10]))
   };
+}
+
+// A half-built character survives closing the wizard; "Start over" clears it.
+function openCreateDialog() {
+  ensureCharacterInLibrary();
+  if (!creationDraft) creationDraft = blankCreationDraft();
   renderCreateStep();
   document.querySelector("#createDialog").showModal();
+}
+
+function draftClass() {
+  return getClasses()[creationDraft.classId] || null;
+}
+
+function createStepDone(index) {
+  const draft = creationDraft;
+  return [
+    Boolean(draft.name.trim() || draft.species),
+    Boolean(draft.classId),
+    draft.backgroundChosen,
+    ABILITIES.some(([id]) => Number(draft.abilities[id]) !== 10),
+    false
+  ][index];
 }
 
 function renderCreateStep() {
   const draft = creationDraft;
   document.querySelector("#createSteps").innerHTML = CREATE_STEP_LABELS.map((label, index) => `
-    <button type="button" class="create-rail-step ${index === draft.step ? "is-active" : ""}${index < draft.step ? " is-complete" : ""}" data-create-step="${index}">
+    <button type="button" class="create-rail-step ${index === draft.step ? "is-active" : ""}${createStepDone(index) ? " is-complete" : ""}" data-create-step="${index}">
       <span>${index + 1}</span>${label}
     </button>
-  `).join("");
+  `).join("") + `<button type="button" class="ghost create-start-over" data-create-reset>Start over</button>`;
   document.querySelector("#createBack").disabled = draft.step === 0;
   document.querySelector("#createBack").style.visibility = draft.step === 0 ? "hidden" : "";
   document.querySelector("#createNext").textContent = draft.step === CREATE_STEP_LABELS.length - 1 ? "Create Character" : "Next";
@@ -327,7 +351,7 @@ function renderCreateIdentity() {
   return `
     <h3 class="create-screen-title">Who are you?</h3>
     <label class="create-name">Character Name
-      <input data-create-field="name" value="${escapeHtml(creationDraft.name)}" autocomplete="off" placeholder="Name your hero...">
+      <input data-create-field="name" value="${escapeHtml(creationDraft.name)}" autocomplete="off" maxlength="60" placeholder="Name your hero...">
     </label>
     <div class="create-option-grid">
       ${SPECIES_PRESETS.map(([name, speed, , glyph]) => `
@@ -343,16 +367,17 @@ function renderCreateIdentity() {
 }
 
 function renderCreateClass() {
-  const cls = getClasses()[creationDraft.classId] || currentClass();
-  const saves = CLASS_SAVES[cls.id];
-  const casting = cls.casterType === "none" ? "Martial — no spell slots" : `${(cls.spellAbility || "").toUpperCase()} spellcasting`;
+  const cls = draftClass();
+  const saves = cls ? CLASS_SAVES[cls.id] : null;
+  const casting = cls ? (cls.casterType === "none" ? "Martial — no spell slots" : `${(cls.spellAbility || "").toUpperCase()} spellcasting`) : "";
   return `
     <div class="create-title-row">
       <h3 class="create-screen-title">Choose your class</h3>
       <label class="create-level">Starting Level
-        <input type="number" min="1" max="20" data-create-field="level" value="${creationDraft.level}">
+        <input type="number" min="1" max="20" step="1" inputmode="numeric" data-create-field="level" value="${creationDraft.level}">
       </label>
     </div>
+    <div id="createSubclassSlot">${renderCreateLevelExtras()}</div>
     <div class="create-option-grid">
       ${Object.values(getClasses()).map(item => `
         <button type="button" class="create-option-card ${item.id === creationDraft.classId ? "is-selected" : ""}" data-create-option="classId:${item.id}">
@@ -367,10 +392,14 @@ function renderCreateClass() {
         <span>Forge your own</span>
       </button>
     </div>
-    <p class="create-detail"><strong>${escapeHtml(cls.name)}</strong> — d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}</p>
-    <div id="createSubclassSlot">${renderCreateSubclassPicker(cls)}</div>
-    ${creationDraft.level > 1 ? `<p class="create-detail">Starting at level ${creationDraft.level}: after creation a checklist shows everything to fill in for your level.</p>` : ""}
+    <p class="create-detail">${cls ? `<strong>${escapeHtml(cls.name)}</strong> — d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}` : "Pick a class to continue."}</p>
   `;
+}
+
+function renderCreateLevelExtras() {
+  const cls = draftClass();
+  const note = creationDraft.level > 1 ? `<p class="create-detail">Starting at level ${creationDraft.level}: after creation a checklist shows everything to fill in for your level.</p>` : "";
+  return (cls ? renderCreateSubclassPicker(cls) : "") + note;
 }
 
 function renderCreateSubclassPicker(cls) {
@@ -388,6 +417,34 @@ function renderCreateSubclassPicker(cls) {
   `;
 }
 
+function backgroundSkills(background) {
+  const preset = BACKGROUND_PRESETS.find(([name]) => name === background);
+  return preset ? preset[1].split(",").map(name => SKILLS.find(([, label]) => label.toLowerCase() === name.trim().toLowerCase())?.[0]).filter(Boolean) : [];
+}
+
+function classSkillPicks(cls) {
+  return CLASS_PROFICIENCIES[cls?.id]?.[3] || 2;
+}
+
+function renderCreateSkillPicker() {
+  const cls = draftClass();
+  if (!cls) return `<p class="create-detail">Pick a class first to choose its skills.</p>`;
+  const fromBackground = new Set(backgroundSkills(creationDraft.background));
+  const allowed = CLASS_SKILL_CHOICES[cls.id] === "any" || !CLASS_SKILL_CHOICES[cls.id] ? SKILLS.map(([id]) => id) : CLASS_SKILL_CHOICES[cls.id];
+  const picks = classSkillPicks(cls);
+  return `
+    <h4 class="create-subtitle">${escapeHtml(cls.name)} skills — choose ${picks} (${creationDraft.skills.length}/${picks})</h4>
+    <div class="create-skill-chips">
+      ${allowed.map(id => {
+        const label = SKILLS.find(([skill]) => skill === id)?.[1] || id;
+        const owned = fromBackground.has(id);
+        const chosen = creationDraft.skills.includes(id);
+        return `<button type="button" class="condition-chip ${chosen || owned ? "active" : ""}" data-create-skill="${id}" ${owned ? "disabled title=\"From your background\"" : ""}>${escapeHtml(label)}${owned ? " ✓" : ""}</button>`;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderCreateBackground() {
   const preset = BACKGROUND_PRESETS.find(([name]) => name === creationDraft.background);
   return `
@@ -400,74 +457,106 @@ function renderCreateBackground() {
           <span>${skills}</span>
         </button>
       `).join("")}
-      <button type="button" class="create-option-card ${creationDraft.background === "" ? "is-selected" : ""}" data-create-option="background:">
+      <button type="button" class="create-option-card ${creationDraft.backgroundChosen && creationDraft.background === "" ? "is-selected" : ""}" data-create-option="background:">
         <span class="create-glyph">❔</span>
         <strong>Skip for now</strong>
         <span>Decide later</span>
       </button>
     </div>
     <p class="create-detail">${preset ? `<strong>${preset[0]}</strong> — Skills: ${preset[1]} · ${preset[2]} · Feature: ${preset[3]}` : "A preset grants its skill proficiencies and background feature automatically."}</p>
+    ${renderCreateSkillPicker()}
   `;
 }
 
+function draftAbilitiesWithBonus() {
+  const bonus = SPECIES_PRESETS.find(([name]) => name === creationDraft.species)?.[4] || {};
+  return Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(creationDraft.abilities[id] || 10) + (bonus[id] || 0), 1, 30)]));
+}
+
 function renderCreateAbilities() {
+  const cls = draftClass();
   return `
     <h3 class="create-screen-title">Assign ability scores</h3>
     <div class="create-ability-grid">
       ${ABILITIES.map(([id, label]) => `
         <div class="create-ability-card">
           <strong>${label}</strong>
-          <input type="number" min="1" max="30" data-create-ability="${id}" value="${creationDraft.abilities[id]}">
+          <input type="number" min="1" max="30" step="1" inputmode="numeric" data-create-ability="${id}" value="${creationDraft.abilities[id]}">
           <span class="ability-mod">${formatMod(Math.floor((creationDraft.abilities[id] - 10) / 2))}</span>
         </div>
       `).join("")}
     </div>
-    <button type="button" class="secondary" data-create-standard>Use Standard Array for ${escapeHtml((getClasses()[creationDraft.classId] || currentClass()).name)}</button>
-    <p class="create-detail">Puts 15, 14, 13, 12, 10, 8 into the abilities your class leans on most. ${speciesBonusText(creationDraft.species) ? `${escapeHtml(creationDraft.species)} bonuses (${speciesBonusText(creationDraft.species)}) are added when you create the character.` : ""}</p>
+    <button type="button" class="secondary" data-create-standard>Use Standard Array${cls ? ` for ${escapeHtml(cls.name)}` : ""}</button>
+    <p class="create-detail">Puts 15, 14, 13, 12, 10, 8 into the abilities your class leans on most. ${speciesBonusText(creationDraft.species) ? `${escapeHtml(creationDraft.species)} bonuses (${speciesBonusText(creationDraft.species)}) are added on top.` : ""}</p>
   `;
 }
 
 function renderCreateReview() {
-  const cls = getClasses()[creationDraft.classId] || currentClass();
+  const cls = draftClass();
+  if (!cls) return `<h3 class="create-screen-title">Almost there</h3><p class="create-detail">Choose a class before creating your character.</p>`;
   const speciesRow = SPECIES_PRESETS.find(([name]) => name === creationDraft.species);
-  const conMod = Math.floor((Number(creationDraft.abilities.con || 10) - 10) / 2);
-  const hp = averageHpFor(cls, creationDraft.level, conMod);
+  const abilities = draftAbilitiesWithBonus();
+  const bonus = speciesRow?.[4] || {};
+  const conMod = Math.floor((abilities.con - 10) / 2);
+  const hp = averageHpFor(cls, creationDraft.level, conMod) + speciesHpPerLevel(creationDraft.species) * creationDraft.level;
+  const subclass = officialSubclasses.find(item => item.index === creationDraft.subclass);
+  const skills = [...new Set([...backgroundSkills(creationDraft.background), ...creationDraft.skills, ...(SPECIES_GRANTS[creationDraft.species]?.skills || [])])]
+    .map(id => SKILLS.find(([skill]) => skill === id)?.[1]).filter(Boolean);
   return `
     <h3 class="create-screen-title">Ready for adventure</h3>
     <div class="create-review-hero">
       <span class="create-glyph">${speciesRow ? speciesRow[3] : ""}${CLASS_GLYPHS[cls.id] || "✨"}</span>
       <strong>${escapeHtml(creationDraft.name.trim() || "New Character")}</strong>
-      <span>${escapeHtml([creationDraft.species, cls.name].filter(Boolean).join(" "))} · ${escapeHtml(creationDraft.background || "No background")} · Level ${creationDraft.level}</span>
+      <span>${escapeHtml([creationDraft.species, cls.name, subclass ? `(${subclass.name})` : ""].filter(Boolean).join(" "))} · ${escapeHtml(creationDraft.background || "No background")} · Level ${creationDraft.level}</span>
     </div>
     <div class="create-review-stats">
-      ${ABILITIES.map(([id, label]) => `<span><strong>${id.toUpperCase()}</strong> ${creationDraft.abilities[id]} (${formatMod(Math.floor((creationDraft.abilities[id] - 10) / 2))})</span>`).join("")}
+      ${ABILITIES.map(([id]) => `<span><strong>${id.toUpperCase()}</strong> ${abilities[id]} (${formatMod(Math.floor((abilities[id] - 10) / 2))})${bonus[id] ? ` <em>+${bonus[id]}</em>` : ""}</span>`).join("")}
       <span><strong>HP</strong> ${hp}</span>
       <span><strong>Hit Dice</strong> ${creationDraft.level}d${cls.hitDie}</span>
     </div>
-    <p class="create-detail">Your current sheet stays saved in the Character Library. Creating starts a fresh blank sheet.</p>
+    <p class="create-detail">Skills: ${escapeHtml(skills.join(", ") || "none yet")}${creationDraft.skills.length < classSkillPicks(cls) ? ` · ${classSkillPicks(cls) - creationDraft.skills.length} class skill pick${classSkillPicks(cls) - creationDraft.skills.length === 1 ? "" : "s"} left (Background step)` : ""}</p>
+    <p class="create-detail">Your current sheet stays saved in the Character Library. Creating starts a fresh sheet.</p>
   `;
+}
+
+function wholeNumber(value, fallback, min, max) {
+  const number = Math.round(Number(value));
+  return Number.isFinite(number) && String(value).trim() !== "" ? clamp(number, min, max) : fallback;
 }
 
 function handleCreateFieldInput(event) {
   if (!creationDraft) return;
   const field = event.target.dataset.createField;
   if (field === "level") {
-    creationDraft.level = clamp(Number(event.target.value || 1), 1, 20);
+    creationDraft.level = wholeNumber(event.target.value, creationDraft.level, 1, 20);
     const slot = document.querySelector("#createSubclassSlot");
-    if (slot) slot.innerHTML = renderCreateSubclassPicker(getClasses()[creationDraft.classId] || currentClass());
+    if (slot) slot.innerHTML = renderCreateLevelExtras();
   } else if (field) {
     creationDraft[field] = event.target.value;
   }
   const ability = event.target.dataset.createAbility;
   if (ability) {
-    creationDraft.abilities[ability] = clamp(Number(event.target.value || 10), 1, 30);
+    creationDraft.abilities[ability] = wholeNumber(event.target.value, creationDraft.abilities[ability], 1, 30);
     const modLabel = event.target.closest(".create-ability-card")?.querySelector(".ability-mod");
     if (modLabel) modLabel.textContent = formatMod(Math.floor((creationDraft.abilities[ability] - 10) / 2));
   }
 }
 
+// On commit (blur/Enter) the box shows the value that will actually be used.
+function handleCreateFieldChange(event) {
+  if (!creationDraft) return;
+  if (event.target.dataset.createField === "level") event.target.value = creationDraft.level;
+  const ability = event.target.dataset.createAbility;
+  if (ability) event.target.value = creationDraft.abilities[ability];
+}
+
 function handleCreateStepClick(event) {
   if (!creationDraft) return;
+  if (event.target.closest("[data-create-reset]")) {
+    creationDraft = blankCreationDraft();
+    renderCreateStep();
+    return;
+  }
   const stepButton = event.target.closest("[data-create-step]");
   if (stepButton) {
     creationDraft.step = Number(stepButton.dataset.createStep);
@@ -478,17 +567,37 @@ function handleCreateStepClick(event) {
     startCustomClassDraft();
     return;
   }
+  const skill = event.target.closest("[data-create-skill]");
+  if (skill) {
+    const id = skill.dataset.createSkill;
+    const picks = classSkillPicks(draftClass());
+    if (creationDraft.skills.includes(id)) creationDraft.skills = creationDraft.skills.filter(item => item !== id);
+    else if (creationDraft.skills.length < picks) creationDraft.skills.push(id);
+    renderCreateStep();
+    return;
+  }
   const option = event.target.closest("[data-create-option]");
   if (option) {
     const [field, ...value] = option.dataset.createOption.split(":");
     creationDraft[field] = value.join(":");
+    if (field === "classId") {
+      creationDraft.subclass = "";
+      creationDraft.skills = [];
+    }
+    if (field === "background") {
+      creationDraft.backgroundChosen = true;
+      const owned = new Set(backgroundSkills(creationDraft.background));
+      creationDraft.skills = creationDraft.skills.filter(id => !owned.has(id));
+    }
     renderCreateStep();
     return;
   }
   if (event.target.closest("[data-create-standard]")) {
     const array = [15, 14, 13, 12, 10, 8];
-    const order = CLASS_ABILITY_PRIORITY[creationDraft.classId] || ABILITIES.map(([id]) => id);
-    order.forEach((id, index) => {
+    const cls = draftClass();
+    const priority = CLASS_ABILITY_PRIORITY[creationDraft.classId]
+      || [...new Set([cls?.spellAbility, "con", "dex", "str", "wis", "int", "cha"].filter(id => ABILITIES.some(([ability]) => ability === id)))];
+    priority.forEach((id, index) => {
       creationDraft.abilities[id] = array[index];
     });
     renderCreateStep();
@@ -503,6 +612,10 @@ function createStepBack() {
 
 function createStepNext() {
   if (!creationDraft) return;
+  if (creationDraft.step === 1 && !creationDraft.classId) {
+    showToast(`<span class="toast-label">Pick a class to continue</span>`);
+    return;
+  }
   if (creationDraft.step < CREATE_STEP_LABELS.length - 1) {
     creationDraft.step += 1;
     renderCreateStep();
@@ -515,6 +628,10 @@ function averageHpFor(cls, level, conMod) {
   return Math.max(level, cls.hitDie + conMod + (level - 1) * (Math.ceil(cls.hitDie / 2) + 1 + conMod));
 }
 
+function speciesHpPerLevel(species) {
+  return SPECIES_GRANTS[species]?.hpPerLevel || 0;
+}
+
 function speciesBonusText(species) {
   const bonus = SPECIES_PRESETS.find(([name]) => name === species)?.[4] || {};
   return Object.entries(bonus).map(([id, value]) => `+${value} ${id.toUpperCase()}`).join(", ");
@@ -522,7 +639,13 @@ function speciesBonusText(species) {
 
 function finishCreation() {
   const draft = creationDraft;
-  const cls = getClasses()[draft.classId] || currentClass();
+  const cls = draftClass();
+  if (!cls) {
+    creationDraft.step = 1;
+    renderCreateStep();
+    showToast(`<span class="toast-label">Pick a class to continue</span>`);
+    return;
+  }
   const speciesRow = SPECIES_PRESETS.find(([name]) => name === draft.species);
   const speciesBonus = speciesRow?.[4] || {};
   const abilities = Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10) + (speciesBonus[id] || 0), 1, 30)]));
@@ -531,8 +654,10 @@ function finishCreation() {
   const featureLines = cls.table.slice(0, clamp(Number(draft.level || 1), 1, 20))
     .filter(row => row.features)
     .map(row => `Level ${row.level}: ${row.features}`);
-  const level = clamp(Number(draft.level || 1), 1, 20);
-  const hp = averageHpFor(cls, level, Math.floor((abilities.con - 10) / 2));
+  const level = wholeNumber(draft.level, 1, 1, 20);
+  const grants = SPECIES_GRANTS[draft.species] || {};
+  const hp = averageHpFor(cls, level, Math.floor((abilities.con - 10) / 2)) + speciesHpPerLevel(draft.species) * level;
+  const joined = (...parts) => parts.flat().filter(Boolean).join(", ");
   character = {
     ...defaultCharacter(),
     name: draft.name.trim() || "New Character",
@@ -549,20 +674,28 @@ function finishCreation() {
     speed: speciesRow ? speciesRow[1] : 30,
     hitDice: `${level}d${cls.hitDie}`,
     saveProficiencies: CLASS_SAVES[cls.id] || [],
-    proficientSkills: [],
-    spells: [],
+    proficientSkills: [...new Set([...draft.skills, ...(grants.skills || [])])],
+    spells: (grants.cantrips || []).map(index => ({ id: crypto.randomUUID(), index, level: 0, prepared: false, racial: true })),
+    acAuto: true,
     equipment: [],
     resources: [],
     classOptions: [],
     actions: [],
     autoSpells: [],
-    features: [speciesRow ? `Species: ${draft.species} — ${speciesRow[2]}` : "", ...featureLines].filter(Boolean).join("\n"),
-    backgroundDetails: { ...defaultCharacter().backgroundDetails, armor, weapons, tools },
+    features: [speciesRow ? `Species: ${draft.species} — ${speciesRow[2]}` : "", grants.feature || "", ...featureLines].filter(Boolean).join("\n"),
+    backgroundDetails: {
+      ...defaultCharacter().backgroundDetails,
+      armor: joined(armor, grants.armor || []),
+      weapons: joined(weapons, grants.weapons || []),
+      tools: joined(tools, grants.tools || []),
+      languages: joined(grants.languages || [])
+    },
     attacks: "",
     inventory: "",
     notes: ""
   };
   applyBackgroundPresetNamed(draft.background);
+  character.ac = calculatedArmorClass();
   creationDraft = null;
   document.querySelector("#createDialog").close();
   persistAndRender();
