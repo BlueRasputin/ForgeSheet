@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", init);
 
 function trackTabBarHeight() {
-  const tabs = document.querySelector(".sheet-main .tabs");
+  const tabs = document.querySelector(".sticky-head");
   const update = () => document.documentElement.style.setProperty("--tabs-height", `${Math.ceil(tabs.getBoundingClientRect().height)}px`);
   new ResizeObserver(update).observe(tabs);
   update();
@@ -9,7 +9,8 @@ function trackTabBarHeight() {
 
 function init() {
   const savedTheme = localStorage.getItem(THEME_KEY);
-  document.body.dataset.theme = THEMES.includes(savedTheme) ? savedTheme : "beyond";
+  const systemTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "beyond";
+  document.body.dataset.theme = THEMES.includes(savedTheme) ? savedTheme : systemTheme;
   applyCustomBackground();
   ensureCharacterInLibrary();
   buildStaticControls();
@@ -56,7 +57,7 @@ function buildStaticControls() {
     <label class="skill-row">
       <input data-skill="${id}" type="checkbox">
       <span class="skill-name">${name} <em>${ability.toUpperCase()}</em></span>
-      <button type="button" class="expertise-toggle" data-expert-skill="${id}" title="Toggle expertise (double proficiency)">★</button>
+      <button type="button" class="expertise-toggle" data-expert-skill="${id}" title="Toggle expertise (double proficiency)">${icon("star")}</button>
       <button type="button" class="mod-chip" id="${id}Skill" data-roll-skill="${id}" title="Roll ${name}">+0</button>
     </label>
   `).join("");

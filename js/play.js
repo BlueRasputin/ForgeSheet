@@ -81,9 +81,9 @@ function renderCombatDashboard() {
   document.querySelector("#combatDashboard").innerHTML = `
     ${actions.map(action => `<article><strong>${action}</strong><span>${combatActionHint(action)}</span></article>`).join("")}
     <article><strong>Concentration</strong><span>${escapeHtml(character.concentration || "None")}</span></article>
-    <article><strong>Death Saves</strong><span>${character.deathSaveSuccesses} successes / ${character.deathSaveFailures} failures</span></article>
+    <article><strong>Death saves</strong><span>${character.deathSaveSuccesses} successes / ${character.deathSaveFailures} failures</span></article>
     <article><strong>Conditions</strong><span>${escapeHtml(character.conditions.join(", ") || "None")}</span></article>
-    <article><strong>Inspiration</strong><span>${character.inspiration ? `${character.inspiration} point${character.inspiration === 1 ? "" : "s"} — spend one for advantage on a roll.` : "None"}</span></article>
+    <article><strong>Inspiration</strong><span>${character.inspiration ? `${character.inspiration} point${character.inspiration === 1 ? "" : "s"}. Spend one for advantage on a roll.` : "None"}</span></article>
   `;
 }
 
@@ -102,7 +102,7 @@ function renderDyingPrompt() {
       : `Dying at 0 HP: ${successes} success${successes === 1 ? "" : "es"}, ${failures} failure${failures === 1 ? "" : "s"}.`;
   root.innerHTML = `
     <span><strong>${status}</strong></span>
-    ${successes < 3 && failures < 3 ? `<button type="button" class="secondary" data-dying-roll>Roll Death Save</button>` : ""}
+    ${successes < 3 && failures < 3 ? `<button type="button" class="secondary" data-dying-roll>Roll death save</button>` : ""}
   `;
 }
 
@@ -113,7 +113,7 @@ function renderConcentrationPrompt() {
     return;
   }
   root.innerHTML = `
-    <span><strong>Concentration check:</strong> ${escapeHtml(character.concentration)} — CON save DC ${pendingConcentrationDc}</span>
+    <span><strong>Concentration check:</strong> ${escapeHtml(character.concentration)}, CON save DC ${pendingConcentrationDc}</span>
     <button type="button" class="secondary" data-roll-concentration>Roll Save</button>
     <button type="button" class="ghost" data-dismiss-concentration>Dismiss</button>
   `;
@@ -236,7 +236,7 @@ function renderQuickVitals() {
       <button type="button" class="heal" data-quick="heal">Heal</button>
     </span>
     <button type="button" class="ghost quick-conditions" data-quick="conditions" title="Open conditions">${conditions.length ? escapeHtml(conditions.join(", ")) : "No conditions"}</button>
-    ${character.concentration ? `<span class="quick-concentration">◉ ${escapeHtml(character.concentration)}</span>` : ""}
+    ${character.concentration ? `<span class="quick-concentration" title="Concentrating">${icon("brain")}${escapeHtml(character.concentration)}</span>` : ""}
   `;
 }
 
@@ -257,7 +257,7 @@ function gainInspiration() {
 function spendInspiration() {
   if (!character.inspiration) return;
   character.inspiration -= 1;
-  character.rollHistory = [{ label: "Inspiration Spent", formula: "advantage on one roll", mode: "normal", total: character.inspiration, parts: [`${character.inspiration} left`] }, ...(character.rollHistory || [])].slice(0, 25);
+  character.rollHistory = [{ label: "Inspiration spent", formula: "advantage on one roll", mode: "normal", total: character.inspiration, parts: [`${character.inspiration} left`] }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
 }
 
@@ -292,10 +292,10 @@ function rollDeathSave() {
     character.deathSaveSuccesses = 0;
     character.deathSaveFailures = 0;
     character.hp = 1;
-    outcome = "Natural 20 — back up with 1 HP";
+    outcome = "natural 20, back up with 1 HP";
   } else if (roll === 1) {
     character.deathSaveFailures = clamp(character.deathSaveFailures + 2, 0, 3);
-    outcome = "Natural 1 — two failures";
+    outcome = "natural 1, two failures";
   } else if (roll >= 10) {
     character.deathSaveSuccesses = clamp(character.deathSaveSuccesses + 1, 0, 3);
     outcome = "Success";
@@ -303,7 +303,7 @@ function rollDeathSave() {
     character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3);
     outcome = "Failure";
   }
-  character.rollHistory = [{ label: `Death Save — ${outcome}`, formula: "1d20", mode: "normal", total: roll, parts: [`d20[${roll}]`] }, ...(character.rollHistory || [])].slice(0, 25);
+  character.rollHistory = [{ label: `Death save: ${outcome}`, formula: "1d20", mode: "normal", total: roll, parts: [`d20[${roll}]`] }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
   showToast(`<span class="toast-label">Death save · ${escapeHtml(outcome)}</span><span class="toast-roll"><b>${roll}</b><small>${character.deathSaveSuccesses} success${character.deathSaveSuccesses === 1 ? "" : "es"} · ${character.deathSaveFailures} failure${character.deathSaveFailures === 1 ? "" : "s"}</small></span>`, { tone: roll >= 10 ? "crit" : "fumble" });
 }
@@ -350,7 +350,7 @@ function renderDiceRoller() {
       <strong>${escapeHtml(roll.label)}</strong>
       <span>${escapeHtml(roll.parts.join(" + "))}</span>
       <b>${roll.total}</b>
-      ${/^(Death Save|Hit Die)/.test(roll.label) ? "<span></span>" : `<button type="button" class="ghost reroll" data-roll-index="${index}" aria-label="Reroll ${escapeHtml(roll.label)}" title="Reroll">↻</button>`}
+      ${/^(death save|hit die)/i.test(roll.label) ? "<span></span>" : `<button type="button" class="ghost reroll" data-roll-index="${index}" aria-label="Reroll ${escapeHtml(roll.label)}" title="Reroll">${icon("arrow-clockwise")}</button>`}
     </article>
   `).join("") || `<p class="empty-state">No roll history yet.</p>`;
 }
@@ -457,7 +457,7 @@ function spendHitDie() {
   const heal = Math.max(1, face + mod("con"));
   character.hitDiceUsed += 1;
   character.hp = Math.min(Number(character.maxHp || character.hp), Number(character.hp || 0) + heal);
-  character.rollHistory = [{ label: "Hit Die Healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`1d${cls.hitDie}[${face}]`, String(mod("con"))] }, ...(character.rollHistory || [])].slice(0, 25);
+  character.rollHistory = [{ label: "Hit die healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`1d${cls.hitDie}[${face}]`, String(mod("con"))] }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
   const left = character.level - character.hitDiceUsed;
   const more = left > 0 && character.hp < character.maxHp ? [{ label: `Spend another (${left} left)`, run: spendHitDie }] : [];
@@ -495,7 +495,7 @@ function takeRest(type) {
     run: undoLastRest
   }];
   const hitDiceLeft = character.level - character.hitDiceUsed;
-  if (type === "short" && hitDiceLeft > 0 && character.hp < character.maxHp) actions.push({ label: `Spend Hit Die (${hitDiceLeft} left)`, run: spendHitDie });
+  if (type === "short" && hitDiceLeft > 0 && character.hp < character.maxHp) actions.push({ label: `Spend a hit die (${hitDiceLeft} left)`, run: spendHitDie });
   const changes = restChanges(before, character);
   const nothing = character.hp < character.maxHp && hitDiceLeft > 0 ? "No resources to recover. Spend hit dice to heal." : "Nothing needed recovering.";
   showToast(`<span class="toast-label">${name}</span><span>${escapeHtml(changes.join(" · ") || nothing)}</span>`, { actions, duration: 12000 });

@@ -141,12 +141,12 @@ function renderFeatureAutomation() {
 function featureSuggestions(cls = currentClass()) {
   const featureText = `${character.features}\n${character.classOptions.map(item => item.name).join("\n")}`.toLowerCase();
   const suggestions = [
-    ["Hit Dice", `Use ${character.level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${character.level}d${cls.hitDie}`],
-    ["Proficiency Bonus", `Current bonus is ${formatMod(proficiencyBonus())}.`, true],
-    ["Prepared Spells", `${preparedSpellCount()} prepared out of ${preparedLimitFor(cls)}.`, preparedSpellCount() <= preparedLimitFor(cls)],
-    ["ASI / Feat", asiLevelsFor(cls).has(character.level) ? "This level includes an ASI or feat decision." : "No ASI/feat decision at this level.", !asiLevelsFor(cls).has(character.level) || character.planner.feats.length],
-    ["Subclass Notes", "Record subclass features, choices, and resource rules.", (character.subclass.sections || []).some(section => section.body)],
-    ["Feature Text", "Keep class, species, background, and feat features in the Features box.", featureText.length > 40]
+    ["Hit dice", `Use ${character.level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${character.level}d${cls.hitDie}`],
+    ["Proficiency bonus", `Current bonus is ${formatMod(proficiencyBonus())}.`, true],
+    ["Prepared spells", `${preparedSpellCount()} prepared out of ${preparedLimitFor(cls)}.`, preparedSpellCount() <= preparedLimitFor(cls)],
+    ["ASI or feat", asiLevelsFor(cls).has(character.level) ? "This level includes an ASI or feat decision." : "No ASI/feat decision at this level.", !asiLevelsFor(cls).has(character.level) || character.planner.feats.length],
+    ["Subclass notes", "Record subclass features, choices, and resource rules.", (character.subclass.sections || []).some(section => section.body)],
+    ["Feature text", "Keep class, species, background, and feat features in the Features box.", featureText.length > 40]
   ];
   return suggestions.map(([title, body, done]) => ({ title, body, done }));
 }
@@ -171,11 +171,11 @@ function renderPlanner() {
   const requirements = multiclassRequirements(document.querySelector("#multiclassSelect").value);
   document.querySelector("#plannerSummary").innerHTML = `
     <article class="planner-card">
-      <strong>Prerequisite Check</strong>
+      <strong>Prerequisite check</strong>
       <span>${escapeHtml(requirements)}</span>
     </article>
     <article class="planner-card">
-      <strong>Planned Classes</strong>
+      <strong>Planned classes</strong>
       <span>${escapeHtml(planner.multiclass.map(id => getClasses()[id]?.name || id).join(", ") || "None")}</span>
       ${planner.multiclass.map(id => `<button class="ghost" data-remove-plan="multiclass:${id}" type="button">Remove ${escapeHtml(getClasses()[id]?.name || id)}</button>`).join("")}
     </article>
@@ -268,7 +268,7 @@ function openLevelDialog() {
   const unlock = SUBCLASS_LEVEL[cls.id] || 3;
   const subclassOptions = officialSubclasses.filter(item => item.classIndex === cls.id);
   const needsSubclass = !character.subclassName && nextLevel >= unlock && subclassOptions.length;
-  document.querySelector("#levelDialogTitle").textContent = `${cls.name} Level ${nextLevel}`;
+  document.querySelector("#levelDialogTitle").textContent = `${cls.name} level ${nextLevel}`;
   document.querySelector("#levelSubclass").innerHTML = needsSubclass ? `
     <label>Choose your ${escapeHtml(subclassOptions[0].flavor || "subclass")}
       <select id="levelSubclassSelect">
@@ -278,7 +278,7 @@ function openLevelDialog() {
     </label>` : "";
   document.querySelector("#levelAsiPrompt").innerHTML = asiLevelsFor(cls).has(nextLevel) ? `
     <fieldset class="level-asi">
-      <legend>Ability Score Improvement</legend>
+      <legend>Ability score improvement</legend>
       <label class="inline-check"><input type="radio" name="asiMode" value="asi" checked> Raise scores: +1 and +1 (choose the same ability twice for +2)</label>
       <div class="level-asi-picks">
         ${["asiFirst", "asiSecond"].map(id => `<select id="${id}">${ABILITIES.map(([ability, label]) => `<option value="${ability}" ${Number(character.abilities[ability]) >= 20 ? "disabled" : ""}>${label} (${character.abilities[ability]})</option>`).join("")}</select>`).join("")}
@@ -389,7 +389,7 @@ function renderCreateStep() {
   `).join("") + `<button type="button" class="ghost create-start-over" data-create-reset>Start over</button>`;
   document.querySelector("#createBack").disabled = draft.step === 0;
   document.querySelector("#createBack").style.visibility = draft.step === 0 ? "hidden" : "";
-  document.querySelector("#createNext").textContent = draft.step === CREATE_STEP_LABELS.length - 1 ? "Create Character" : "Next";
+  document.querySelector("#createNext").textContent = draft.step === CREATE_STEP_LABELS.length - 1 ? "Create character" : "Next";
   const renderers = [renderCreateIdentity, renderCreateClass, renderCreateBackground, renderCreateAbilities, renderCreateReview];
   document.querySelector("#createStepBody").innerHTML = renderers[draft.step]();
 }
@@ -404,20 +404,20 @@ function renderCreateIdentity() {
     <div class="create-option-grid">
       ${SPECIES_PRESETS.map(([name, speed, , glyph]) => `
         <button type="button" class="create-option-card ${name === creationDraft.species ? "is-selected" : ""}" data-create-option="species:${name}">
-          <span class="create-glyph">${glyph}</span>
+          <span class="create-glyph">${icon(glyph)}</span>
           <strong>${name}</strong>
           <span>${speed} ft speed</span>
         </button>
       `).join("")}
     </div>
-    <p class="create-detail">${species ? `<strong>${species[0]}</strong> — ${species[2]}` : "Choose a species, or skip this screen and type a homebrew species on the sheet later."}</p>
+    <p class="create-detail">${species ? `<strong>${species[0]}.</strong> ${species[2]}` : "Choose a species, or skip this screen and type a homebrew species on the sheet later."}</p>
   `;
 }
 
 function renderCreateClass() {
   const cls = draftClass();
   const saves = cls ? CLASS_SAVES[cls.id] : null;
-  const casting = cls ? (cls.casterType === "none" ? "Martial — no spell slots" : `${(cls.spellAbility || "").toUpperCase()} spellcasting`) : "";
+  const casting = cls ? (cls.casterType === "none" ? "Martial, no spell slots" : `${(cls.spellAbility || "").toUpperCase()} spellcasting`) : "";
   return `
     <div class="create-title-row">
       <h3 class="create-screen-title">Choose your class</h3>
@@ -429,18 +429,18 @@ function renderCreateClass() {
     <div class="create-option-grid">
       ${Object.values(getClasses()).map(item => `
         <button type="button" class="create-option-card ${item.id === creationDraft.classId ? "is-selected" : ""}" data-create-option="classId:${item.id}">
-          <span class="create-glyph">${CLASS_GLYPHS[item.id] || "✨"}</span>
+          <span class="create-glyph">${icon(CLASS_GLYPHS[item.id] || "sparkle")}</span>
           <strong>${escapeHtml(item.name)}</strong>
           <span>d${item.hitDie} · ${item.casterType === "none" ? "Martial" : "Caster"}</span>
         </button>
       `).join("")}
       <button type="button" class="create-option-card" data-create-forge>
-        <span class="create-glyph">🛠️</span>
+        <span class="create-glyph">${icon("hammer")}</span>
         <strong>Custom Class</strong>
         <span>Forge your own</span>
       </button>
     </div>
-    <p class="create-detail">${cls ? `<strong>${escapeHtml(cls.name)}</strong> — d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}` : "Pick a class to continue."}</p>
+    <p class="create-detail">${cls ? `<strong>${escapeHtml(cls.name)}.</strong> d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}` : "Pick a class to continue."}</p>
   `;
 }
 
@@ -481,13 +481,13 @@ function renderCreateSkillPicker() {
   const allowed = CLASS_SKILL_CHOICES[cls.id] === "any" || !CLASS_SKILL_CHOICES[cls.id] ? SKILLS.map(([id]) => id) : CLASS_SKILL_CHOICES[cls.id];
   const picks = classSkillPicks(cls);
   return `
-    <h4 class="create-subtitle">${escapeHtml(cls.name)} skills — choose ${picks} (${creationDraft.skills.length}/${picks})</h4>
+    <h4 class="create-subtitle">${escapeHtml(cls.name)} skills: choose ${picks} (${creationDraft.skills.length}/${picks})</h4>
     <div class="create-skill-chips">
       ${allowed.map(id => {
         const label = SKILLS.find(([skill]) => skill === id)?.[1] || id;
         const owned = fromBackground.has(id);
         const chosen = creationDraft.skills.includes(id);
-        return `<button type="button" class="condition-chip ${chosen || owned ? "active" : ""}" data-create-skill="${id}" ${owned ? "disabled title=\"From your background\"" : ""}>${escapeHtml(label)}${owned ? " ✓" : ""}</button>`;
+        return `<button type="button" class="condition-chip ${chosen || owned ? "active" : ""}" data-create-skill="${id}" ${owned ? "disabled title=\"From your background\"" : ""}>${owned ? icon("check") : ""}${escapeHtml(label)}</button>`;
       }).join("")}
     </div>
   `;
@@ -500,18 +500,18 @@ function renderCreateBackground() {
     <div class="create-option-grid">
       ${BACKGROUND_PRESETS.map(([name, skills, , , glyph]) => `
         <button type="button" class="create-option-card ${name === creationDraft.background ? "is-selected" : ""}" data-create-option="background:${name}">
-          <span class="create-glyph">${glyph}</span>
+          <span class="create-glyph">${icon(glyph)}</span>
           <strong>${name}</strong>
           <span>${skills}</span>
         </button>
       `).join("")}
       <button type="button" class="create-option-card ${creationDraft.backgroundChosen && creationDraft.background === "" ? "is-selected" : ""}" data-create-option="background:">
-        <span class="create-glyph">❔</span>
+        <span class="create-glyph">${icon("question")}</span>
         <strong>Skip for now</strong>
         <span>Decide later</span>
       </button>
     </div>
-    <p class="create-detail">${preset ? `<strong>${preset[0]}</strong> — Skills: ${preset[1]} · ${preset[2]} · Feature: ${preset[3]}` : "A preset grants its skill proficiencies and background feature automatically."}</p>
+    <p class="create-detail">${preset ? `<strong>${preset[0]}.</strong> Skills: ${preset[1]} · ${preset[2]} · Feature: ${preset[3]}` : "A preset grants its skill proficiencies and background feature automatically."}</p>
     ${renderCreateSkillPicker()}
   `;
 }
@@ -534,7 +534,7 @@ function renderCreateAbilities() {
         </div>
       `).join("")}
     </div>
-    <button type="button" class="secondary" data-create-standard>Use Standard Array${cls ? ` for ${escapeHtml(cls.name)}` : ""}</button>
+    <button type="button" class="secondary" data-create-standard>Use the standard array${cls ? ` for ${escapeHtml(cls.name)}` : ""}</button>
     <p class="create-detail">Puts 15, 14, 13, 12, 10, 8 into the abilities your class leans on most. ${speciesBonusText(creationDraft.species) ? `${escapeHtml(creationDraft.species)} bonuses (${speciesBonusText(creationDraft.species)}) are added on top.` : ""}</p>
   `;
 }
@@ -553,7 +553,7 @@ function renderCreateReview() {
   return `
     <h3 class="create-screen-title">Ready for adventure</h3>
     <div class="create-review-hero">
-      <span class="create-glyph">${speciesRow ? speciesRow[3] : ""}${CLASS_GLYPHS[cls.id] || "✨"}</span>
+      <span class="create-glyph">${speciesRow ? icon(speciesRow[3]) : ""}${icon(CLASS_GLYPHS[cls.id] || "sparkle")}</span>
       <strong>${escapeHtml(creationDraft.name.trim() || "New Character")}</strong>
       <span>${escapeHtml([creationDraft.species, cls.name, subclass ? `(${subclass.name})` : ""].filter(Boolean).join(" "))} · ${escapeHtml(creationDraft.background || "No background")} · Level ${creationDraft.level}</span>
     </div>
@@ -730,7 +730,7 @@ function finishCreation() {
     classOptions: [],
     actions: [],
     autoSpells: [],
-    features: [speciesRow ? `Species: ${draft.species} — ${speciesRow[2]}` : "", grants.feature || "", ...featureLines].filter(Boolean).join("\n"),
+    features: [speciesRow ? `Species: ${draft.species}. ${speciesRow[2]}` : "", grants.feature || "", ...featureLines].filter(Boolean).join("\n"),
     backgroundDetails: {
       ...defaultCharacter().backgroundDetails,
       armor: joined(armor, grants.armor || []),
@@ -771,12 +771,12 @@ function levelChecklist() {
     ["Identity", "Name, species, and background chosen.", Boolean(character.name && character.species && character.background), "background"],
     // ponytail: subclass required at level 3 for everyone; some classes pick at 1-2, refine per-class if it matters
     ["Subclass", level >= subclassUnlock ? "Choose and record your subclass." : `Chosen at level ${subclassUnlock}.`, level < subclassUnlock || Boolean(character.subclassName), "#officialSubclassSelect"],
-    ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
+    ["Ability scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
     ["Skills", `Pick ${expectedSkills} skill proficiencies (${classSkills} from ${cls.name}${character.background ? ", 2 from your background" : ""}).`, (character.proficientSkills || []).length >= expectedSkills, "#skills"],
-    ["Hit Dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
-    ["Saving Throws", "Mark your class's two saving throw proficiencies.", (character.saveProficiencies || []).length >= 2, "#savingThrows"],
-    ["Hit Points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
-    ["ASI / Feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level} — record each in the Builder planner.`, featCount >= asiCount, "#featPlanner"],
+    ["Hit dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
+    ["Saving throws", "Mark your class's two saving throw proficiencies.", (character.saveProficiencies || []).length >= 2, "#savingThrows"],
+    ["Hit points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
+    ["ASIs and feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level}. Record each in the Builder planner.`, featCount >= asiCount, "#featPlanner"],
     ["Equipment", "Add starting gear or catalog items.", (character.equipment || []).length > 0 || Boolean(character.inventory), "inventory"]
   ];
   if (caster) {
@@ -786,13 +786,13 @@ function levelChecklist() {
     const ownSpells = character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !spellAlwaysPrepared(row) && !row.itemId).length;
     const knownCap = cls.preparedFormula === "known" ? knownSpellCap(cls) : cls.id === "wizard" ? KNOWN_SPELLS.wizard[level - 1] : null;
     if (knownCap !== null && knownCap !== undefined) {
-      items.push([cls.id === "wizard" ? "Spellbook" : "Spells Known", `${ownSpells} of ${knownCap} ${cls.id === "wizard" ? "spellbook spells" : "spells known"}.`, cls.id === "wizard" ? ownSpells >= knownCap : ownSpells === knownCap, "spells"]);
+      items.push([cls.id === "wizard" ? "Spellbook" : "Spells known", `${ownSpells} of ${knownCap} ${cls.id === "wizard" ? "spellbook spells" : "spells known"}.`, cls.id === "wizard" ? ownSpells >= knownCap : ownSpells === knownCap, "spells"]);
     } else {
       items.push(["Spells", "Choose your class spells.", !expectedSlots || ownSpells > 0, "spells"]);
     }
     const limit = preparedLimitFor(cls);
     if (cls.preparedFormula !== "none" && cls.preparedFormula !== "known") {
-      items.push(["Prepared Spells", `${preparedSpellCount()} of ${limit} prepared.`, preparedSpellCount() === limit, "spells"]);
+      items.push(["Prepared spells", `${preparedSpellCount()} of ${limit} prepared.`, preparedSpellCount() === limit, "spells"]);
     }
   }
   return items.map(([label, detail, done, tab]) => ({ label, detail, done, tab }));
@@ -802,15 +802,15 @@ function renderChecklist() {
   const items = levelChecklist();
   const remaining = items.filter(item => !item.done);
   const button = document.querySelector("#checklistButton");
-  button.textContent = remaining.length ? `Checklist (${remaining.length})` : "Checklist";
+  button.innerHTML = `${icon("list-checks")}${remaining.length ? `Checklist (${remaining.length})` : "Checklist"}`;
   button.classList.toggle("needs-attention", remaining.length > 0);
   button.title = remaining.length ? `To do: ${remaining.map(item => item.label).join(", ")}` : "Everything is up to date for your level.";
   document.querySelector("#checklistSummary").textContent = remaining.length
     ? `${items.length - remaining.length} of ${items.length} done for level ${character.level}`
-    : `All set for level ${character.level}!`;
+    : `All set for level ${character.level}.`;
   document.querySelector("#checklistBody").innerHTML = items.map(item => `
     <article class="checklist-item ${item.done ? "is-complete" : ""}">
-      <span class="checklist-mark">${item.done ? "✓" : "○"}</span>
+      <span class="checklist-mark">${icon(item.done ? "check-circle" : "circle")}</span>
       <div>
         <strong>${escapeHtml(item.label)}</strong>
         <span>${item.done ? "Done" : escapeHtml(item.detail)}</span>

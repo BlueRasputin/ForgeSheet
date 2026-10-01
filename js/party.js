@@ -33,8 +33,8 @@ function renderPartyDashboard() {
     const percent = Math.round(clamp(ratio(item), 0, 1) * 100);
     const initiative = latestInitiative(item);
     const badges = [
-      state === "dead" ? "Dead" : state === "stable" ? "Stable at 0 HP" : state === "down" ? `Dying ${item.deathSaveSuccesses || 0}✓ ${item.deathSaveFailures || 0}✗` : "",
-      item.concentration ? `◉ ${item.concentration}` : "",
+      state === "dead" ? "Dead" : state === "stable" ? "Stable at 0 HP" : state === "down" ? `Dying: ${item.deathSaveSuccesses || 0} saved, ${item.deathSaveFailures || 0} failed` : "",
+      item.concentration ? `Concentrating on ${item.concentration}` : "",
       Number(item.tempHp) ? `+${item.tempHp} temp` : ""
     ].filter(Boolean);
     const conditions = (item.conditions || []).filter(condition => condition !== "Unconscious" || state === "healthy");

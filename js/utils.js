@@ -73,6 +73,10 @@ function structuredCloneSafe(value) {
 }
 
 // Toasts stack (newest at the bottom, max 3) so a result or an Undo isn't replaced by the next toast.
+function icon(name) {
+  return `<i class="ph ph-${name}" aria-hidden="true"></i>`;
+}
+
 function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
   let stack = document.querySelector("#toastStack");
   if (!stack) {
@@ -89,7 +93,7 @@ function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
   toast.innerHTML = `
     <div class="app-toast-body">${html}</div>
     ${actions.map((action, index) => `<button type="button" class="secondary" data-toast-action="${index}">${escapeHtml(action.label)}</button>`).join("")}
-    <button type="button" class="ghost app-toast-close" aria-label="Dismiss">×</button>
+    <button type="button" class="ghost app-toast-close" aria-label="Dismiss">${icon("x")}</button>
   `;
   let timer = null;
   const close = () => {

@@ -311,7 +311,7 @@ function renderSpellRows() {
           <h3>${spellLevelLabel(level)}</h3>
           <span class="${cap !== null && chosen > cap ? "over-cap" : ""}">${cap ? `${chosen} / ${cap} known${chosen > cap ? ` · ${chosen - cap} over` : ""}` : `${chosen} selected`}</span>
         </div>
-        <button type="button" class="ghost" data-add-spell-level="${level}">Add ${level === 0 ? "Cantrip" : "Spell"}</button>
+        <button type="button" class="ghost" data-add-spell-level="${level}">${icon("plus")}${level === 0 ? "Cantrip" : "Spell"}</button>
       </div>
       <div class="spell-section-body"></div>
     `;
@@ -331,7 +331,7 @@ function renderSpellRows() {
       const syncExpand = () => {
         const open = expandedSpellRows.has(row.id);
         node.classList.toggle("is-expanded", open);
-        expand.textContent = open ? "▾" : "▸";
+        expand.setAttribute("aria-expanded", String(open));
       };
       syncExpand();
       expand.addEventListener("click", () => {
@@ -447,7 +447,7 @@ function visibleSpellLevels() {
 }
 
 function spellLevelLabel(level) {
-  return level === 0 ? "Cantrips" : `${ordinal(level)} Level`;
+  return level === 0 ? "Cantrips" : `${ordinal(level)} level`;
 }
 
 function spellMatchesClass(item, cls) {
@@ -519,7 +519,7 @@ function renderSpellCard(card, rowOrIndex) {
     <br>${detail.concentration ? "Concentration · " : ""}${escapeHtml(detail.duration || "")}
     ${(detail.desc || []).map(paragraph => `<p>${escapeHtml(paragraph)}</p>`).join("")}
     ${higher ? `<p><strong>At higher levels.</strong> ${escapeHtml(higher)}</p>` : ""}
-    <span>${detail.local ? "Original mechanical summary — full text in your sourcebook" : `Classes: ${escapeHtml(classes || "custom/homebrew")}`}</span>
+    <span>${detail.local ? "Original mechanical summary. Full text is in your sourcebook." : `Classes: ${escapeHtml(classes || "custom/homebrew")}`}</span>
     ${spellCastControls(row, detail.level ?? baseLevel)}
   `;
 }
@@ -549,7 +549,7 @@ function renderPrepSuggestions() {
     }
   });
   document.querySelector("#prepSuggestions").innerHTML = unique.length
-    ? unique.map(spell => `<button type="button" class="ghost" data-prep-add="${escapeHtml(spell.index)}" title="Add as a prepared spell">+ ${escapeHtml(spell.name)}</button>`).join("")
+    ? unique.map(spell => `<button type="button" class="ghost" data-prep-add="${escapeHtml(spell.index)}" title="Add as a prepared spell">${icon("plus")}${escapeHtml(spell.name)}</button>`).join("")
     : `<span>No suggestions for this class yet.</span>`;
 }
 
@@ -563,7 +563,7 @@ function spellCastControls(row, baseLevel = spellLevelForRow(row)) {
       <div class="spell-cast-controls">
         <span>${escapeHtml(grantingItem.name || "Item")} · cast at base level, no slot</span>
         <button type="button" class="secondary cast-spell" ${uses && !left ? "disabled" : ""}>Cast</button>
-        <em>${uses ? (left ? `${left} of ${uses} use${uses === 1 ? "" : "s"} left today` : "Spent — recharges on a long rest") : "At will"}</em>
+        <em>${uses ? (left ? `${left} of ${uses} use${uses === 1 ? "" : "s"} left today` : "Spent. Recharges on a long rest.") : "At will"}</em>
       </div>
     `;
   }

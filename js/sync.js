@@ -125,7 +125,7 @@ async function shareCustomClass() {
       sharedBy: syncState.user?.displayName || syncSettings.playerName || "Anonymous",
       createdAt: fs.serverTimestamp()
     });
-    status.textContent = `Share code for ${cls.name}: ${code} — anyone can import it from this box.`;
+    status.textContent = `Share code for ${cls.name}: ${code}. Anyone can import it from this box.`;
   } catch {
     status.textContent = "Sharing failed. Check the Firestore rules allow writes to sharedClasses.";
   }
@@ -175,7 +175,7 @@ async function saveCharacterToCloud() {
     await fs.setDoc(ref, { character, updatedAt: fs.serverTimestamp() });
     renderAccountPanel(`Cloud save ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
   } catch {
-    renderAccountPanel("Cloud save failed — data kept locally.");
+    renderAccountPanel("Cloud save failed. Your data is kept on this device.");
   }
 }
 

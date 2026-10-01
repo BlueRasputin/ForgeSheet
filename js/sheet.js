@@ -89,7 +89,7 @@ function renderSheet() {
     const expert = (character.expertSkills || []).includes(id);
     const star = document.querySelector(`[data-expert-skill="${id}"]`);
     star.classList.toggle("is-expert", expert);
-    star.title = expert ? "Expertise active — double proficiency" : "Toggle expertise (double proficiency)";
+    star.title = expert ? "Expertise active: double proficiency" : "Toggle expertise (double proficiency)";
   });
   const expertCount = (character.expertSkills || []).length;
   document.querySelector("#skillSummary").textContent = `${character.proficientSkills.length} proficient${expertCount ? ` · ${expertCount} expertise` : ""}`;
@@ -278,7 +278,7 @@ function renderDeathSaves() {
   const root = document.querySelector("#deathSaveTracker");
   const successes = character.deathSaveSuccesses;
   const failures = character.deathSaveFailures;
-  const status = failures >= 3 ? "Three failures — dead" : successes >= 3 ? "Stable" : "";
+  const status = failures >= 3 ? "Three failures: dead" : successes >= 3 ? "Stable" : "";
   const pips = kind => Array.from({ length: 3 }, (_, index) => {
     const count = kind === "success" ? successes : failures;
     return `<button type="button" class="death-pip ${kind} ${index < count ? "filled" : ""}" data-death-kind="${kind}" data-death-index="${index}" aria-label="${kind} ${index + 1}"></button>`;
@@ -287,7 +287,7 @@ function renderDeathSaves() {
     <div class="death-save-row"><span>Successes</span>${pips("success")}</div>
     <div class="death-save-row"><span>Failures</span>${pips("failure")}</div>
     <div class="death-save-actions">
-      <button type="button" class="ghost" data-death-action="roll" ${isDying() ? "" : "disabled title=\"Only while dying at 0 HP\""}>Roll Death Save</button>
+      <button type="button" class="ghost" data-death-action="roll" ${isDying() ? "" : "disabled title=\"Only while dying at 0 HP\""}>Roll death save</button>
       <button type="button" class="ghost" data-death-action="reset">Reset</button>
       ${status ? `<em>${status}</em>` : ""}
     </div>
