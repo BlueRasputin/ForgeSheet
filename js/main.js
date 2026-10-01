@@ -116,6 +116,10 @@ function bindEvents() {
   });
   document.querySelector("#deathSaveTracker").addEventListener("click", handleDeathSaveClick);
   document.querySelector("#rollInitiative").addEventListener("click", rollInitiativeCheck);
+  document.querySelector("#acHint").addEventListener("click", () => {
+    character.ac = calculatedArmorClass();
+    persistAndRender();
+  });
   document.querySelector("#inspirationAdd").addEventListener("click", gainInspiration);
   document.querySelector("#inspirationSpend").addEventListener("click", spendInspiration);
   const fileMenu = document.querySelector(".file-menu");
@@ -160,6 +164,15 @@ function bindEvents() {
     persistAndRender();
   });
   document.querySelector("#slotGrid").addEventListener("click", handleSlotUsageClick);
+  document.querySelector("#partyDashboard").addEventListener("click", event => {
+    const card = event.target.closest("[data-party-sheet]");
+    if (!card || card.dataset.partySheet === character.sheetId) return;
+    const next = characterLibrary[card.dataset.partySheet];
+    if (!next) return;
+    character = normalizeCharacter(next);
+    persistAndRender();
+    showToast(`<span class="toast-label">Switched to ${escapeHtml(character.name)}</span>`);
+  });
   document.querySelector("#prepSuggestions").addEventListener("click", event => {
     const button = event.target.closest("[data-prep-add]");
     if (button) addSuggestedSpell(button.dataset.prepAdd);

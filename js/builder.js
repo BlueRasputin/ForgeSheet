@@ -9,22 +9,14 @@ function renderBuilderTools() {
 }
 
 function renderBuilderWizard() {
-  const steps = [
-    ["identity", "Identity", Boolean(character.name && character.species && character.background)],
-    ["class", "Class & Subclass", Boolean(character.classId && character.level && character.subclassName)],
-    ["abilities", "Ability Scores", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1)],
-    ["proficiencies", "Skills", (character.proficientSkills || []).length > 0],
-    ["equipment", "Equipment", (character.equipment || []).length > 0 || Boolean(character.inventory)],
-    ["spells", "Spells", currentClass().casterType === "none" || character.spells.some(spellRowHasSpell)],
-    ["personality", "Personality", Boolean(character.backgroundDetails?.trait || character.backgroundDetails?.ideal)]
-  ];
-  const complete = steps.filter(([, , done]) => done).length;
-  document.querySelector("#builderProgress").textContent = `${complete} / ${steps.length} complete`;
-  document.querySelector("#builderWizard").innerHTML = steps.map(([id, label, done]) => `
-    <article class="wizard-step ${done ? "is-complete" : ""}">
-      <strong>${escapeHtml(label)}</strong>
-      <span>${done ? "Complete" : builderStepHint(id)}</span>
-      <button class="ghost" type="button" data-builder-tab="${builderStepTab(id)}">${done ? "Review" : "Go"}</button>
+  const items = levelChecklist();
+  const complete = items.filter(item => item.done).length;
+  document.querySelector("#builderProgress").textContent = `${complete} / ${items.length} complete`;
+  document.querySelector("#builderWizard").innerHTML = items.map(item => `
+    <article class="wizard-step ${item.done ? "is-complete" : ""}">
+      <strong>${escapeHtml(item.label)}</strong>
+      <span>${item.done ? "Complete" : escapeHtml(item.detail)}</span>
+      ${item.tab ? `<button class="ghost" type="button" data-builder-tab="${item.tab}">${item.done ? "Review" : "Go"}</button>` : ""}
     </article>
   `).join("");
 }
@@ -309,6 +301,7 @@ function openCreateDialog() {
     classId: currentClass().id,
     background: "",
     level: 1,
+    subclass: "",
     abilities: Object.fromEntries(ABILITIES.map(([id]) => [id, 10]))
   };
   renderCreateStep();
@@ -375,7 +368,23 @@ function renderCreateClass() {
       </button>
     </div>
     <p class="create-detail"><strong>${escapeHtml(cls.name)}</strong> — d${cls.hitDie} hit die · ${casting}${saves ? ` · Saving throws: ${saves.map(id => id.toUpperCase()).join(", ")}` : " · Set saving throw proficiencies on the sheet"}</p>
+    <div id="createSubclassSlot">${renderCreateSubclassPicker(cls)}</div>
     ${creationDraft.level > 1 ? `<p class="create-detail">Starting at level ${creationDraft.level}: after creation a checklist shows everything to fill in for your level.</p>` : ""}
+  `;
+}
+
+function renderCreateSubclassPicker(cls) {
+  const unlock = SUBCLASS_LEVEL[cls.id] || 3;
+  if (creationDraft.level < unlock) return "";
+  const options = officialSubclasses.filter(item => item.classIndex === cls.id);
+  if (!options.length) return "";
+  return `
+    <label class="create-name">Subclass
+      <select data-create-field="subclass">
+        <option value="">Decide later</option>
+        ${options.map(item => `<option value="${escapeHtml(item.index)}" ${item.index === creationDraft.subclass ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
+      </select>
+    </label>
   `;
 }
 
@@ -413,8 +422,8 @@ function renderCreateAbilities() {
         </div>
       `).join("")}
     </div>
-    <button type="button" class="secondary" data-create-standard>Use Standard Array (15, 14, 13, 12, 10, 8)</button>
-    <p class="create-detail">The array fills scores in the order listed — swap numbers between abilities to suit your class.</p>
+    <button type="button" class="secondary" data-create-standard>Use Standard Array for ${escapeHtml((getClasses()[creationDraft.classId] || currentClass()).name)}</button>
+    <p class="create-detail">Puts 15, 14, 13, 12, 10, 8 into the abilities your class leans on most. ${speciesBonusText(creationDraft.species) ? `${escapeHtml(creationDraft.species)} bonuses (${speciesBonusText(creationDraft.species)}) are added when you create the character.` : ""}</p>
   `;
 }
 
@@ -444,6 +453,8 @@ function handleCreateFieldInput(event) {
   const field = event.target.dataset.createField;
   if (field === "level") {
     creationDraft.level = clamp(Number(event.target.value || 1), 1, 20);
+    const slot = document.querySelector("#createSubclassSlot");
+    if (slot) slot.innerHTML = renderCreateSubclassPicker(getClasses()[creationDraft.classId] || currentClass());
   } else if (field) {
     creationDraft[field] = event.target.value;
   }
@@ -476,7 +487,8 @@ function handleCreateStepClick(event) {
   }
   if (event.target.closest("[data-create-standard]")) {
     const array = [15, 14, 13, 12, 10, 8];
-    ABILITIES.forEach(([id], index) => {
+    const order = CLASS_ABILITY_PRIORITY[creationDraft.classId] || ABILITIES.map(([id]) => id);
+    order.forEach((id, index) => {
       creationDraft.abilities[id] = array[index];
     });
     renderCreateStep();
@@ -503,19 +515,30 @@ function averageHpFor(cls, level, conMod) {
   return Math.max(level, cls.hitDie + conMod + (level - 1) * (Math.ceil(cls.hitDie / 2) + 1 + conMod));
 }
 
+function speciesBonusText(species) {
+  const bonus = SPECIES_PRESETS.find(([name]) => name === species)?.[4] || {};
+  return Object.entries(bonus).map(([id, value]) => `+${value} ${id.toUpperCase()}`).join(", ");
+}
+
 function finishCreation() {
   const draft = creationDraft;
   const cls = getClasses()[draft.classId] || currentClass();
   const speciesRow = SPECIES_PRESETS.find(([name]) => name === draft.species);
-  const abilities = Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10), 1, 30)]));
+  const speciesBonus = speciesRow?.[4] || {};
+  const abilities = Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10) + (speciesBonus[id] || 0), 1, 30)]));
+  const official = officialSubclasses.find(item => item.index === draft.subclass);
+  const [armor, weapons, tools] = CLASS_PROFICIENCIES[cls.id] || ["", "", ""];
+  const featureLines = cls.table.slice(0, clamp(Number(draft.level || 1), 1, 20))
+    .filter(row => row.features)
+    .map(row => `Level ${row.level}: ${row.features}`);
   const level = clamp(Number(draft.level || 1), 1, 20);
   const hp = averageHpFor(cls, level, Math.floor((abilities.con - 10) / 2));
   character = {
     ...defaultCharacter(),
     name: draft.name.trim() || "New Character",
     classId: cls.id,
-    subclassName: "",
-    subclass: { mode: "custom", officialIndex: "", type: "Subclass", sections: [] },
+    subclassName: official?.name || "",
+    subclass: { mode: official ? "official" : "custom", officialIndex: official?.index || "", type: official?.flavor || "Subclass", sections: [] },
     level,
     species: draft.species,
     background: "",
@@ -533,7 +556,8 @@ function finishCreation() {
     classOptions: [],
     actions: [],
     autoSpells: [],
-    features: speciesRow ? `Species: ${draft.species} — ${speciesRow[2]}` : "",
+    features: [speciesRow ? `Species: ${draft.species} — ${speciesRow[2]}` : "", ...featureLines].filter(Boolean).join("\n"),
+    backgroundDetails: { ...defaultCharacter().backgroundDetails, armor, weapons, tools },
     attacks: "",
     inventory: "",
     notes: ""
@@ -542,6 +566,8 @@ function finishCreation() {
   creationDraft = null;
   document.querySelector("#createDialog").close();
   persistAndRender();
+  const bonusText = speciesBonusText(draft.species);
+  if (bonusText) showToast(`<span class="toast-label">${escapeHtml(character.name)} is ready</span><span>Added ${escapeHtml(draft.species)} ${bonusText} (PHB). Using custom origins? Move them in the ability scores.</span>`, { duration: 10000 });
   if (level > 1 && levelChecklist().some(item => !item.done)) document.querySelector("#checklistDialog").showModal();
 }
 
@@ -549,6 +575,8 @@ function levelChecklist() {
   const cls = currentClass();
   const level = character.level;
   const conMod = mod("con");
+  const classSkills = CLASS_PROFICIENCIES[cls.id]?.[3] || 2;
+  const expectedSkills = classSkills + (character.background ? 2 : 0);
   const asiCount = [...asiLevelsFor(cls)].filter(asiLevel => asiLevel <= level).length;
   const featCount = (character.planner?.feats || []).length;
   // Lowest legal max HP: full first die, then a roll of 1 + CON (min 1) every level after.
@@ -561,7 +589,7 @@ function levelChecklist() {
     // ponytail: subclass required at level 3 for everyone; some classes pick at 1-2, refine per-class if it matters
     ["Subclass", level >= 3 ? "Choose and record your subclass." : "Chosen at level 3 for most classes.", level < 3 || Boolean(character.subclassName), "features"],
     ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
-    ["Skills", "Pick your skill proficiencies.", (character.proficientSkills || []).length > 0, "#skills"],
+    ["Skills", `Pick ${expectedSkills} skill proficiencies (${classSkills} from ${cls.name}${character.background ? ", 2 from your background" : ""}).`, (character.proficientSkills || []).length >= expectedSkills, "#skills"],
     ["Hit Dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
     ["Hit Points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
     ["ASI / Feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level} — record each in the Builder planner.`, featCount >= asiCount, "builder"],

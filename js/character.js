@@ -342,10 +342,44 @@ function proficiencyBonus(level = character.level) {
   return Math.ceil(level / 4) + 1;
 }
 
+// Bards from 2nd level add half proficiency to any ability check they aren't proficient in.
+function jackOfAllTrades() {
+  return currentClass().id === "bard" && character.level >= 2 ? Math.floor(proficiencyBonus() / 2) : 0;
+}
+
 function skillBonus(skill, ability) {
   const proficient = character.proficientSkills.includes(skill);
   const expert = (character.expertSkills || []).includes(skill);
-  return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : 0);
+  return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : jackOfAllTrades());
+}
+
+function initiativeBonus() {
+  return mod("dex") + jackOfAllTrades();
+}
+
+// AC from equipped gear: body armor ("AC 14 + Dex modifier, max 2"), shields and magic "+N AC" bonuses.
+function calculatedArmorClass() {
+  const worn = (character.equipment || []).filter(item => item.equipped || item.container === "equipped");
+  const usable = item => !/attunement/i.test(item.notes || "") || item.attuned;
+  const armor = worn.find(item => /\bAC\s+\d+/i.test(item.notes || ""));
+  const dex = mod("dex");
+  let ac;
+  if (armor) {
+    const notes = armor.notes;
+    const base = Number(notes.match(/\bAC\s+(\d+)/i)[1]);
+    const addsDex = /\+\s*Dex/i.test(notes);
+    const cap = notes.match(/max\s+(\d+)/i);
+    ac = base + (addsDex ? (cap ? Math.min(dex, Number(cap[1])) : dex) : 0);
+  } else {
+    const shield = worn.some(item => /shield/i.test(item.name || ""));
+    const id = currentClass().id;
+    ac = 10 + dex + (id === "barbarian" ? mod("con") : id === "monk" && !shield ? mod("wis") : 0);
+  }
+  worn.filter(item => item !== armor && usable(item)).forEach(item => {
+    const bonus = String(item.notes || "").match(/\+(\d+)\s*AC/i);
+    if (bonus) ac += Number(bonus[1]);
+  });
+  return ac;
 }
 
 function passivePerception(source = character) {

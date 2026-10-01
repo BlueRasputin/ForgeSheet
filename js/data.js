@@ -114,16 +114,55 @@ const ITEM_CATALOG = [
 ];
 
 const SPECIES_PRESETS = [
-  ["Dragonborn", 30, "Draconic ancestry grants a breath weapon and resistance to its damage type.", "🐲"],
-  ["Dwarf", 25, "Darkvision, advantage against poison, and tool proficiency.", "⚒️"],
-  ["Elf", 30, "Darkvision, keen senses, fey ancestry, and trance instead of sleep.", "🌙"],
-  ["Gnome", 25, "Darkvision and advantage on mental saves against magic.", "⚙️"],
-  ["Half-Elf", 30, "Darkvision, fey ancestry, and two extra skill proficiencies.", "🌓"],
-  ["Half-Orc", 30, "Darkvision, relentless endurance, and savage critical hits.", "💪"],
-  ["Halfling", 25, "Lucky rerolls on 1s, brave, and nimble through larger creatures' spaces.", "🍀"],
-  ["Human", 30, "+1 to every ability score.", "⭐"],
-  ["Tiefling", 30, "Darkvision, fire resistance, and infernal legacy spells.", "🔥"]
+  ["Dragonborn", 30, "Draconic ancestry grants a breath weapon and resistance to its damage type.", "🐲", { str: 2, cha: 1 }],
+  ["Dwarf", 25, "Darkvision, advantage against poison, and tool proficiency.", "⚒️", { con: 2 }],
+  ["Elf", 30, "Darkvision, keen senses, fey ancestry, and trance instead of sleep.", "🌙", { dex: 2 }],
+  ["Gnome", 25, "Darkvision and advantage on mental saves against magic.", "⚙️", { int: 2 }],
+  ["Half-Elf", 30, "Darkvision, fey ancestry, and two extra skill proficiencies. +1 to two other abilities of your choice.", "🌓", { cha: 2 }],
+  ["Half-Orc", 30, "Darkvision, relentless endurance, and savage critical hits.", "💪", { str: 2, con: 1 }],
+  ["Halfling", 25, "Lucky rerolls on 1s, brave, and nimble through larger creatures' spaces.", "🍀", { dex: 2 }],
+  ["Human", 30, "+1 to every ability score.", "⭐", { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 }],
+  ["Tiefling", 30, "Darkvision, fire resistance, and infernal legacy spells.", "🔥", { cha: 2, int: 1 }]
 ];
+
+// 2014 PHB starting proficiencies: [armor, weapons, tools, number of class skill choices].
+const CLASS_PROFICIENCIES = {
+  artificer: ["Light armor, medium armor, shields", "Simple weapons", "Thieves' tools, tinker's tools, one artisan's tools", 2],
+  barbarian: ["Light armor, medium armor, shields", "Simple weapons, martial weapons", "", 2],
+  bard: ["Light armor", "Simple weapons, hand crossbows, longswords, rapiers, shortswords", "Three musical instruments", 3],
+  bloodhunter: ["Light armor, medium armor, shields", "Simple weapons, martial weapons", "Alchemist's supplies", 3],
+  cleric: ["Light armor, medium armor, shields", "Simple weapons", "", 2],
+  druid: ["Light armor, medium armor, shields (nonmetal)", "Clubs, daggers, darts, javelins, maces, quarterstaffs, scimitars, sickles, slings, spears", "Herbalism kit", 2],
+  fighter: ["All armor, shields", "Simple weapons, martial weapons", "", 2],
+  monk: ["", "Simple weapons, shortswords", "One artisan's tools or musical instrument", 2],
+  paladin: ["All armor, shields", "Simple weapons, martial weapons", "", 2],
+  ranger: ["Light armor, medium armor, shields", "Simple weapons, martial weapons", "", 3],
+  rogue: ["Light armor", "Simple weapons, hand crossbows, longswords, rapiers, shortswords", "Thieves' tools", 4],
+  sorcerer: ["", "Daggers, darts, slings, quarterstaffs, light crossbows", "", 2],
+  warlock: ["Light armor", "Simple weapons", "", 2],
+  wizard: ["", "Daggers, darts, slings, quarterstaffs, light crossbows", "", 2]
+};
+
+// Highest-priority ability first, so the Standard Array lands where each class needs it.
+const CLASS_ABILITY_PRIORITY = {
+  artificer: ["int", "con", "dex", "wis", "str", "cha"],
+  barbarian: ["str", "con", "dex", "wis", "cha", "int"],
+  bard: ["cha", "dex", "con", "wis", "int", "str"],
+  bloodhunter: ["dex", "int", "con", "wis", "str", "cha"],
+  cleric: ["wis", "con", "str", "dex", "cha", "int"],
+  druid: ["wis", "con", "dex", "int", "cha", "str"],
+  fighter: ["str", "con", "dex", "wis", "int", "cha"],
+  monk: ["dex", "wis", "con", "str", "int", "cha"],
+  paladin: ["str", "cha", "con", "wis", "dex", "int"],
+  ranger: ["dex", "wis", "con", "str", "int", "cha"],
+  rogue: ["dex", "con", "int", "wis", "cha", "str"],
+  sorcerer: ["cha", "con", "dex", "wis", "int", "str"],
+  warlock: ["cha", "con", "dex", "wis", "int", "str"],
+  wizard: ["int", "con", "dex", "wis", "cha", "str"]
+};
+
+// Level at which each class picks its subclass.
+const SUBCLASS_LEVEL = { cleric: 1, sorcerer: 1, warlock: 1, druid: 2, wizard: 2 };
 
 const CLASS_GLYPHS = {
   artificer: "🔧", barbarian: "🪓", bard: "🎻", bloodhunter: "🩸", cleric: "🙏", druid: "🌿",

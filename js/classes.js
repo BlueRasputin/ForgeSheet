@@ -23,15 +23,28 @@ const CANTRIPS_KNOWN = {
   wizard: cantripProgression(3)
 };
 
+// 2014 PHB class features by level for the classes built with classDef (ASI added automatically).
+const CASTER_FEATURES = {
+  bard: { 1: "Spellcasting, bardic inspiration (d6)", 2: "Jack of all trades, song of rest (d6)", 3: "Bard college, expertise", 5: "Bardic inspiration (d8), font of inspiration", 6: "Countercharm, college feature", 9: "Song of rest (d8)", 10: "Bardic inspiration (d10), expertise, magical secrets", 13: "Song of rest (d10)", 14: "Magical secrets, college feature", 15: "Bardic inspiration (d12)", 17: "Song of rest (d12)", 18: "Magical secrets", 20: "Superior inspiration" },
+  cleric: { 1: "Spellcasting, divine domain", 2: "Channel divinity (1/rest), domain feature", 5: "Destroy undead (CR 1/2)", 6: "Channel divinity (2/rest), domain feature", 8: "Destroy undead (CR 1), domain feature", 10: "Divine intervention", 11: "Destroy undead (CR 2)", 14: "Destroy undead (CR 3)", 17: "Destroy undead (CR 4), domain feature", 18: "Channel divinity (3/rest)", 20: "Divine intervention improvement" },
+  druid: { 1: "Druidic, spellcasting", 2: "Wild shape, druid circle", 4: "Wild shape improvement", 6: "Circle feature", 8: "Wild shape improvement", 10: "Circle feature", 14: "Circle feature", 18: "Timeless body, beast spells", 20: "Archdruid" },
+  paladin: { 1: "Divine sense, lay on hands", 2: "Fighting style, spellcasting, divine smite", 3: "Divine health, sacred oath", 5: "Extra attack", 6: "Aura of protection", 7: "Sacred oath feature", 10: "Aura of courage", 11: "Improved divine smite", 14: "Cleansing touch", 15: "Sacred oath feature", 18: "Aura improvements", 20: "Sacred oath feature" },
+  ranger: { 1: "Favored enemy, natural explorer", 2: "Fighting style, spellcasting", 3: "Ranger archetype, primeval awareness", 5: "Extra attack", 6: "Favored enemy and natural explorer improvements", 7: "Ranger archetype feature", 8: "Land's stride", 10: "Natural explorer improvement, hide in plain sight", 11: "Ranger archetype feature", 14: "Favored enemy improvement, vanish", 15: "Ranger archetype feature", 18: "Feral senses", 20: "Foe slayer" },
+  sorcerer: { 1: "Spellcasting, sorcerous origin", 2: "Font of magic", 3: "Metamagic", 6: "Sorcerous origin feature", 10: "Metamagic", 14: "Sorcerous origin feature", 17: "Metamagic", 18: "Sorcerous origin feature", 20: "Sorcerous restoration" },
+  warlock: { 1: "Otherworldly patron, pact magic", 2: "Eldritch invocations", 3: "Pact boon", 6: "Otherworldly patron feature", 10: "Otherworldly patron feature", 11: "Mystic arcanum (6th level)", 13: "Mystic arcanum (7th level)", 14: "Otherworldly patron feature", 15: "Mystic arcanum (8th level)", 17: "Mystic arcanum (9th level)", 20: "Eldritch master" },
+  wizard: { 1: "Spellcasting, arcane recovery", 2: "Arcane tradition", 6: "Arcane tradition feature", 10: "Arcane tradition feature", 14: "Arcane tradition feature", 18: "Spell mastery", 20: "Signature spells" }
+};
+
 function classDef(id, name, hitDie, casterType, spellAbility, preparedFormula, spellSources) {
   const known = KNOWN_SPELLS[id] || [];
   const cantrips = CANTRIPS_KNOWN[id] || [];
+  const featureText = CASTER_FEATURES[id] || {};
   const delta = (list, level) => Math.max(0, (list[level - 1] || 0) - (list[level - 2] || 0));
   return {
     id, name, hitDie, casterType, spellAbility, preparedFormula, spellSources,
     table: makeTable(Object.fromEntries(Array.from({ length: 20 }, (_, index) => {
       const level = index + 1;
-      const features = ASI_LEVELS.has(level) ? "Ability score improvement" : level === 1 ? "Spellcasting" : "";
+      const features = [featureText[level], ASI_LEVELS.has(level) ? "Ability score improvement" : ""].filter(Boolean).join(", ");
       return [level, [features, delta(known, level), delta(cantrips, level)]];
     })))
   };

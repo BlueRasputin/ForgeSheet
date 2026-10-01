@@ -27,7 +27,7 @@ function spellSummaryHtml(row) {
 
 // Only the saves a target makes ("make a Wisdom saving throw", "Wisdom save or take"), not "advantage on Wisdom saving throws".
 function spellSaveAbility(text) {
-  const match = String(text).match(/(?:makes?|must make|succeeds? on|succeed on)\s+an?\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav|(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+save\s+or\b/i);
+  const match = String(text).match(/(?:makes?|must make|succeeds? on|succeed on)\s+(?:an?\s+)?(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav|(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+save\s+or\b/i);
   return match ? match[1] || match[2] : "";
 }
 

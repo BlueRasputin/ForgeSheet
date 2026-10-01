@@ -16,7 +16,12 @@ function renderHeader() {
   setValue("acInput", character.ac);
   setValue("speedInput", character.speed);
   document.querySelector("#profBonus").textContent = formatMod(proficiencyBonus());
-  document.querySelector("#initiativeValue").textContent = formatMod(mod("dex"));
+  document.querySelector("#initiativeValue").textContent = formatMod(initiativeBonus());
+  const armorClass = calculatedArmorClass();
+  const acHint = document.querySelector("#acHint");
+  acHint.hidden = armorClass === Number(character.ac);
+  acHint.textContent = `Gear: ${armorClass}`;
+  acHint.title = `Your equipped armor, shield, and DEX give AC ${armorClass}. Click to use it.`;
   document.querySelector("#inspirationValue").textContent = character.inspiration;
   document.querySelector("#inspirationTile").classList.toggle("is-on", character.inspiration > 0);
   ["speedInput", "acInput", "hpInput", "maxHpInput", "tempHpInput"].forEach(id => {

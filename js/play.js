@@ -243,7 +243,7 @@ function rollDeathSave() {
 
 function rollAbilityCheck(ability) {
   const name = ABILITIES.find(([id]) => id === ability)?.[1] || ability;
-  rollFromInput(`${name} check`, `1d20${formatMod(mod(ability))}`);
+  rollFromInput(`${name} check`, `1d20${formatMod(mod(ability) + jackOfAllTrades())}`);
 }
 
 function rollSavingThrow(ability) {
@@ -258,7 +258,7 @@ function rollSkillCheck(skill) {
 }
 
 function rollInitiativeCheck() {
-  rollFromInput("Initiative", `1d20${formatMod(mod("dex"))}`);
+  rollFromInput("Initiative", `1d20${formatMod(initiativeBonus())}`);
 }
 
 function combatActionHint(action) {
