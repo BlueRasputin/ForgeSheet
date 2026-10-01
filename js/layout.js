@@ -37,6 +37,9 @@ function activateTab(tab) {
   }
   persistViewLayout();
   renderViewLayout();
+  const tabsHeight = document.querySelector(".sheet-main .tabs").getBoundingClientRect().height;
+  const deckTop = document.querySelector("#panelDeck").getBoundingClientRect().top;
+  if (deckTop < tabsHeight) window.scrollTo({ top: window.scrollY + deckTop - tabsHeight - 8 });
 }
 
 function renderViewLayout() {

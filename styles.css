@@ -458,7 +458,7 @@ textarea:focus-visible {
 .eyebrow {
   margin: 0;
   color: var(--accent);
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -689,7 +689,7 @@ textarea {
   .summary-band .ability-name {
     max-width: 100%;
     overflow: hidden;
-    font-size: 0.56rem;
+    font-size: 0.7rem;
     letter-spacing: 0.04em;
   }
 
@@ -888,7 +888,7 @@ body.custom-bg {
 
 .hp-fields label {
   gap: 2px;
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   text-align: center;
   min-width: 0;
 }
@@ -2665,91 +2665,11 @@ body:not(.role-dm) .dm-only {
 }
 
 @media screen and (min-width: 981px) {
-  body {
-    height: 100dvh;
-    overflow: hidden;
-  }
-
-  .app-shell {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    padding-bottom: 14px;
-  }
-
-  main {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .sheet-layout {
-    flex: 1;
-    min-height: 0;
-    align-items: stretch;
-  }
-
-  .sheet-rail {
-    min-height: 0;
-    overflow-y: auto;
-    align-content: start;
-    padding-right: 2px;
-  }
-
-  .skills-col {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .skills-col .skill-grid {
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .sheet-main {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    height: 100%;
-  }
-
-  .deck-shell {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .panel-deck {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  body.split-view .panel-deck {
-    overflow: hidden;
-    grid-template-rows: minmax(0, 1fr);
-    align-items: stretch;
-  }
-
   body.split-view .panel.split-panel {
-    min-height: 0;
-    height: 100%;
-    overflow-y: auto;
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 10px;
     background: color-mix(in srgb, var(--panel-soft) 55%, transparent);
-  }
-
-  .sheet-rail,
-  .skills-col .skill-grid,
-  .panel-deck,
-  body.split-view .panel.split-panel {
-    scrollbar-width: thin;
-    scrollbar-color: var(--line) transparent;
   }
 }
 
@@ -3762,4 +3682,189 @@ body[data-theme] .topbar .file-menu-items .danger {
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+/* ===== Formatting pass (Brennan's review) ===== */
+
+/* #1 The notched frame belongs to the header band; everything else is a plain card. */
+.block,
+.deck-shell {
+  clip-path: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.block::before,
+.block::after,
+.deck-shell::before,
+.deck-shell::after {
+  content: none;
+}
+
+.deck-shell {
+  border: 0;
+  background: transparent;
+}
+
+/* #2 The tab bar stays pinned while the page scrolls. */
+.sheet-main .tabs {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 30;
+}
+
+@media screen and (min-width: 981px) {
+  .spell-layout > .spell-control {
+    top: calc(var(--tabs-height, 56px) + 8px);
+    max-height: calc(100vh - var(--tabs-height, 56px) - 16px);
+  }
+}
+
+/* #3 One filled button in the top bar, all aligned to the same height. */
+.top-actions {
+  align-items: center;
+}
+
+.topbar .ghost,
+.file-menu > summary {
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* #4 Header tiles: short labels when narrow, a real Inspiration stepper, HP controls in one row. */
+.stat-tile {
+  container-type: inline-size;
+}
+
+.stat-tile .label-long {
+  display: inline;
+}
+
+.stat-tile .label-short {
+  display: none;
+}
+
+@container (max-width: 84px) {
+  .stat-tile .label-long {
+    display: none;
+  }
+
+  .stat-tile .label-short {
+    display: inline;
+  }
+}
+
+.topbar .file-menu > summary {
+  min-height: 28px;
+}
+
+.tile-buttons {
+  position: static;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tile-buttons button {
+  min-height: 26px;
+  min-width: 26px;
+  font-size: 0.95rem;
+}
+
+.hp-box {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hp-caption {
+  order: 1;
+}
+
+.hp-fields {
+  order: 2;
+}
+
+.hp-actions {
+  order: 3;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.hp-actions button,
+.hp-actions input {
+  min-height: 28px;
+  font-size: 0.8rem;
+}
+
+.sense-row span {
+  padding: 0 2px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+/* Attack, Damage and Remove stay together. */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* #5 Tablets and phones: the active tab first, one scrolling tab row, a compact top bar. */
+@media screen and (max-width: 980px) {
+  .sheet-main {
+    order: -1;
+  }
+
+  .sheet-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+  }
+
+  .top-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .top-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .manager-band {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .manager-band > label,
+  #autosaveStatus {
+    grid-column: 1 / -1;
+  }
+
+  .split-toolbar {
+    display: none;
+  }
+}
+
+/* Heal/Damage text leans toward the theme's ink so it stays readable on light and dark panels. */
+.hp-actions .heal {
+  color: color-mix(in srgb, var(--green) 62%, var(--ink));
+}
+
+.hp-actions .damage {
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+}
+
+body[data-theme="dark"] .tab.active {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
 }

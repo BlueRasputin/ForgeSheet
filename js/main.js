@@ -1,5 +1,12 @@
 document.addEventListener("DOMContentLoaded", init);
 
+function trackTabBarHeight() {
+  const tabs = document.querySelector(".sheet-main .tabs");
+  const update = () => document.documentElement.style.setProperty("--tabs-height", `${Math.ceil(tabs.getBoundingClientRect().height)}px`);
+  new ResizeObserver(update).observe(tabs);
+  update();
+}
+
 function init() {
   const savedTheme = localStorage.getItem(THEME_KEY);
   document.body.dataset.theme = THEMES.includes(savedTheme) ? savedTheme : "beyond";
@@ -7,6 +14,7 @@ function init() {
   ensureCharacterInLibrary();
   buildStaticControls();
   bindEvents();
+  trackTabBarHeight();
   renderAll();
   hydrateSubclasses();
   hydrateSpells();

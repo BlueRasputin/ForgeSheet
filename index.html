@@ -38,9 +38,9 @@
             </div>
           </details>
           <input id="backgroundFile" type="file" accept="image/*" hidden>
-          <button id="shortRestButton" class="secondary" type="button">Short Rest</button>
-          <button id="longRestButton" class="secondary" type="button">Long Rest</button>
-          <button id="checklistButton" class="secondary" type="button">Checklist</button>
+          <button id="shortRestButton" class="ghost" type="button">Short Rest</button>
+          <button id="longRestButton" class="ghost" type="button">Long Rest</button>
+          <button id="checklistButton" class="ghost" type="button">Checklist</button>
           <button id="levelUpButton" class="primary">Level Up</button>
         </div>
       </header>
@@ -123,7 +123,7 @@
             <div id="abilities" class="ability-grid"></div>
             <div class="stat-tile-group">
               <div class="stat-tile">
-                <span>Proficiency</span>
+                <span><span class="label-long">Proficiency</span><span class="label-short">Prof</span></span>
                 <strong id="profBonus">+2</strong>
               </div>
               <div class="stat-tile">
@@ -131,7 +131,7 @@
                 <strong><input id="speedInput" type="number" min="0"></strong>
               </div>
               <div class="stat-tile" id="inspirationTile">
-                <span>Inspiration</span>
+                <span><span class="label-long">Inspiration</span><span class="label-short">Insp</span></span>
                 <strong id="inspirationValue">0</strong>
                 <div class="tile-buttons">
                   <button id="inspirationSpend" type="button" title="Spend inspiration">−</button>
@@ -139,16 +139,16 @@
                 </div>
               </div>
               <button type="button" id="rollInitiative" class="stat-tile" title="Roll initiative">
-                <span>Initiative</span>
+                <span><span class="label-long">Initiative</span><span class="label-short">Init</span></span>
                 <strong id="initiativeValue">+0</strong>
               </button>
               <div class="stat-tile">
-                <span>Armor Class</span>
+                <span><span class="label-long">Armor Class</span><span class="label-short">AC</span></span>
                 <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
                 <button type="button" id="acHint" class="ac-hint" hidden></button>
               </div>
               <div class="stat-tile conditions-tile">
-                <span>Conditions</span>
+                <span><span class="label-long">Conditions</span><span class="label-short">Cond.</span></span>
                 <p id="conditionsMini">None</p>
               </div>
             </div>
@@ -334,7 +334,7 @@
                 Preset
                 <select id="backgroundPreset"></select>
               </label>
-              <button id="applyBackgroundPreset" class="ghost" type="button">Apply</button>
+              <button id="applyBackgroundPreset" class="secondary" type="button">Apply</button>
             </div>
             <div class="field-grid">
               <label>Trait <textarea id="personalityTraitInput" rows="3"></textarea></label>
@@ -925,9 +925,11 @@
         <input class="action-attack" placeholder="e.g. +7 or DC 15" aria-label="Attack bonus or save DC">
         <input class="action-damage" placeholder="e.g. 1d8+3 fire" aria-label="Damage">
         <textarea class="action-notes" rows="2" placeholder="Range, save, riders, ammo, charges..."></textarea>
-        <button class="secondary roll-attack" type="button">Attack</button>
-        <button class="secondary roll-damage" type="button">Damage</button>
-        <button class="ghost remove-action" type="button">Remove</button>
+        <div class="action-buttons">
+          <button class="secondary roll-attack" type="button">Attack</button>
+          <button class="secondary roll-damage" type="button">Damage</button>
+          <button class="ghost remove-action" type="button">Remove</button>
+        </div>
       </article>
     </template>
 
