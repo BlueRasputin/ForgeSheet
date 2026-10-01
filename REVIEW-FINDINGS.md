@@ -145,6 +145,39 @@ Fixes: roll toast · cast-on-row · Actions tab reorder · resource −/+ pips �
 - NOTE: his fresh L8 barbarian showed empty Resources until visiting Actions tab —
   ensureClassResources only runs in renderPlayTools; seed it in renderAll/persist path instead.
 
+## Fix status (2026-09-30)
+
+Fixed in be449c7, 5f3ed3f, 93ec3a7 and verified in the browser:
+
+- All 8 consensus issues: multi-tab data loss (per-character merge + storage event), skill-row
+  grid, roll results (toasts at the viewport edge), cast from collapsed row, level edits apply
+  HP/hit dice, rests report + Undo, starting level beside the class step title, Actions tab
+  reordered with the explainer collapsed
+- Also: blank "New Character" minted on every fresh load; checklist HP floor math; 0 HP →
+  Unconscious + dying banner with Roll Death Save; death saves reset on any healing; HP input
+  accepts 0; party card 0 HP; Profane Soul pact magic; real spells-known caps ("Known N / cap");
+  loose subclass matching + datalist; timeline pact slot labels; sync duplication, DM role
+  demotion, role re-render, clipboard fallback; dead create-draft breaking Save Class; note
+  sections searchable; Attack/Damage buttons with crit doubling; Generate Actions builds real
+  weapon attacks and offensive spells, skips armor, no duplicates; resource −/+; compact
+  condition chips; concentration-swap confirm; printed spell names; C/R chips; sticky
+  spellcasting block; over-limit warning in words; HP state colors; File menu; rules + catalog
+  gaps; checklist Go targets; martial level-up dialog; CSV commas; non-SRD subclass text;
+  ASI banner covering the top bar; ability tiles overflowing at mid widths; action rows clipping
+
+Still open (backlog):
+
+- Spellbook at scale (Liam): search-as-you-type spell add, clickable sheet-search results,
+  print zoom cap + pagination, Arcane Recovery helper, slot pips, select label truncation,
+  empty-row text collision
+- DM/campaign (Matt): Party tab should use synced sheets when connected; offline callout and
+  disabled copy/disconnect buttons when not connected; DM item cards placement; panel layout
+- Custom content (Taliesin): template guidance as placeholders, pact-magic caster multiplier
+  for custom classes, official vs custom subclass model, em-dash caster columns for martials
+- Combat (Travis): Rage on/off state chip, Spells tab stub for non-casters, read-mode action
+  cards, SRD equipment from the API
+- Create wizard: subclass step for level 3+ characters
+
 ## Still to do
 
 - Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley
