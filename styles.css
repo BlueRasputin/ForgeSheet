@@ -3868,3 +3868,67 @@ body[data-theme="dark"] .tab.active {
   border-color: var(--accent-strong);
   background: var(--accent-strong);
 }
+
+/* Action notes stay one line until you click into them, so resources and conditions sit higher. */
+.action-row .action-notes {
+  min-height: 0;
+  height: 2.1em;
+  resize: none;
+  overflow: hidden;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.action-row .action-notes:focus {
+  height: 6em;
+  overflow: auto;
+  color: var(--ink);
+}
+
+/* Mid-width laptops: one left column (saves, skills, senses, proficiencies) so the main panel gets the width. */
+@media screen and (min-width: 981px) and (max-width: 1279px) {
+  .sheet-layout {
+    grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-rows: auto auto auto 1fr;
+  }
+
+  .sheet-rail {
+    display: contents;
+  }
+
+  .sheet-main {
+    grid-column: 2;
+    grid-row: 1 / 5;
+  }
+
+  .sheet-rail > .block,
+  .skills-col {
+    grid-column: 1;
+  }
+
+  .sheet-rail > .block:nth-child(1) {
+    order: 1;
+  }
+
+  .skills-col {
+    order: 2;
+  }
+
+  .sheet-rail > .block:nth-child(2) {
+    order: 3;
+  }
+
+  .sheet-rail > .block:nth-child(3) {
+    order: 4;
+  }
+}
+
+/* Action rows: fields on line one, notes and buttons on line two. */
+.action-row .action-notes {
+  flex: 1 1 220px;
+  order: 5;
+}
+
+.action-row .action-buttons {
+  order: 6;
+}
