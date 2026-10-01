@@ -181,6 +181,14 @@ window.addEventListener("storage", event => {
   if (!latest) characterLibrary[character.sheetId] = character;
   renderCharacterManager();
   renderPartyDashboard();
+  renderDmItemTools();
+});
+
+window.addEventListener("storage", event => {
+  if (event.key !== CUSTOM_CLASS_KEY) return;
+  customClasses = loadCustomClasses();
+  renderCharacterManager();
+  renderPartyDashboard();
 });
 
 function ensureCharacterInLibrary() {
@@ -228,26 +236,54 @@ function duplicateCharacter() {
 }
 
 function deleteCharacter() {
-  if (!confirm(`Delete ${character.name || "this character"} from the library?`)) return;
+  showToast(`<span class="toast-label">Delete ${escapeHtml(character.name || "this character")}?</span><span>This removes the character from the library and can't be undone.</span>`, {
+    tone: "fumble",
+    actions: [{ label: "Delete", run: confirmDeleteCharacter }],
+    duration: 10000
+  });
+}
+
+function confirmDeleteCharacter() {
+  const name = character.name || "Character";
   deleteCharacterFromCloud(character.sheetId);
   removedSheetIds.add(character.sheetId);
   delete characterLibrary[character.sheetId];
   const remaining = Object.values(characterLibrary);
   character = remaining.length ? normalizeCharacter(remaining[0]) : defaultCharacter();
   persistAndRender();
+  showToast(`<span class="toast-label">${escapeHtml(name)} deleted</span>`);
+}
+
+// Opening a sheet only views it; nothing is saved (and no one else's sheet gets a new timestamp) until it changes.
+function switchToSheet(sheetId) {
+  const next = characterLibrary[sheetId];
+  if (!next) return;
+  character = normalizeCharacter(next);
+  try {
+    sessionStorage.setItem(ACTIVE_TAB_SHEET_KEY, sheetId);
+  } catch {
+    // Per-tab memory is optional.
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
+  renderAll();
+  showToast(`<span class="toast-label">Now viewing ${escapeHtml(character.name || "character")}</span>`);
 }
 
 function switchCharacter(event) {
-  const next = characterLibrary[event.target.value];
-  if (!next) return;
-  character = normalizeCharacter(next);
-  persistAndRender();
+  switchToSheet(event.target.value);
 }
 
 function resetCharacter() {
-  if (!confirm("Reset this character sheet?")) return;
-  character = defaultCharacter();
-  persistAndRender();
+  showToast(`<span class="toast-label">Start a blank sheet?</span><span>${escapeHtml(character.name || "The current character")} stays in the library.</span>`, {
+    actions: [{
+      label: "Blank sheet",
+      run: () => {
+        character = defaultCharacter();
+        persistAndRender();
+      }
+    }],
+    duration: 10000
+  });
 }
 
 function exportCharacterJson() {

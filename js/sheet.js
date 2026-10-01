@@ -189,8 +189,9 @@ function switchClassTo(classId) {
   character.subclass = { ...character.subclass, mode: "custom", officialIndex: "", type: "Subclass" };
   const cls = currentClass();
   const grants = SPECIES_GRANTS[character.species] || {};
-  const [armor, weapons] = CLASS_PROFICIENCIES[cls.id] || ["", ""];
-  if (CLASS_SAVES[cls.id]) character.saveProficiencies = [...CLASS_SAVES[cls.id]];
+  const [armor, weapons] = CLASS_PROFICIENCIES[cls.id] || [cls.armor || "", cls.weapons || ""];
+  const saves = CLASS_SAVES[cls.id] || cls.saves;
+  if (saves?.length) character.saveProficiencies = [...saves];
   character.backgroundDetails.armor = mergeList(armor, grants.armor || []);
   character.backgroundDetails.weapons = mergeList(weapons, grants.weapons || []);
   character.hitDice = `${character.level}d${cls.hitDie}`;

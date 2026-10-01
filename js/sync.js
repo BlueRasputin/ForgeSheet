@@ -86,7 +86,7 @@ async function handleAuthState(user) {
       const data = docSnap.data();
       if (data?.class?.id && data.class.table) customClasses[data.class.id] = data.class;
     });
-    localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
+    saveCustomClasses();
     if (characterLibrary[character.sheetId]) character = normalizeCharacter(characterLibrary[character.sheetId]);
     renderAll();
     queueCloudSave();
@@ -151,7 +151,7 @@ async function importSharedClass() {
       return;
     }
     customClasses[data.class.id] = data.class;
-    localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
+    saveCustomClasses();
     saveClassToCloud(data.class);
     document.querySelector("#importClassCode").value = "";
     status.textContent = `Imported ${data.class.name} (shared by ${data.sharedBy || "another user"}). It is now in your class list.`;
@@ -265,7 +265,7 @@ function handleSyncSettingsInput(event) {
   syncSettings[map[event.target.id]] = event.target.value;
   if (event.target.id === "syncSheetId") character.sheetId = event.target.value || character.sheetId;
   saveSyncSettings();
-  persist();
+  if (event.target.id === "syncSheetId") persist();
   if (event.target.id === "syncRole") renderSyncPanel();
 }
 
@@ -463,7 +463,9 @@ function renderDmItemTools() {
     ? targets.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")
     : `<option value="">No players available</option>`;
   if (targets.some(item => item.id === currentTarget)) target.value = currentTarget;
+  const currentItem = catalog.value;
   catalog.innerHTML = ITEM_CATALOG.map(item => `<option value="${item.index}">${escapeHtml(item.name)} (${escapeHtml(item.type)})</option>`).join("");
+  if (currentItem) catalog.value = currentItem;
   renderDmItemPreview();
 }
 
@@ -547,9 +549,14 @@ function sendLocalItem(sheetId, equipmentItem) {
   target.equipment = [...(target.equipment || []), equipmentItem];
   target.updatedAt = Date.now();
   characterLibrary[sheetId] = normalizeCharacter(target);
-  if (character.sheetId === sheetId) character = normalizeCharacter(characterLibrary[sheetId]);
   saveCharacterLibrary();
-  persistAndRender();
+  if (character.sheetId === sheetId) {
+    character = normalizeCharacter(characterLibrary[sheetId]);
+    persistAndRender();
+  } else {
+    renderAll();
+  }
+  showToast(`<span class="toast-label">${escapeHtml(equipmentItem.name)} sent</span><span>to ${escapeHtml(target.name || "player")}</span>`);
 }
 
 async function sendRemoteItem(sheet, equipmentItem) {

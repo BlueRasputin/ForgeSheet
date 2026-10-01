@@ -226,6 +226,18 @@ let classBuilderDraft = null;
 let officialSubclasses = OFFICIAL_SUBCLASS_FALLBACK;
 let subclassApiStatus = "fallback";
 
+// Merge with stored classes so a tab opened earlier can't erase classes other tabs saved.
+function saveCustomClasses() {
+  let stored = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(CUSTOM_CLASS_KEY)) || {};
+  } catch {
+    stored = {};
+  }
+  customClasses = { ...stored, ...customClasses };
+  localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
+}
+
 function loadCustomClasses() {
   try {
     return JSON.parse(localStorage.getItem(CUSTOM_CLASS_KEY)) || {};
@@ -307,8 +319,9 @@ function preparedLimitFor(cls, level = character.level) {
   return 0;
 }
 
-function startCustomClassDraft() {
-  classBuilderDraft = {
+function startCustomClassDraft(existingId = "") {
+  const existing = customClasses[existingId];
+  classBuilderDraft = existing ? structuredCloneSafe(existing) : {
     id: "",
     name: "",
     hitDie: 8,
@@ -316,6 +329,9 @@ function startCustomClassDraft() {
     spellAbility: "int",
     preparedFormula: "none",
     spellSources: [],
+    saves: [],
+    armor: "",
+    weapons: "",
     table: makeTable({
       1: ["Starting features", 0, 0],
       4: ["Ability score improvement", 0, 0],
@@ -325,58 +341,98 @@ function startCustomClassDraft() {
       19: ["Ability score improvement", 0, 0]
     })
   };
-  renderBuilder();
+  renderBuilder(true);
   renderClassTable();
   document.querySelector("#classBuilderDialog").showModal();
 }
 
-function renderBuilder() {
-  const cls = classBuilderDraft || currentClass();
-  setValue("builderName", cls.name);
-  setValue("builderHitDie", String(cls.hitDie));
-  setValue("builderCasterType", cls.casterType);
-  setValue("builderSpellAbility", cls.spellAbility || "int");
-  setValue("builderPreparedFormula", cls.preparedFormula || "none");
-  setValue("builderSpellSources", (cls.spellSources || []).join(", "));
-  setValue("builderTable", cls.table.map(row => `${row.level}, ${row.features || ""}, ${row.newSpells || 0}, ${row.cantrips || 0}`).join("\n"));
-}
-
-function renderClassTable() {
-  const cls = classBuilderDraft || currentClass();
-  const rows = cls.table.map(row => {
-    const slots = spellSlotsFor(cls, row.level);
-    return `<tr class="${row.level === character.level ? "current" : ""}">
-      <td>${row.level}</td>
-      <td>${escapeHtml(row.features || "-")}</td>
-      <td>${row.newSpells || "-"}</td>
-      <td>${row.cantrips || "-"}</td>
-      <td>${slots.length ? slots.join(" / ") : "-"}</td>
-      <td>${preparedLimitFor(cls, row.level)}</td>
-    </tr>`;
-  }).join("");
-  document.querySelector("#classTable").innerHTML = `
-    <table>
-      <thead><tr><th>Level</th><th>Features</th><th>New spells</th><th>Cantrips</th><th>Slots</th><th>Prepared</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function saveCustomClass() {
-  const name = document.querySelector("#builderName").value.trim();
-  if (!name) return;
-  const id = slug(name);
-  customClasses[id] = {
-    id,
-    name,
+// Builder fields are the draft: every keystroke updates the draft and the preview table.
+function readBuilderFields() {
+  const saves = [document.querySelector("#builderSaveOne").value, document.querySelector("#builderSaveTwo").value].filter(Boolean);
+  return {
+    ...(classBuilderDraft || {}),
+    name: document.querySelector("#builderName").value.trim(),
     hitDie: Number(document.querySelector("#builderHitDie").value),
     casterType: document.querySelector("#builderCasterType").value,
     spellAbility: document.querySelector("#builderSpellAbility").value,
     preparedFormula: document.querySelector("#builderPreparedFormula").value,
     spellSources: document.querySelector("#builderSpellSources").value.split(",").map(item => slug(item.trim())).filter(Boolean),
+    saves: [...new Set(saves)],
+    armor: document.querySelector("#builderArmor").value.trim(),
+    weapons: document.querySelector("#builderWeapons").value.trim(),
     table: parseClassTable(document.querySelector("#builderTable").value)
   };
-  localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
+}
+
+function handleBuilderInput() {
+  classBuilderDraft = readBuilderFields();
+  renderClassTable();
+}
+
+function renderBuilder(force = false) {
+  // Never overwrite what someone is typing in an open builder (a background re-render used to wipe it).
+  if (!force && document.querySelector("#classBuilderDialog")?.open) return;
+  const cls = classBuilderDraft || currentClass();
+  const abilityOptions = [["", "None"], ...ABILITIES];
+  fillSelect(document.querySelector("#builderSaveOne"), abilityOptions);
+  fillSelect(document.querySelector("#builderSaveTwo"), abilityOptions);
+  const write = (id, value) => {
+    document.querySelector(`#${id}`).value = value;
+  };
+  write("builderName", cls.name);
+  write("builderHitDie", String(cls.hitDie));
+  write("builderCasterType", cls.casterType);
+  write("builderSpellAbility", cls.spellAbility || "int");
+  write("builderPreparedFormula", cls.preparedFormula || "none");
+  write("builderSpellSources", (cls.spellSources || []).join(", "));
+  const saves = cls.saves || CLASS_SAVES[cls.id] || [];
+  write("builderSaveOne", saves[0] || "");
+  write("builderSaveTwo", saves[1] || "");
+  write("builderArmor", cls.armor ?? CLASS_PROFICIENCIES[cls.id]?.[0] ?? "");
+  write("builderWeapons", cls.weapons ?? CLASS_PROFICIENCIES[cls.id]?.[1] ?? "");
+  write("builderTable", cls.table.map(row => `${row.level}, ${row.features || ""}, ${row.newSpells || 0}, ${row.cantrips || 0}`).join("\n"));
+  const editSelect = document.querySelector("#editCustomClassSelect");
+  const customs = Object.values(customClasses);
+  editSelect.innerHTML = `<option value="">Edit existing…</option>` + customs.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+  editSelect.hidden = !customs.length;
+}
+
+function classTableHtml(cls) {
+  const caster = cls.casterType !== "none";
+  const rows = cls.table.map(row => {
+    const slots = spellSlotsFor(cls, row.level);
+    return `<tr class="${row.level === character.level ? "current" : ""}">
+      <td>${row.level}</td>
+      <td>${escapeHtml(row.features || "-")}</td>
+      ${caster ? `<td>${row.newSpells || "-"}</td><td>${row.cantrips || "-"}</td><td>${slots.some(Boolean) ? slots.join(" / ") : "-"}</td><td>${preparedLimitFor(cls, row.level) || "-"}</td>` : ""}
+    </tr>`;
+  }).join("");
+  return `
+    <table>
+      <thead><tr><th>Level</th><th>Features</th>${caster ? "<th>New spells</th><th>Cantrips</th><th>Slots</th><th>Prepared</th>" : ""}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function renderClassTable() {
+  if (document.querySelector("#classBuilderDialog")?.open) {
+    document.querySelector("#classTable").innerHTML = classTableHtml(classBuilderDraft || currentClass());
+  }
+  const cls = currentClass();
+  document.querySelector("#builderTabClassTable").innerHTML = classTableHtml(cls);
+  document.querySelector("#editCurrentClass").hidden = !customClasses[cls.id];
+}
+
+function saveCustomClass() {
+  const fields = readBuilderFields();
+  if (!fields.name) {
+    showToast(`<span class="toast-label">Give the class a name first</span>`);
+    return;
+  }
+  const id = fields.id || slug(fields.name);
+  customClasses[id] = { ...fields, id };
+  saveCustomClasses();
   saveClassToCloud(customClasses[id]);
   const creating = creationDraft && document.querySelector("#createDialog").open;
   if (creating) {
@@ -396,11 +452,13 @@ function parseClassTable(text) {
   const rows = {};
   text.split("\n").forEach(line => {
     // "level, features, new spells, cantrips": only the first and last two commas are separators.
-    const parts = line.split(",");
+    const parts = line.split(",").map(part => part.trim());
     const number = Number(parts[0]);
-    const numeric = parts.length >= 4 ? parts.slice(-2) : ["0", "0"];
-    const features = (parts.length >= 4 ? parts.slice(1, -2) : parts.slice(1)).join(",").trim();
-    if (number >= 1 && number <= 20) rows[number] = [features, Number(numeric[0]) || 0, Number(numeric[1]) || 0];
+    const rest = parts.slice(1);
+    const numbers = [];
+    while (rest.length > 1 && numbers.length < 2 && /^\d+$/.test(rest[rest.length - 1])) numbers.unshift(Number(rest.pop()));
+    while (numbers.length < 2) numbers.push(0);
+    if (number >= 1 && number <= 20) rows[number] = [rest.join(", "), numbers[0], numbers[1]];
   });
   return makeTable(rows);
 }

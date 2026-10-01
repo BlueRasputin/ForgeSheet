@@ -249,6 +249,13 @@
               </div>
               <div id="featureAutomation" class="feature-automation"></div>
             </section>
+            <section class="block">
+              <div class="block-head">
+                <h2>Class Table</h2>
+                <button id="editCurrentClass" class="secondary" type="button" hidden>Edit custom class</button>
+              </div>
+              <div id="builderTabClassTable" class="class-table"></div>
+            </section>
             <section class="block" id="featPlanner">
               <div class="block-head">
                 <h2>Multiclass & Feat Planner</h2>
@@ -540,6 +547,11 @@
           <section class="block">
             <div class="block-head">
               <h2>Party Dashboard</h2>
+              <div id="partySort" class="action-filter">
+                <button type="button" data-party-sort="hp" class="active">Most hurt</button>
+                <button type="button" data-party-sort="init">Initiative</button>
+                <button type="button" data-party-sort="name">Name</button>
+              </div>
               <span id="partyCount" class="muted">0 characters</span>
             </div>
             <div id="partySummary" class="party-summary"></div>
@@ -762,6 +774,7 @@
               <option value="core">Core Rules</option>
               <option value="condition">Conditions</option>
               <option value="action">Actions</option>
+              <option value="combat">Combat</option>
               <option value="rest">Rests</option>
               <option value="equipment">Equipment</option>
               <option value="class">Class Options</option>
@@ -784,7 +797,8 @@
             <div class="block-head">
               <h2>Create Class</h2>
               <div class="button-row">
-                <button id="newCustomClass" class="ghost" type="button">New Custom</button>
+                <select id="editCustomClassSelect" aria-label="Edit an existing custom class"></select>
+                <button id="newCustomClass" class="secondary" type="button">New Custom</button>
                 <button id="saveClass" class="secondary" type="button">Save Class</button>
               </div>
             </div>
@@ -795,6 +809,11 @@
               <label>Spell Ability <select id="builderSpellAbility"></select></label>
               <label>Prepared Formula <select id="builderPreparedFormula"></select></label>
               <label>Spell Source Classes <input id="builderSpellSources" placeholder="wizard, cleric"></label>
+              <label>Saving Throws
+                <span class="builder-saves"><select id="builderSaveOne"></select><select id="builderSaveTwo"></select></span>
+              </label>
+              <label>Armor Training <input id="builderArmor" placeholder="Light armor, shields"></label>
+              <label>Weapon Training <input id="builderWeapons" placeholder="Simple weapons, martial weapons"></label>
             </div>
             <label>
               Level Table
@@ -802,7 +821,7 @@
             </label>
             <p class="muted">Rows use: level, feature text, new spells, cantrips. Example: <code>5, Extra Attack, 1, 0</code></p>
             <div class="class-share">
-              <button id="shareClassButton" class="ghost" type="button">Share Current Class</button>
+              <button id="shareClassButton" class="secondary" type="button">Share Current Class</button>
               <input id="importClassCode" autocomplete="off" placeholder="Enter share code">
               <button id="importClassButton" class="secondary" type="button">Import</button>
             </div>

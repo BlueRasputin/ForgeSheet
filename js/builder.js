@@ -698,7 +698,7 @@ function finishCreation() {
   const speciesBonus = speciesRow?.[4] || {};
   const abilities = Object.fromEntries(ABILITIES.map(([id]) => [id, clamp(Number(draft.abilities[id] || 10) + (speciesBonus[id] || 0), 1, 30)]));
   const official = officialSubclasses.find(item => item.index === draft.subclass);
-  const [armor, weapons, tools] = CLASS_PROFICIENCIES[cls.id] || ["", "", ""];
+  const [armor, weapons, tools] = CLASS_PROFICIENCIES[cls.id] || [cls.armor || "", cls.weapons || "", ""];
   const featureLines = cls.table.slice(0, clamp(Number(draft.level || 1), 1, 20))
     .filter(row => row.features)
     .map(row => `Level ${row.level}: ${row.features}`);
@@ -721,7 +721,7 @@ function finishCreation() {
     ac: 10 + Math.floor((abilities.dex - 10) / 2),
     speed: speciesRow ? speciesRow[1] : 30,
     hitDice: `${level}d${cls.hitDie}`,
-    saveProficiencies: CLASS_SAVES[cls.id] || [],
+    saveProficiencies: CLASS_SAVES[cls.id] || cls.saves || [],
     proficientSkills: [...new Set([...draft.skills, ...(grants.skills || [])])],
     spells: (grants.cantrips || []).map(index => ({ id: crypto.randomUUID(), index, level: 0, prepared: false, racial: true })),
     acAuto: true,
@@ -774,6 +774,7 @@ function levelChecklist() {
     ["Ability Scores", "Set all six ability scores.", ABILITIES.every(([id]) => Number(character.abilities[id]) >= 1), "#abilities"],
     ["Skills", `Pick ${expectedSkills} skill proficiencies (${classSkills} from ${cls.name}${character.background ? ", 2 from your background" : ""}).`, (character.proficientSkills || []).length >= expectedSkills, "#skills"],
     ["Hit Dice", `Should be ${level}d${cls.hitDie} for ${cls.name}.`, character.hitDice === `${level}d${cls.hitDie}`, "features"],
+    ["Saving Throws", "Mark your class's two saving throw proficiencies.", (character.saveProficiencies || []).length >= 2, "#savingThrows"],
     ["Hit Points", `Max HP ${character.maxHp} is below the level ${level} minimum of ${minHp} (average is ${averageHp}).`, Number(character.maxHp) >= minHp, null],
     ["ASI / Feats", `${asiCount} ability score improvement${asiCount === 1 ? "" : "s"} by level ${level} — record each in the Builder planner.`, featCount >= asiCount, "#featPlanner"],
     ["Equipment", "Add starting gear or catalog items.", (character.equipment || []).length > 0 || Boolean(character.inventory), "inventory"]

@@ -4136,3 +4136,78 @@ body[data-theme="dark"] .tab.active {
 .planner-tools {
   grid-template-columns: minmax(0, 1fr) auto;
 }
+
+/* Party: a grid of compact cards the DM can scan */
+#partyDashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 10px;
+}
+
+.party-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.party-card strong,
+.party-card span,
+.party-card p {
+  overflow-wrap: anywhere;
+}
+
+.party-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.party-init {
+  flex: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--blue);
+}
+
+.party-class,
+.party-conditions {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.party-hp b {
+  font-size: 1.1rem;
+}
+
+.party-card.is-current {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+.party-card[data-state="dead"] {
+  border-color: var(--ink);
+  opacity: 0.7;
+}
+
+.party-card[data-state="stable"] .party-badges {
+  color: var(--green);
+}
+
+.party-summary small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.builder-saves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+#editCustomClassSelect {
+  max-width: 12rem;
+}

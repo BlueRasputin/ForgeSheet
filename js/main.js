@@ -138,9 +138,19 @@ function bindEvents() {
   document.addEventListener("click", event => {
     if (fileMenu.open && !fileMenu.contains(event.target)) fileMenu.open = false;
   });
-  document.querySelector("#rulesButton").addEventListener("click", () => document.querySelector("#rulesDialog").showModal());
+  document.querySelector("#rulesButton").addEventListener("click", () => {
+    document.querySelector("#rulesDialog").showModal();
+    document.querySelector("#rulesSearch").focus();
+  });
   document.querySelector("#closeRulesDialog").addEventListener("click", () => document.querySelector("#rulesDialog").close());
   document.querySelector("#closeClassBuilder").addEventListener("click", () => document.querySelector("#classBuilderDialog").close());
+  document.querySelector("#classBuilderDialog").addEventListener("input", event => {
+    if (event.target.closest(".field-grid") || event.target.id === "builderTable") handleBuilderInput();
+  });
+  document.querySelector("#editCustomClassSelect").addEventListener("change", event => {
+    if (event.target.value) startCustomClassDraft(event.target.value);
+  });
+  document.querySelector("#editCurrentClass").addEventListener("click", () => startCustomClassDraft(character.classId));
   document.querySelector("#classBuilderDialog").addEventListener("close", () => {
     classBuilderDraft = null;
     renderAll();
@@ -195,11 +205,13 @@ function bindEvents() {
   document.querySelector("#partyDashboard").addEventListener("click", event => {
     const card = event.target.closest("[data-party-sheet]");
     if (!card || card.dataset.partySheet === character.sheetId) return;
-    const next = characterLibrary[card.dataset.partySheet];
-    if (!next) return;
-    character = normalizeCharacter(next);
-    persistAndRender();
-    showToast(`<span class="toast-label">Switched to ${escapeHtml(character.name)}</span>`);
+    switchToSheet(card.dataset.partySheet);
+  });
+  document.querySelector("#partySort").addEventListener("click", event => {
+    const button = event.target.closest("[data-party-sort]");
+    if (!button) return;
+    partySort = button.dataset.partySort;
+    renderPartyDashboard();
   });
   document.querySelector("#prepSuggestions").addEventListener("click", event => {
     const button = event.target.closest("[data-prep-add]");
