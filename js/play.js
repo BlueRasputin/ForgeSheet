@@ -22,7 +22,8 @@ function classFeatureTrackers(cls = currentClass(), level = character.level) {
     artificer: [level >= 7 ? ["Flash of Genius", Math.max(1, mod("int")), "long"] : null],
     bloodhunter: [["Blood Maledict", level >= 17 ? 4 : level >= 13 ? 3 : level >= 6 ? 2 : 1, "short"]]
   };
-  return (byClass[cls.id] || []).filter(Boolean).map(([name, max, reset]) => ({ name, max, reset }));
+  const extras = lookupBySubclass(SUBCLASS_EXTRAS)?.trackers?.(level) || [];
+  return [...(byClass[cls.id] || []), ...extras].filter(Boolean).map(([name, max, reset]) => ({ name, max, reset }));
 }
 
 function ensureClassResources() {

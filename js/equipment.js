@@ -83,9 +83,13 @@ function handleEquipmentInput(event) {
   if (event.target.classList.contains("equipment-qty")) item.quantity = clamp(Number(event.target.value), 0, 999);
   if (event.target.classList.contains("equipment-weight")) item.weight = Math.max(0, Number(event.target.value) || 0);
   if (event.target.classList.contains("equipment-container")) item.container = event.target.value;
-  if (event.target.classList.contains("equipment-equipped")) {
-    item.equipped = event.target.checked;
-    if (item.equipped) item.container = "equipped";
+  if (event.target.classList.contains("equipment-equipped") || event.target.classList.contains("equipment-container")) {
+    if (event.target.classList.contains("equipment-equipped")) {
+      item.equipped = event.target.checked;
+      if (item.equipped) item.container = "equipped";
+    }
+    persistAndRender();
+    return;
   }
   if (event.target.classList.contains("equipment-attuned")) item.attuned = event.target.checked;
   if (event.target.classList.contains("equipment-notes")) item.notes = event.target.value;

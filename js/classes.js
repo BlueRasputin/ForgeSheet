@@ -245,7 +245,8 @@ const PROFANE_SOUL_KNOWN = [0, 0, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9
 // Martial subclasses that make their class a caster.
 const SUBCLASS_CASTING = {
   "eldritch-knight": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN, cantripTable: subclassCantrips(2) },
-  "arcane-trickster": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN, cantripTable: subclassCantrips(3) },
+  // Arcane Trickster's third cantrip is Mage Hand, granted automatically, so only two are chosen.
+  "arcane-trickster": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN, cantripTable: subclassCantrips(2) },
   "profane-soul": { casterType: "pactThird", spellAbility: "int", preparedFormula: "known", spellSources: ["warlock"], knownTable: PROFANE_SOUL_KNOWN, cantripTable: subclassCantrips(2) }
 };
 
@@ -416,7 +417,7 @@ function renderOfficialSubclassControls() {
   select.innerHTML = `<option value="">${placeholder}</option>` + options
     .map(item => `<option value="${item.index}">${item.name}${matching.length ? "" : ` (${item.className})`}</option>`)
     .join("");
-  select.disabled = !isOfficial || !officialSubclasses.length || (!matching.length && character.classId === "artificer");
+  select.disabled = !officialSubclasses.length;
   select.value = officialSubclasses.some(item => item.index === character.subclass.officialIndex)
     ? character.subclass.officialIndex
     : "";
@@ -444,16 +445,38 @@ function renderOfficialSubclassControls() {
   if (!(official.desc || []).length) loadOfficialSubclassDetail(official.index);
 }
 
-function applyOfficialSubclass(index) {
+function applyOfficialSubclass(index, render = true) {
   character.subclass.officialIndex = index || "";
   if (index) character.subclass.mode = "official";
   const official = officialSubclasses.find(item => item.index === index);
   if (official) {
     character.subclassName = official.name;
     character.subclass.type = official.flavor || character.subclass.type;
+    applySubclassExtras();
     loadOfficialSubclassDetail(index);
   }
-  persistAndRender();
+  if (render) persistAndRender();
+}
+
+function mergeList(existing, additions) {
+  const items = String(existing || "").split(",").map(item => item.trim()).filter(Boolean);
+  additions.forEach(item => {
+    if (!items.some(current => current.toLowerCase() === item.toLowerCase())) items.push(item);
+  });
+  return items.join(", ");
+}
+
+function applySubclassExtras() {
+  const extras = lookupBySubclass(SUBCLASS_EXTRAS) || {};
+  if (extras.armor) character.backgroundDetails.armor = mergeList(character.backgroundDetails.armor, extras.armor);
+  if (extras.weapons) character.backgroundDetails.weapons = mergeList(character.backgroundDetails.weapons, extras.weapons);
+}
+
+// "Level N: ..." feature lines always match the current class and level.
+function rebuildClassFeatureLines(cls = currentClass(), level = character.level) {
+  const kept = String(character.features || "").split("\n").filter(line => line && !/^Level \d+: /.test(line));
+  const lines = cls.table.slice(0, level).filter(row => row.features).map(row => `Level ${row.level}: ${row.features}`);
+  character.features = [...kept, ...lines].join("\n");
 }
 
 function applySubclassTemplate(templateId) {

@@ -204,6 +204,22 @@ const CLASS_SKILL_CHOICES = {
   wizard: ["arcana", "history", "insight", "investigation", "medicine", "religion"]
 };
 
+// Subclass grants beyond spells: extra training and limited-use features with their own trackers.
+const SUBCLASS_EXTRAS = {
+  "battle-master": { trackers: level => level >= 3 ? [["Superiority Dice", level >= 15 ? 6 : level >= 7 ? 5 : 4, "short"]] : [] },
+  hexblade: { armor: ["Medium armor, shields"], weapons: ["Martial weapons"], trackers: () => [["Hexblade's Curse", 1, "short"]] },
+  "eldritch-knight": {},
+  champion: {},
+  "war-magic": {},
+  "life": { armor: ["Heavy armor"] },
+  "war": { armor: ["Heavy armor"], weapons: ["Martial weapons"] },
+  "tempest": { armor: ["Heavy armor"], weapons: ["Martial weapons"] },
+  "forge": { armor: ["Heavy armor"] },
+  "valor": { armor: ["Medium armor, shields"], weapons: ["Martial weapons"] },
+  "swords": { armor: ["Medium armor"], weapons: ["Scimitar"] },
+  "bladesinging": { armor: ["Light armor"], weapons: ["One one-handed melee weapon"] }
+};
+
 // Level at which each class picks its subclass.
 const SUBCLASS_LEVEL = { cleric: 1, sorcerer: 1, warlock: 1, druid: 2, wizard: 2 };
 
@@ -395,7 +411,8 @@ const SUBCLASS_SPELLS = {
   "horizon-walker": { 3: ["protection-from-evil-and-good"], 5: ["misty-step"], 9: ["haste"], 13: ["banishment"], 17: ["teleportation-circle"] },
   "monster-slayer": { 3: ["protection-from-evil-and-good"], 5: ["zone-of-truth"], 9: ["magic-circle"], 13: ["banishment"], 17: ["hold-monster"] },
   "fey-wanderer": { 3: ["charm-person"], 5: ["misty-step"], 9: ["dispel-magic"], 13: ["dimension-door"], 17: ["mislead"] },
-  swarmkeeper: { 3: ["faerie-fire"], 5: ["web"], 9: ["gaseous-form"], 13: ["arcane-eye"], 17: ["insect-plague"] }
+  swarmkeeper: { 3: ["faerie-fire"], 5: ["web"], 9: ["gaseous-form"], 13: ["arcane-eye"], 17: ["insect-plague"] },
+  "arcane-trickster": { 3: ["mage-hand"] }
 };
 
 // Warlock patron lists expand the spells a warlock MAY learn — they are not auto-known like domain/oath/specialist spells.

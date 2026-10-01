@@ -239,6 +239,11 @@ function bindEvents() {
   document.querySelector("#parseSheetImport").addEventListener("click", parseImportDialogText);
   document.querySelector("#applySheetImport").addEventListener("click", applyPendingImport);
   document.querySelector("#levelUpButton").addEventListener("click", openLevelDialog);
+  document.querySelector("#levelSubclass").addEventListener("change", event => {
+    if (event.target.id !== "levelSubclassSelect") return;
+    pendingLevelSubclass = event.target.value;
+    renderLevelSummaryAndChoices();
+  });
   document.querySelector("#checklistButton").addEventListener("click", () => document.querySelector("#checklistDialog").showModal());
   document.querySelector("#checklistBody").addEventListener("click", event => {
     const button = event.target.closest("[data-checklist-tab]");

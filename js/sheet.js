@@ -125,16 +125,8 @@ function handleInput(event) {
   if (map[id]) {
     if (id === "acInput") character.acAuto = false;
     character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), map[id] === "hp" ? 0 : 1, map[id] === "level" ? 20 : 999) : value;
-    if (id === "classSelect") {
-      classBuilderDraft = null;
-      const cls = currentClass();
-      character.hitDice = `${character.level}d${cls.hitDie}`;
-      const official = officialSubclasses.find(item => item.index === character.subclass.officialIndex);
-      if (character.subclass.mode === "official" && official && official.classIndex !== character.classId) {
-        character.subclass.officialIndex = "";
-        character.subclassName = "";
-      }
-    }
+    if (id === "classSelect") switchClassTo(value);
+    if (id === "subclassName") linkTypedSubclass(value);
     persist();
   }
   if (id === "subclassType") {
@@ -188,16 +180,57 @@ function handleInput(event) {
 }
 
 // Committed on change (blur/Enter) so typing "1" then "5" doesn't apply two level jumps.
+// Changing class swaps everything the class provides: saves, armor and weapon training, HP by hit die, features.
+function switchClassTo(classId) {
+  classBuilderDraft = null;
+  const previousHitDie = Number(String(character.hitDice || "").split("d")[1]) || null;
+  character.classId = classId;
+  character.subclassName = "";
+  character.subclass = { ...character.subclass, mode: "custom", officialIndex: "", type: "Subclass" };
+  const cls = currentClass();
+  const grants = SPECIES_GRANTS[character.species] || {};
+  const [armor, weapons] = CLASS_PROFICIENCIES[cls.id] || ["", ""];
+  if (CLASS_SAVES[cls.id]) character.saveProficiencies = [...CLASS_SAVES[cls.id]];
+  character.backgroundDetails.armor = mergeList(armor, grants.armor || []);
+  character.backgroundDetails.weapons = mergeList(weapons, grants.weapons || []);
+  character.hitDice = `${character.level}d${cls.hitDie}`;
+  if (previousHitDie !== cls.hitDie) {
+    const missing = Number(character.maxHp || 0) - Number(character.hp || 0);
+    character.maxHp = averageHpFor(cls, character.level, mod("con")) + speciesHpPerLevel(character.species) * character.level;
+    character.hp = clamp(character.maxHp - missing, 0, character.maxHp);
+  }
+  rebuildClassFeatureLines(cls, character.level);
+  showToast(`<span class="toast-label">Now a ${escapeHtml(cls.name)}</span><span>Saves, training, hit dice, HP and features updated. Pick a ${escapeHtml(cls.name)} subclass when you reach it.</span>`, { duration: 9000 });
+}
+
+// Typing a subclass name links it to the official entry, so its grants and extras apply.
+function linkTypedSubclass(name) {
+  const key = normalizedSubclassKey(name);
+  const official = key && officialSubclasses.find(item => item.classIndex === character.classId && normalizedSubclassKey(item.name) === key);
+  if (!official) return;
+  character.subclass.mode = "official";
+  character.subclass.officialIndex = official.index;
+  character.subclass.type = official.flavor || character.subclass.type;
+  applySubclassExtras();
+}
+
 function applyLevelChange(value) {
-  const next = clamp(Number(value), 1, 20);
+  const typed = Number(value);
+  if (!Number.isInteger(typed) || typed < 1 || typed > 20) {
+    showToast(`<span class="toast-label">Level must be a whole number from 1 to 20</span><span>Kept level ${character.level}.</span>`, { tone: "fumble" });
+    document.querySelector("#levelInput").value = character.level;
+    return;
+  }
+  const next = typed;
   const delta = next - character.level;
   if (!delta) {
     renderAll();
     return;
   }
   const cls = currentClass();
-  const perLevel = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con"));
+  const perLevel = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + speciesHpPerLevel(character.species);
   character.level = next;
+  rebuildClassFeatureLines(cls, next);
   character.maxHp = Math.max(next, Number(character.maxHp || 0) + delta * perLevel);
   character.hp = clamp(Number(character.hp || 0) + delta * perLevel, 0, character.maxHp);
   character.hitDice = `${next}d${cls.hitDie}`;
