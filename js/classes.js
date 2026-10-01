@@ -439,7 +439,7 @@ function renderOfficialSubclassControls() {
   detail.innerHTML = `
     <div><span>Class</span><strong>${escapeHtml(official.className)}</strong></div>
     <div><span>Subclass Type</span><strong>${escapeHtml(official.flavor || "Subclass")}</strong></div>
-    <p>${escapeHtml(truncate((official.desc || []).join(" "), 380)) || (subclassApiStatus === "ready" ? "This subclass isn't in the free SRD, so no description is bundled. Record its features in the sections below." : "Description will appear when API details finish loading.")}</p>
+    <p>${escapeHtml(truncate((official.desc || []).join(" "), 380)) || (subclassDetailRequests.has(official.index) ? "This subclass isn't in the free SRD, so no description is bundled. Record its features in the sections below." : "Loading the description…")}</p>
   `;
   if (!(official.desc || []).length) loadOfficialSubclassDetail(official.index);
 }
@@ -506,11 +506,19 @@ function normalizeSubclassDetail(detail) {
   };
 }
 
+// Each subclass is fetched at most once: a non-SRD subclass 404s, and re-fetching on every render would loop.
+const subclassDetailRequests = new Set();
+
 async function loadOfficialSubclassDetail(index) {
   const existing = officialSubclasses.find(item => item.index === index);
-  if (!index || (existing?.desc || []).length) return;
+  if (!index || (existing?.desc || []).length || subclassDetailRequests.has(index)) return;
+  subclassDetailRequests.add(index);
   try {
     const response = await fetch(`${API_BASE}/subclasses/${index}`);
+    if (!response.ok) {
+      if (character.subclass.officialIndex === index) renderOfficialSubclassControls();
+      return;
+    }
     const detail = normalizeSubclassDetail(await response.json());
     officialSubclasses = mergeSubclasses(officialSubclasses, [detail]);
     if (character.subclass.officialIndex === index) renderAll();

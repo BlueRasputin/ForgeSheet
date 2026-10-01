@@ -618,6 +618,7 @@ async function loadSpellDetail(index) {
   if (!index || spellDetails[index]) return;
   try {
     const response = await fetch(`${API_BASE}/spells/${index}`);
+    if (!response.ok) throw new Error(`spell ${index}: ${response.status}`);
     const detail = await response.json();
     spellDetails[index] = normalizeSpellDetail(detail);
     allSpells = allSpells.map(item => item.index === index ? {
