@@ -546,7 +546,7 @@ function renderResources() {
   const template = document.querySelector("#resourceRowTemplate");
   root.innerHTML = "";
   if (!character.resources.length) {
-    root.innerHTML = `<p class="empty-state">No tracked resources yet.</p>`;
+    root.innerHTML = `<p class="empty-state">No resources tracked yet. Choose Edit sheet to add one.</p>`;
     return;
   }
   character.resources.forEach(resource => {
@@ -735,7 +735,7 @@ function renderActions() {
   root.innerHTML = "";
   const visible = character.actions.filter(action => actionTypeFilter === "all" || action.type === actionTypeFilter);
   if (!visible.length) {
-    root.innerHTML = `<p class="empty-state">${character.actions.length ? "No actions of this type." : "No custom actions yet."}</p>`;
+    root.innerHTML = `<p class="empty-state">${character.actions.length ? "No actions of this type." : "No actions yet. Choose Edit sheet to add attacks or generate them from your gear."}</p>`;
     return;
   }
   visible.forEach(action => {

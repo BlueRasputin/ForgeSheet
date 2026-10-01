@@ -28,7 +28,7 @@ function renderHeader() {
   acHint.title = `Your equipped armor, shield, and DEX give AC ${armorClass}. Click to use it.`;
   document.querySelector("#inspirationValue").textContent = character.inspiration;
   document.querySelector("#inspirationTile").classList.toggle("is-on", character.inspiration > 0);
-  ["speedInput", "acInput", "hpInput", "maxHpInput", "tempHpInput"].forEach(id => {
+  ["speedInput", "acInput", "maxHpInput"].forEach(id => {
     document.querySelector(`#${id}`).disabled = character.identityLocked;
   });
   const hpRatio = character.maxHp ? Number(character.hp) / Number(character.maxHp) : 1;
@@ -43,7 +43,13 @@ function renderHeader() {
 function renderIdentityDisplay() {
   const block = document.querySelector("#identityBlock");
   block.classList.toggle("is-locked", character.identityLocked);
-  document.querySelector("#identityLock").title = character.identityLocked ? "Edit character details, scores, and stats" : "Done editing";
+  // Play mode by default: build values read as text; Edit unlocks scores, proficiencies, actions and trackers.
+  document.body.classList.toggle("is-editing", !character.identityLocked);
+  const lock = document.querySelector("#identityLock");
+  lock.innerHTML = character.identityLocked ? `${icon("pencil-simple")}Edit sheet` : `${icon("check")}Done`;
+  lock.classList.toggle("primary", !character.identityLocked);
+  lock.title = character.identityLocked ? "Edit details, scores, proficiencies, actions and trackers" : "Back to play mode";
+  document.querySelector("#heroPortrait").innerHTML = `${icon(CLASS_GLYPHS[character.classId] || "sparkle")}<span>${character.level}</span>`;
   const classLine = [
     `Level ${character.level}`,
     character.species,

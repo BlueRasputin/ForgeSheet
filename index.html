@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
-    <link rel="stylesheet" href="./styles.css?v=24">
+    <link rel="stylesheet" href="./styles.css?v=25">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to the sheet</a>
@@ -102,13 +102,10 @@
       <section id="searchResults" class="search-results"></section>
 
       <main id="main">
-        <div class="sheet-layout">
-          <aside class="sheet-sidebar" aria-label="Character summary">
+          <section class="sheet-hero" aria-label="Character">
+            <div id="heroPortrait" class="hero-portrait" aria-hidden="true"></div>
             <div id="identityBlock" class="identity-block">
-              <button type="button" id="identityLock" class="ability-lock identity-lock" title="Edit character details">
-                <i class="ph ph-pencil-simple icon-edit" aria-hidden="true"></i>
-                <i class="ph ph-check icon-done" aria-hidden="true"></i>
-              </button>
+              <button type="button" id="identityLock" class="ghost edit-toggle">Edit sheet</button>
               <div id="identityDisplay" class="identity-display"></div>
               <div class="identity-grid">
               <label>
@@ -142,23 +139,6 @@
               </label>
               </div>
             </div>
-            <div class="hp-box">
-              <span class="hp-caption">Hit points</span>
-              <div class="hp-fields">
-                <label>Current<input id="hpInput" type="number" min="1"></label>
-                <label>Max<input id="maxHpInput" type="number" min="1"></label>
-                <label>Temp<input id="tempHpInput" type="number" min="0"></label>
-              </div>
-              <div class="hp-actions">
-                <button id="applyDamageButton" class="damage" type="button">Damage</button>
-                <input id="damageAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Heal or damage amount">
-                <button id="applyHealButton" class="heal" type="button">Heal</button>
-              </div>
-            </div>
-            <div class="sheet-alerts">
-              <div id="concentrationPrompt" class="concentration-prompt"></div>
-              <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
-            </div>
             <div class="stat-tile-group">
               <div class="stat-tile">
                 <span>AC</span>
@@ -190,24 +170,45 @@
                 <p id="conditionsMini">None</p>
               </div>
             </div>
-            <details class="side-section" open>
+            <details class="hero-abilities" open>
               <summary class="side-head">
                 <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Abilities and saves</h2>
               </summary>
               <div id="abilities" class="ability-grid"></div>
             </details>
-            <details class="side-section" open>
-              <summary class="side-head">
-                <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Passive senses</h2>
-              </summary>
-              <div id="senses" class="senses-list"></div>
-            </details>
+          </section>
+
+        <div class="sheet-layout">
+          <aside class="sheet-sidebar" aria-label="Hit points and skills">
+            <div class="hp-box">
+              <span class="hp-caption">Hit points</span>
+              <div class="hp-fields">
+                <label>Current<input id="hpInput" type="number" min="1"></label>
+                <label>Max<input id="maxHpInput" type="number" min="1"></label>
+                <label>Temp<input id="tempHpInput" type="number" min="0"></label>
+              </div>
+              <div class="hp-actions">
+                <button id="applyDamageButton" class="damage" type="button">Damage</button>
+                <input id="damageAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Heal or damage amount">
+                <button id="applyHealButton" class="heal" type="button">Heal</button>
+              </div>
+            </div>
+            <div class="sheet-alerts">
+              <div id="concentrationPrompt" class="concentration-prompt"></div>
+              <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
+            </div>
             <details id="skillsSection" class="side-section" open>
               <summary class="side-head">
                 <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Skills</h2>
                 <span id="skillSummary"></span>
               </summary>
               <div id="skills" class="skill-grid single"></div>
+            </details>
+            <details class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph ph-caret-right" aria-hidden="true"></i>Passive senses</h2>
+              </summary>
+              <div id="senses" class="senses-list"></div>
             </details>
           </aside>
 
@@ -970,20 +971,20 @@
       </article>
     </template>
 
-    <script src="./js/utils.js?v=23"></script>
-    <script src="./js/data.js?v=23"></script>
-    <script src="./js/classes.js?v=23"></script>
-    <script src="./js/character.js?v=23"></script>
-    <script src="./js/layout.js?v=23"></script>
-    <script src="./js/spells.js?v=23"></script>
-    <script src="./js/sheet.js?v=23"></script>
-    <script src="./js/builder.js?v=23"></script>
-    <script src="./js/play.js?v=23"></script>
-    <script src="./js/equipment.js?v=23"></script>
-    <script src="./js/party.js?v=23"></script>
-    <script src="./js/rules.js?v=23"></script>
-    <script src="./js/import.js?v=23"></script>
-    <script src="./js/sync.js?v=23"></script>
-    <script src="./js/main.js?v=23"></script>
+    <script src="./js/utils.js?v=24"></script>
+    <script src="./js/data.js?v=24"></script>
+    <script src="./js/classes.js?v=24"></script>
+    <script src="./js/character.js?v=24"></script>
+    <script src="./js/layout.js?v=24"></script>
+    <script src="./js/spells.js?v=24"></script>
+    <script src="./js/sheet.js?v=24"></script>
+    <script src="./js/builder.js?v=24"></script>
+    <script src="./js/play.js?v=24"></script>
+    <script src="./js/equipment.js?v=24"></script>
+    <script src="./js/party.js?v=24"></script>
+    <script src="./js/rules.js?v=24"></script>
+    <script src="./js/import.js?v=24"></script>
+    <script src="./js/sync.js?v=24"></script>
+    <script src="./js/main.js?v=24"></script>
   </body>
 </html>

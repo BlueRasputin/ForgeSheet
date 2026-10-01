@@ -116,3 +116,29 @@ Audit of the whole UI against the redesign checklist, followed by the rules the 
   - The one-page print layout and the sticky combat strip.
   - The container queries on spell rows and ability tiles.
   - The 981 to 1279px two-column layout and the phone reflow at 980px and below.
+
+## Structure, round 2 (reference-driven)
+
+**References:**
+- **Tidy 5e Sheets, "Quadrone" layout:**
+  - a hero with the portrait, keeping HP and vitals together
+  - a sidebar for skills
+  - separate play and edit modes
+- **D&D Beyond-style layout:**
+  - a header banner and a row of ability cards
+  - a skills column next to a tabbed box
+
+**Structure:**
+- **Top nav:** a floating pill holding the character switcher, search, Builder / Party / Campaign, Rest, Checklist, Level up and the Menu.
+- **Character hero:** a gapless 12-column grid with `grid-auto-flow: dense`.
+  - Row 1: the portrait (2 columns, spanning both rows), identity (4) and six stat tiles (6).
+  - Row 2: the portrait continues (2) next to six ability cards with their saves (10).
+- **Sticky sidebar:** HP with Damage and Heal, the concentration and dying prompts, skills and passives.
+- **Tabs:** Combat, Spells (casters only), Inventory, Roleplay and Features.
+- **Play mode by default.** Build values read as text: scores, proficiencies, AC, speed, max HP, and the action and resource definitions. The add and remove buttons are hidden.
+  - Proficiencies show as dots.
+  - **Edit sheet** unlocks all of it, and the hero gets an accent ring while you edit.
+  - Live state stays editable in both modes: HP, temp HP, resource counts, slots, inventory and notes.
+- **Phones:** one column in play order: name, HP, stat tiles, then abilities, skills and passives (collapsed), then the tabs.
+
+**Not adopted from gpt-taste:** the hero / story page flow, scroll-pinned GSAP sections and stock photography. Those suit a landing page, not a sheet used during play. The motion that was kept is feedback only: tiles lift on hover, panels fade in with a stagger, and everything is off under reduced motion.

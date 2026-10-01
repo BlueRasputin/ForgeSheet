@@ -67,7 +67,7 @@ function buildStaticControls() {
     </label>
   `).join("");
 
-  if (matchMedia("(max-width: 640px)").matches) document.querySelectorAll("details.side-section").forEach(section => { section.open = false; });
+  if (matchMedia("(max-width: 640px)").matches) document.querySelectorAll("details.side-section, .hero-abilities").forEach(section => { section.open = false; });
 }
 
 function bindEvents() {

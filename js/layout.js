@@ -107,7 +107,7 @@ function swapSplitPanels() {
 
 function preparePrintLayout() {
   document.body.classList.add("print-compact");
-  document.querySelectorAll("details.side-section").forEach(section => { section.open = true; });
+  document.querySelectorAll("details.side-section, .hero-abilities").forEach(section => { section.open = true; });
   // Printable area at 96dpi with a safety margin so rounding never spills to page 2.
   const printableWidth = 7.8 * 96;
   const printableHeight = 10 * 96;
