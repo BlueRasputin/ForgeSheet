@@ -90,8 +90,11 @@ function applyBackgroundPresetNamed(presetName) {
   const [name, skills, tools, feature] = preset;
   character.background = name;
   character.features = mergeLines(character.features, [`Background Feature: ${feature}`]);
-  character.backgroundDetails.tools = tools;
-  character.backgroundDetails.languages = tools.toLowerCase().includes("language") ? tools : character.backgroundDetails.languages;
+  const grants = tools.split(",").map(item => item.trim()).filter(Boolean);
+  const languages = grants.filter(item => /language/i.test(item));
+  const toolGrants = grants.filter(item => !/language/i.test(item));
+  if (toolGrants.length) character.backgroundDetails.tools = mergeLines(character.backgroundDetails.tools, toolGrants).replace(/\n/g, ", ");
+  if (languages.length) character.backgroundDetails.languages = mergeLines(character.backgroundDetails.languages, languages).replace(/\n/g, ", ");
   skills.split(",").map(item => item.trim()).forEach(skillName => {
     const skill = SKILLS.find(([, label]) => label.toLowerCase() === skillName.toLowerCase())?.[0];
     if (skill && !character.proficientSkills.includes(skill)) character.proficientSkills.push(skill);
@@ -254,7 +257,7 @@ function openLevelDialog() {
   document.querySelector("#levelSummary").innerHTML = `
     <div>Hit points: add an average ${Math.ceil(cls.hitDie / 2) + 1 + mod("con")} HP, or edit manually after applying.</div>
     <div>Hit dice: ${nextLevel}d${cls.hitDie}</div>
-    <div>Features: ${row.features || "No class-table feature entered."}</div>
+    <div>Features: ${escapeHtml(row.features || "No class-table feature entered.")}</div>
     ${cls.casterType === "none" ? "" : `
     <div>Spell slots: ${spellSlotsFor(cls, nextLevel).map((count, index) => count ? `${ordinal(index + 1)} ×${count}` : "").filter(Boolean).join(" · ") || "none yet"}</div>
     <div>${cls.preparedFormula === "known" ? "Spells known" : "Prepared spell limit"}: ${preparedLimitFor(cls, nextLevel)}</div>`}
@@ -269,7 +272,7 @@ function openLevelDialog() {
     const newRow = { id: crypto.randomUUID(), index: "", prepared: true };
     pendingLevelChoices.push(newRow);
     const wrapper = document.createElement("div");
-    wrapper.className = "spell-row";
+    wrapper.className = "level-spell-choice";
     wrapper.innerHTML = `<select class="spell-select"></select><span class="muted">${i < row.cantrips ? "Cantrip" : "New spell"}</span>`;
     fillSpellSelect(wrapper.querySelector("select"), "", spellChoicesForLevelChoice(i < row.cantrips ? 0 : "leveled"));
     wrapper.querySelector("select").addEventListener("change", event => {
@@ -320,6 +323,7 @@ function renderCreateStep() {
     </button>
   `).join("");
   document.querySelector("#createBack").disabled = draft.step === 0;
+  document.querySelector("#createBack").style.visibility = draft.step === 0 ? "hidden" : "";
   document.querySelector("#createNext").textContent = draft.step === CREATE_STEP_LABELS.length - 1 ? "Create Character" : "Next";
   const renderers = [renderCreateIdentity, renderCreateClass, renderCreateBackground, renderCreateAbilities, renderCreateReview];
   document.querySelector("#createStepBody").innerHTML = renderers[draft.step]();
@@ -564,7 +568,10 @@ function levelChecklist() {
     ["Equipment", "Add starting gear or catalog items.", (character.equipment || []).length > 0 || Boolean(character.inventory), "inventory"]
   ];
   if (caster) {
-    items.push(["Spells", "Choose your class spells.", !expectedSlots || character.spells.some(spellRowHasSpell), "spells"]);
+    const cantrips = cantripCap(cls);
+    const chosenCantrips = character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) === 0).length;
+    if (cantrips) items.push(["Cantrips", `${chosenCantrips} of ${cantrips} cantrips chosen.`, chosenCantrips >= cantrips, "spells"]);
+    items.push(["Spells", "Choose your class spells.", !expectedSlots || character.spells.some(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && !(character.autoSpells || []).includes(row.index)), "spells"]);
     const limit = preparedLimitFor(cls);
     if (cls.preparedFormula !== "none" && cls.preparedFormula !== "known") {
       items.push(["Prepared Spells", `${preparedSpellCount()} prepared of ${limit} allowed.`, preparedSpellCount() > 0 && preparedSpellCount() <= limit, "spells"]);
@@ -605,7 +612,9 @@ function applyLevelUp(event) {
   const cls = currentClass();
   const nextLevel = character.level + 1;
   character.level = nextLevel;
-  character.hp = Number(character.hp || 0) + Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con"));
+  const gained = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con"));
+  character.maxHp = Number(character.maxHp || 0) + gained;
+  character.hp = Number(character.hp || 0) + gained;
   character.hitDice = `${nextLevel}d${cls.hitDie}`;
   pendingLevelChoices.filter(row => row.index).forEach(row => character.spells.push(row));
   const row = cls.table[nextLevel - 1];

@@ -121,7 +121,16 @@ function handleConcentrationPromptClick(event) {
   if (event.target.closest("[data-roll-concentration]")) {
     const dc = pendingConcentrationDc;
     pendingConcentrationDc = null;
-    rollFromInput(`Concentration save (DC ${dc})`, `1d20${formatMod(mod("con"))}`);
+    const result = rollFromInput(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`);
+    if (!result) return;
+    if (result.total >= dc) {
+      showToast(`<span class="toast-label">Concentration held</span><span class="toast-roll"><b>${result.total}</b><small>vs DC ${dc} · still concentrating on ${escapeHtml(character.concentration)}</small></span>`, { tone: "crit" });
+      return;
+    }
+    const lost = character.concentration;
+    character.concentration = "";
+    persistAndRender();
+    showToast(`<span class="toast-label">Concentration lost</span><span class="toast-roll"><b>${result.total}</b><small>vs DC ${dc} · ${escapeHtml(lost)} ends</small></span>`, { tone: "fumble" });
     return;
   }
   if (event.target.closest("[data-dismiss-concentration]")) {
@@ -134,11 +143,30 @@ function applyDamage() {
   const amount = clamp(Number(document.querySelector("#damageAmount").value), 0, 999);
   if (!amount) return;
   const absorbed = Math.min(Number(character.tempHp || 0), amount);
+  const toHp = amount - absorbed;
+  const hpBefore = Number(character.hp || 0);
   character.tempHp = Number(character.tempHp || 0) - absorbed;
-  character.hp = Math.max(0, Number(character.hp || 0) - (amount - absorbed));
-  if (character.concentration) pendingConcentrationDc = Math.max(10, Math.floor(amount / 2));
+  character.hp = Math.max(0, hpBefore - toHp);
+  let note = "";
+  if (hpBefore <= 0 && toHp > 0) {
+    character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3);
+    note = character.deathSaveFailures >= 3 ? "Damage at 0 HP: third death save failure." : "Damage at 0 HP counts as a death save failure.";
+  } else if (character.hp === 0 && toHp - hpBefore >= Number(character.maxHp || 0)) {
+    character.deathSaveFailures = 3;
+    note = "Massive damage: the overflow equals your HP maximum, which is instant death.";
+  }
+  if (character.hp === 0 && character.concentration) {
+    note = `${note} Concentration on ${character.concentration} ends.`.trim();
+    character.concentration = "";
+  }
+  pendingConcentrationDc = character.concentration ? Math.max(10, Math.floor(amount / 2)) : null;
   document.querySelector("#damageAmount").value = "";
   persistAndRender();
+  if (note) showToast(`<span class="toast-label">Took ${amount} damage</span><span>${escapeHtml(note)}</span>`, { tone: "fumble", duration: 9000 });
+}
+
+function isDying() {
+  return Number(character.hp) <= 0 && character.deathSaveFailures < 3 && character.deathSaveSuccesses < 3;
 }
 
 function applyHeal() {
@@ -187,6 +215,10 @@ function handleDeathSaveClick(event) {
 }
 
 function rollDeathSave() {
+  if (!isDying()) {
+    showToast(`<span class="toast-label">No death save needed</span><span>${Number(character.hp) > 0 ? "You're above 0 HP." : character.deathSaveFailures >= 3 ? "Three failures: the character is dead." : "You're stable."}</span>`);
+    return;
+  }
   const roll = rollDie(20);
   let outcome;
   if (roll === 20) {
@@ -206,7 +238,7 @@ function rollDeathSave() {
   }
   character.rollHistory = [{ label: `Death Save — ${outcome}`, formula: "1d20", mode: "normal", total: roll, parts: [`d20[${roll}]`] }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
-  showToast(`<span class="toast-label">Death save · ${escapeHtml(outcome)}</span><span class="toast-roll"><b>${roll}</b><small>${character.deathSaveSuccesses} successes · ${character.deathSaveFailures} failures</small></span>`, { tone: roll >= 10 ? "crit" : "fumble" });
+  showToast(`<span class="toast-label">Death save · ${escapeHtml(outcome)}</span><span class="toast-roll"><b>${roll}</b><small>${character.deathSaveSuccesses} success${character.deathSaveSuccesses === 1 ? "" : "es"} · ${character.deathSaveFailures} failure${character.deathSaveFailures === 1 ? "" : "s"}</small></span>`, { tone: roll >= 10 ? "crit" : "fumble" });
 }
 
 function rollAbilityCheck(ability) {
@@ -252,6 +284,11 @@ function renderDiceRoller() {
 }
 
 function rollFromInput(label = "Custom Roll", formula = document.querySelector("#rollFormula").value, mode = document.querySelector("#rollMode").value, actions = []) {
+  const problem = formulaProblem(formula || "1d20");
+  if (problem) {
+    showToast(`<span class="toast-label">Can't roll "${escapeHtml(formula)}"</span><span>${problem}</span>`, { tone: "fumble" });
+    return null;
+  }
   const result = rollFormula(formula || "1d20", mode);
   character.rollHistory = [{ label, formula: result.formula, mode, total: result.total, parts: result.parts }, ...(character.rollHistory || [])].slice(0, 25);
   persistAndRender();
@@ -263,6 +300,16 @@ function rollFromInput(label = "Custom Roll", formula = document.querySelector("
     <span class="toast-roll"><b>${result.total}</b><small>${escapeHtml(result.parts.join(" + "))}${mode !== "normal" ? ` · ${mode}` : ""}</small></span>
   `, { tone, actions: toastActions, duration: 7000 });
   return result;
+}
+
+function formulaProblem(formula) {
+  const cleaned = String(formula).replace(/\s+/g, "").toLowerCase();
+  if (!/^[+-]?(\d*d\d+|\d+)([+-](\d*d\d+|\d+))*$/.test(cleaned)) return "Use dice like 1d20+5 or 2d6+1d4+3.";
+  const outOfRange = (cleaned.match(/\d*d\d+/g) || []).some(term => {
+    const [count, sides] = term.split("d").map(value => Number(value || 1));
+    return count < 1 || count > 100 || sides < 2 || sides > 1000;
+  });
+  return outOfRange ? "Use 1 to 100 dice with 2 to 1000 sides." : "";
 }
 
 function naturalD20(result) {
@@ -286,7 +333,7 @@ function rollFormula(formula, mode = "normal") {
     const body = token.replace(/^[+-]/, "");
     const dice = body.match(/^(\d*)d(\d+)$/);
     if (dice) {
-      const count = clamp(Number(dice[1] || 1), 1, 50);
+      const count = clamp(Number(dice[1] || 1), 1, 100);
       const sides = clamp(Number(dice[2]), 2, 1000);
       const rolls = Array.from({ length: count }, () => rollDie(sides));
       const used = mode === "advantage" && count === 1 && sides === 20
@@ -364,13 +411,13 @@ function takeRest(type) {
     if (option.reset === type || (type === "long" && option.reset === "short")) option.current = option.max;
   });
   character.restLog = `${type === "long" ? "Long" : "Short"} rest taken ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  const after = structuredCloneSafe(character);
   persistAndRender();
   const name = type === "long" ? "Long rest" : "Short rest";
   const actions = [{
     label: "Undo",
     run: () => {
-      character = normalizeCharacter(before);
-      persistAndRender();
+      undoRest(before, after);
       showToast(`<span class="toast-label">${name} undone</span>`);
     }
   }];
@@ -378,6 +425,35 @@ function takeRest(type) {
   if (type === "short" && hitDiceLeft > 0 && character.hp < character.maxHp) actions.push({ label: `Spend Hit Die (${hitDiceLeft} left)`, run: spendHitDie });
   const changes = restChanges(before, character);
   showToast(`<span class="toast-label">${name}</span><span>${escapeHtml(changes.join(" · ") || "Nothing needed recovering.")}</span>`, { actions, duration: 12000 });
+}
+
+// Reverse the rest's own changes as deltas, so anything done after the rest (here or in another tab) survives.
+function undoRest(before, after) {
+  const delta = (field, from = before, to = after) => Number(from?.[field] || 0) - Number(to?.[field] || 0);
+  character.hp = clamp(Number(character.hp || 0) + delta("hp"), 0, Number(character.maxHp || 0));
+  const levels = new Set([...Object.keys(before.spellSlotUsage || {}), ...Object.keys(after.spellSlotUsage || {})]);
+  levels.forEach(level => {
+    const change = delta(level, before.spellSlotUsage, after.spellSlotUsage);
+    if (change) character.spellSlotUsage[level] = Math.max(0, Number(character.spellSlotUsage[level] || 0) + change);
+  });
+  character.hitDiceUsed = clamp(Number(character.hitDiceUsed || 0) + delta("hitDiceUsed"), 0, character.level);
+  ["resources", "classOptions"].forEach(key => (character[key] || []).forEach(entry => {
+    const old = (before[key] || []).find(item => item.id === entry.id);
+    const rested = (after[key] || []).find(item => item.id === entry.id);
+    if (old && rested) entry.current = clamp(Number(entry.current || 0) + delta("current", old, rested), 0, Number(entry.max || 0));
+  }));
+  (character.equipment || []).forEach(item => {
+    const old = (before.equipment || []).find(entry => entry.id === item.id);
+    const rested = (after.equipment || []).find(entry => entry.id === item.id);
+    if (old && rested) item.grantUsed = Math.max(0, Number(item.grantUsed || 0) + delta("grantUsed", old, rested));
+  });
+  (before.conditions || []).filter(condition => !(after.conditions || []).includes(condition)).forEach(condition => {
+    if (!character.conditions.includes(condition)) character.conditions.push(condition);
+  });
+  character.exhaustion = clamp(Number(character.exhaustion || 0) + delta("exhaustion"), 0, 6);
+  if (before.concentration && !after.concentration && !character.concentration) character.concentration = before.concentration;
+  character.restLog = before.restLog;
+  persistAndRender();
 }
 
 function restChanges(before, after) {
@@ -392,6 +468,10 @@ function restChanges(before, after) {
   after.resources.forEach(resource => {
     const old = before.resources.find(item => item.id === resource.id);
     if (old && Number(old.current) < Number(resource.current)) changes.push(`${resource.name} ${resource.current}/${resource.max}`);
+  });
+  (after.classOptions || []).forEach(option => {
+    const old = (before.classOptions || []).find(item => item.id === option.id);
+    if (old && Number(old.current) < Number(option.current)) changes.push(`${option.name} ${option.current}/${option.max}`);
   });
   (after.equipment || []).forEach(item => {
     const old = (before.equipment || []).find(entry => entry.id === item.id);
@@ -418,6 +498,11 @@ function renderResources() {
     node.querySelector(".resource-name").value = resource.name;
     node.querySelector(".resource-current").value = resource.current;
     node.querySelector(".resource-max").value = resource.max;
+    node.querySelector(".resource-name").title = resource.name;
+    if (resource.auto) {
+      node.querySelector(".resource-max").readOnly = true;
+      node.querySelector(".resource-max").title = "Set by your class and level";
+    }
     node.querySelector(".resource-reset").value = resource.reset;
     root.appendChild(node);
   });
@@ -434,7 +519,7 @@ function handleResourceInput(event) {
   const resource = character.resources.find(item => item.id === row.dataset.resourceId);
   if (!resource) return;
   if (event.target.classList.contains("resource-name")) resource.name = event.target.value;
-  if (event.target.classList.contains("resource-current")) resource.current = clamp(Number(event.target.value), 0, 999);
+  if (event.target.classList.contains("resource-current")) resource.current = clamp(Number(event.target.value), 0, Number(resource.max || 0));
   if (event.target.classList.contains("resource-max")) resource.max = clamp(Number(event.target.value), 0, 999);
   if (event.target.classList.contains("resource-reset")) resource.reset = event.target.value;
   persist();
@@ -524,6 +609,7 @@ function handleClassOptionClick(event) {
 function renderConditions() {
   const root = document.querySelector("#conditionGrid");
   const active = new Set(character.conditions || []);
+  if (character.concentration) active.add("Concentrating");
   root.innerHTML = `
     <div class="condition-chips">
       ${CONDITIONS.map(condition => `<button type="button" title="${escapeHtml(conditionRule(condition))}" class="condition-chip ${active.has(condition) ? "active" : ""}" aria-pressed="${active.has(condition)}" data-condition="${condition}">${condition}</button>`).join("")}
@@ -537,6 +623,14 @@ function renderConditions() {
 function handleConditionClick(event) {
   const button = event.target.closest("[data-condition]");
   if (!button) return;
+  if (button.dataset.condition === "Concentrating" && character.concentration) {
+    const ended = character.concentration;
+    character.concentration = "";
+    character.conditions = (character.conditions || []).filter(condition => condition !== "Concentrating");
+    persistAndRender();
+    showToast(`<span class="toast-label">Concentration ended</span><span>${escapeHtml(ended)}</span>`);
+    return;
+  }
   const active = new Set(character.conditions || []);
   if (active.has(button.dataset.condition)) active.delete(button.dataset.condition);
   else active.add(button.dataset.condition);
@@ -573,6 +667,7 @@ function renderActions() {
     node.querySelector(".action-attack").value = action.attack;
     node.querySelector(".action-damage").value = action.damage;
     node.querySelector(".action-notes").value = action.notes;
+    syncActionButtons(node, action);
     root.appendChild(node);
   });
 }
@@ -592,7 +687,13 @@ function handleActionInput(event) {
   if (event.target.classList.contains("action-attack")) action.attack = event.target.value;
   if (event.target.classList.contains("action-damage")) action.damage = event.target.value;
   if (event.target.classList.contains("action-notes")) action.notes = event.target.value;
+  syncActionButtons(row, action);
   persist();
+}
+
+function syncActionButtons(node, action) {
+  node.querySelector(".roll-attack").style.display = /^\s*[+-]?\d+/.test(action.attack || "") ? "" : "none";
+  node.querySelector(".roll-damage").style.display = actionDamageFormula(action) ? "" : "none";
 }
 
 function actionDamageFormula(action) {
@@ -661,7 +762,7 @@ function spellAction(row) {
   const detail = spellDetails[row.index] || {};
   const text = [detail.desc].flat().filter(Boolean).join(" ");
   const dice = text.match(/\b\d+d\d+\b/)?.[0];
-  const save = text.match(/(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav/i)?.[1];
+  const save = spellSaveAbility(text);
   const attack = /spell attack/i.test(text);
   if (!dice && !save && !attack) return null;
   const level = spellLevelForRow(row);

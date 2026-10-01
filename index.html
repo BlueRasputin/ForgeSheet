@@ -33,6 +33,7 @@
               <button id="printSheetButton" class="ghost" type="button">Print sheet</button>
               <button id="backgroundUpload" class="ghost" type="button">Set backdrop image…</button>
               <button id="saveCharacter" class="ghost" type="button">Save now</button>
+              <hr>
               <button id="resetCharacter" class="danger" type="button">Reset this sheet…</button>
             </div>
           </details>
@@ -53,7 +54,7 @@
             <select id="characterLibrarySelect"></select>
           </label>
           <button id="newCharacterButton" class="secondary" type="button">New</button>
-          <button id="duplicateCharacterButton" class="ghost" type="button">Duplicate</button>
+          <button id="duplicateCharacterButton" class="secondary" type="button">Duplicate</button>
           <button id="deleteCharacterButton" class="danger" type="button">Delete</button>
           <label>
             Search Sheet
@@ -187,10 +188,10 @@
                 <h2>Proficiencies &amp; Training</h2>
               </div>
               <div class="training-fields">
-                <label>Armor <input id="armorTrainingInput" autocomplete="off" placeholder="Light armor, shields..."></label>
-                <label>Weapons <input id="weaponTrainingInput" autocomplete="off" placeholder="Simple weapons..."></label>
+                <label>Armor <input id="armorTrainingInput" autocomplete="off" placeholder="e.g. Light armor, shields"></label>
+                <label>Weapons <input id="weaponTrainingInput" autocomplete="off" placeholder="e.g. Simple weapons"></label>
                 <label>Tools <input id="toolsInput" autocomplete="off" placeholder="Thieves' tools..."></label>
-                <label>Languages <input id="languagesInput" autocomplete="off" placeholder="Common, Dwarvish..."></label>
+                <label>Languages <input id="languagesInput" autocomplete="off" placeholder="e.g. Common, Dwarvish"></label>
               </div>
             </section>
           </aside>
@@ -279,12 +280,12 @@
               <label>
                 Source
                 <select id="subclassMode">
-                  <option value="custom">Custom / non-SRD</option>
-                  <option value="official">Official SRD API</option>
+                  <option value="custom">Custom (type any subclass)</option>
+                  <option value="official">Official list</option>
                 </select>
               </label>
               <label>
-                Official SRD Subclass
+                Official subclass
                 <select id="officialSubclassSelect"></select>
               </label>
               <label>
@@ -920,8 +921,8 @@
           <option>Reaction</option>
           <option>Free</option>
         </select>
-        <input class="action-attack" placeholder="+7 to hit / DC 15">
-        <input class="action-damage" placeholder="1d8+3 lightning">
+        <input class="action-attack" placeholder="e.g. +7 or DC 15" aria-label="Attack bonus or save DC">
+        <input class="action-damage" placeholder="e.g. 1d8+3 fire" aria-label="Damage">
         <textarea class="action-notes" rows="2" placeholder="Range, save, riders, ammo, charges..."></textarea>
         <button class="secondary roll-attack" type="button">Attack</button>
         <button class="secondary roll-damage" type="button">Damage</button>

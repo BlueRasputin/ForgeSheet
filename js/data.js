@@ -1,5 +1,6 @@
 const API_BASE = "https://www.dnd5eapi.co/api/2014";
 const STORAGE_KEY = "forgesheet.character.v1";
+const ACTIVE_TAB_SHEET_KEY = "forgesheet.activeSheet.v1";
 const CHARACTER_LIBRARY_KEY = "forgesheet.characters.v1";
 const CUSTOM_CLASS_KEY = "forgesheet.classes.v1";
 const SYNC_CONFIG_KEY = "forgesheet.sync.v1";

@@ -242,7 +242,7 @@ function renderDeathSaves() {
     <div class="death-save-row"><span>Successes</span>${pips("success")}</div>
     <div class="death-save-row"><span>Failures</span>${pips("failure")}</div>
     <div class="death-save-actions">
-      <button type="button" class="ghost" data-death-action="roll">Roll Death Save</button>
+      <button type="button" class="ghost" data-death-action="roll" ${isDying() ? "" : "disabled title=\"Only while dying at 0 HP\""}>Roll Death Save</button>
       <button type="button" class="ghost" data-death-action="reset">Reset</button>
       ${status ? `<em>${status}</em>` : ""}
     </div>

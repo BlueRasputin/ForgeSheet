@@ -231,10 +231,20 @@ const PROFANE_SOUL_KNOWN = [0, 0, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9
 
 // Martial subclasses that make their class a caster.
 const SUBCLASS_CASTING = {
-  "eldritch-knight": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN },
-  "arcane-trickster": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN },
-  "profane-soul": { casterType: "pactThird", spellAbility: "int", preparedFormula: "known", spellSources: ["warlock"], knownTable: PROFANE_SOUL_KNOWN }
+  "eldritch-knight": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN, cantripTable: subclassCantrips(2) },
+  "arcane-trickster": { casterType: "third", spellAbility: "int", preparedFormula: "known", spellSources: ["wizard"], knownTable: THIRD_CASTER_KNOWN, cantripTable: subclassCantrips(3) },
+  "profane-soul": { casterType: "pactThird", spellAbility: "int", preparedFormula: "known", spellSources: ["warlock"], knownTable: PROFANE_SOUL_KNOWN, cantripTable: subclassCantrips(2) }
 };
+
+// Subclass casters learn cantrips at 3rd level and one more at 10th.
+function subclassCantrips(start) {
+  return Array.from({ length: 20 }, (_, index) => index + 1 < 3 ? 0 : index + 1 >= 10 ? start + 1 : start);
+}
+
+function cantripCap(cls = currentClass(), level = character.level) {
+  if (cls.cantripTable) return cls.cantripTable[level - 1] || 0;
+  return (cls.table || []).slice(0, level).reduce((sum, row) => sum + Number(row.cantrips || 0), 0);
+}
 
 function currentClass() {
   const cls = getClasses()[character.classId] || BUILT_IN_CLASSES.artificer;
@@ -323,7 +333,7 @@ function renderClassTable() {
     const slots = spellSlotsFor(cls, row.level);
     return `<tr class="${row.level === character.level ? "current" : ""}">
       <td>${row.level}</td>
-      <td>${row.features || "-"}</td>
+      <td>${escapeHtml(row.features || "-")}</td>
       <td>${row.newSpells || "-"}</td>
       <td>${row.cantrips || "-"}</td>
       <td>${slots.length ? slots.join(" / ") : "-"}</td>
@@ -399,7 +409,7 @@ function renderOfficialSubclassControls() {
     : "";
   detail.classList.toggle("is-empty", !isOfficial);
   if (!isOfficial) {
-    detail.innerHTML = `<p class="muted">Custom mode keeps subclass fields flexible for non-SRD options like Armorer.</p>`;
+    detail.innerHTML = `<p class="muted">Custom mode lets you type any subclass name and track its features in the sections below.</p>`;
     return;
   }
   const official = officialSubclasses.find(item => item.index === character.subclass.officialIndex);
@@ -414,15 +424,16 @@ function renderOfficialSubclassControls() {
     return;
   }
   detail.innerHTML = `
-    <div><span>SRD Class</span><strong>${official.className}</strong></div>
-    <div><span>Subclass Type</span><strong>${official.flavor || "Subclass"}</strong></div>
-    <p>${truncate((official.desc || []).join(" "), 380) || (subclassApiStatus === "ready" ? "This subclass isn't in the free SRD, so no description is bundled. Record its features in the sections below." : "Description will appear when API details finish loading.")}</p>
+    <div><span>Class</span><strong>${escapeHtml(official.className)}</strong></div>
+    <div><span>Subclass Type</span><strong>${escapeHtml(official.flavor || "Subclass")}</strong></div>
+    <p>${escapeHtml(truncate((official.desc || []).join(" "), 380)) || (subclassApiStatus === "ready" ? "This subclass isn't in the free SRD, so no description is bundled. Record its features in the sections below." : "Description will appear when API details finish loading.")}</p>
   `;
   if (!(official.desc || []).length) loadOfficialSubclassDetail(official.index);
 }
 
 function applyOfficialSubclass(index) {
   character.subclass.officialIndex = index || "";
+  if (index) character.subclass.mode = "official";
   const official = officialSubclasses.find(item => item.index === index);
   if (official) {
     character.subclassName = official.name;

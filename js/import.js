@@ -154,7 +154,7 @@ function parseCharacterSheetText(text) {
 function renderImportPreview(result) {
   const root = document.querySelector("#importPreview");
   if (!result || !Object.keys(result.fields).length) {
-    root.innerHTML = `<p class="muted">${result?.notes?.[0] || "No fields detected yet."}</p>`;
+    root.innerHTML = `<p class="muted">${escapeHtml(result?.notes?.[0] || "No fields detected yet.")}</p>`;
     return;
   }
   const rows = Object.entries(result.fields).map(([key, value]) => `

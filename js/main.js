@@ -86,7 +86,8 @@ function bindEvents() {
     if (event.target.matches?.('input[type="number"]')) renderAll();
   });
 
-  document.querySelectorAll("[data-ability]").forEach(input => input.addEventListener("input", handleAbilityInput));
+  // Commit on change so half-typed scores (backspace, then "20") don't briefly rescale class resources.
+  document.querySelectorAll("[data-ability]").forEach(input => input.addEventListener("change", handleAbilityInput));
   document.querySelectorAll("[data-skill]").forEach(input => input.addEventListener("input", handleSkillInput));
   document.querySelectorAll("[data-save]").forEach(input => input.addEventListener("input", handleSaveInput));
   document.querySelector("#abilities").addEventListener("click", event => {
@@ -159,6 +160,10 @@ function bindEvents() {
     persistAndRender();
   });
   document.querySelector("#slotGrid").addEventListener("click", handleSlotUsageClick);
+  document.querySelector("#prepSuggestions").addEventListener("click", event => {
+    const button = event.target.closest("[data-prep-add]");
+    if (button) addSuggestedSpell(button.dataset.prepAdd);
+  });
   document.querySelector("#saveCharacter").addEventListener("click", persistAndRender);
   document.querySelector("#resetCharacter").addEventListener("click", resetCharacter);
   document.querySelector("#newCharacterButton").addEventListener("click", openCreateDialog);

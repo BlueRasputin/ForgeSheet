@@ -83,10 +83,12 @@ let characterLibrary = loadCharacterLibrary();
 // With no active character saved yet, reopen the most recent library character instead of minting a new blank one.
 function loadCharacter() {
   try {
+    const library = JSON.parse(localStorage.getItem(CHARACTER_LIBRARY_KEY)) || {};
+    const tabSheet = sessionStorage.getItem(ACTIVE_TAB_SHEET_KEY);
+    if (tabSheet && library[tabSheet]) return normalizeCharacter(library[tabSheet]);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (stored) return normalizeCharacter(stored);
-    const library = Object.values(JSON.parse(localStorage.getItem(CHARACTER_LIBRARY_KEY)) || {});
-    const latest = library.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    const latest = Object.values(library).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
     return normalizeCharacter(latest);
   } catch {
     return defaultCharacter();
@@ -170,9 +172,15 @@ window.addEventListener("storage", event => {
   if (event.key !== CHARACTER_LIBRARY_KEY) return;
   characterLibrary = loadCharacterLibrary();
   const latest = characterLibrary[character.sheetId];
+  if (latest && (latest.updatedAt || 0) > (character.updatedAt || 0)) {
+    character = latest;
+    renderAll();
+    return;
+  }
+  // Another character changed elsewhere: refresh the lists without rebuilding the sheet under the cursor.
   if (!latest) characterLibrary[character.sheetId] = character;
-  else if ((latest.updatedAt || 0) > (character.updatedAt || 0)) character = latest;
-  renderAll();
+  renderCharacterManager();
+  renderPartyDashboard();
 });
 
 function ensureCharacterInLibrary() {
@@ -184,6 +192,11 @@ function ensureCharacterInLibrary() {
 function persist() {
   character = normalizeCharacter(character);
   character.updatedAt = Date.now();
+  try {
+    sessionStorage.setItem(ACTIVE_TAB_SHEET_KEY, character.sheetId);
+  } catch {
+    // sessionStorage can be unavailable (privacy modes); the shared key still works.
+  }
   const down = Number(character.hp) <= 0;
   if (!down) {
     character.deathSaveSuccesses = 0;
@@ -250,7 +263,14 @@ function exportCharacterJson() {
 async function importCharacterJson(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  const data = JSON.parse(await file.text());
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    showToast(`<span class="toast-label">Couldn't import ${escapeHtml(file.name)}</span><span>It isn't valid ForgeSheet JSON.</span>`, { tone: "fumble" });
+    event.target.value = "";
+    return;
+  }
   if (data.characterLibrary) {
     characterLibrary = Object.fromEntries(Object.entries(data.characterLibrary).map(([id, item]) => [id, normalizeCharacter(item)]));
   }

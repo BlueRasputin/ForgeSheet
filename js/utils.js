@@ -30,7 +30,7 @@ function ordinal(number) {
 
 function fillSelect(select, options) {
   const value = select.value;
-  select.innerHTML = options.map(([id, label]) => `<option value="${id}">${label}</option>`).join("");
+  select.innerHTML = options.map(([id, label]) => `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`).join("");
   if (options.some(([id]) => id === value)) select.value = value;
 }
 

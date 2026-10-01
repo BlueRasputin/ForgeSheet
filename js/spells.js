@@ -8,7 +8,7 @@ function spellSummaryHtml(row) {
   const detail = row.custom || spellDetails[row.index] || {};
   const text = [detail.desc].flat().filter(Boolean).join(" ");
   // ponytail: save type and damage dice scraped from the description with regexes; matches SRD phrasing, misses exotic wording
-  const save = text.match(/(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav/i)?.[1];
+  const save = spellSaveAbility(text);
   const attack = /spell attack/i.test(text);
   const dice = text.match(/\b\d+d\d+\b/)?.[0];
   const cast = castingShorthand(row.custom ? row.custom.castingTime : detail.casting_time);
@@ -23,6 +23,12 @@ function spellSummaryHtml(row) {
   ].filter(Boolean);
   return `<strong class="spell-print-name">${escapeHtml(spellDisplayName(row))}</strong>` +
     parts.map(part => `<span title="${escapeHtml(CAST_SHORTHAND_TITLES[part] || "")}">${escapeHtml(part)}</span>`).join("");
+}
+
+// Only the saves a target makes ("make a Wisdom saving throw", "Wisdom save or take"), not "advantage on Wisdom saving throws".
+function spellSaveAbility(text) {
+  const match = String(text).match(/(?:makes?|must make|succeeds? on|succeed on)\s+an?\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav|(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+save\s+or\b/i);
+  return match ? match[1] || match[2] : "";
 }
 
 const CAST_SHORTHAND_TITLES = { A: "Action", B: "Bonus action", R: "Reaction", C: "Concentration" };
@@ -52,7 +58,7 @@ function ensureSubclassSpells() {
   });
   const known = new Set(character.spells.map(row => row.index).filter(Boolean));
   entitled.forEach(index => {
-    if (granted.has(index)) return;
+    if (granted.has(index) && known.has(index)) return;
     const spellInfo = allSpells.find(item => item.index === index);
     if (!spellInfo) return;
     granted.add(index);
@@ -163,41 +169,74 @@ function handleSpellCastClick(event) {
   const button = event.target.closest(".cast-spell");
   if (!button) return;
   const row = spellRowForElement(button);
-  if (!row || !spellRowHasSpell(row)) return;
-  const incoming = spellConcentrationLabel(row);
-  if (incoming && character.concentration && character.concentration !== incoming
-    && !confirm(`You're concentrating on ${character.concentration}. Casting ${incoming} ends it. Cast anyway?`)) return;
+  if (row) castSpellRow(row);
+}
+
+function castSpellRow(row, force = false) {
+  if (!spellRowHasSpell(row)) return;
+  const name = spellDisplayName(row);
+  const baseLevel = spellLevelForRow(row);
   const grantingItem = itemForSpellRow(row);
+  const cls = currentClass();
+  if (!grantingItem && baseLevel > 0 && ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula) && !row.prepared && !spellAlwaysPrepared(row)) {
+    showToast(`<span class="toast-label">${escapeHtml(name)} isn't prepared</span><span>Tick Prepared on its row to cast it.</span>`);
+    return;
+  }
+  const concentration = spellConcentrationLabel(row);
+  if (!force && concentration && character.concentration && character.concentration !== concentration) {
+    showToast(`<span class="toast-label">Concentrating on ${escapeHtml(character.concentration)}</span><span>Casting ${escapeHtml(concentration)} ends it.</span>`, {
+      actions: [{ label: "Cast anyway", run: () => castSpellRow(row, true) }],
+      duration: 10000
+    });
+    return;
+  }
+  let castLevel = baseLevel;
+  let status = "Cantrip";
   if (grantingItem) {
     const uses = Number(grantingItem.grantUses || 0);
     if (uses && Number(grantingItem.grantUsed || 0) >= uses) return;
     if (uses) grantingItem.grantUsed = Number(grantingItem.grantUsed || 0) + 1;
-    const itemConcentration = spellConcentrationLabel(row);
-    if (itemConcentration) character.concentration = itemConcentration;
-    persistAndRender();
-    return;
+    status = uses ? `${uses - grantingItem.grantUsed} of ${uses} ${grantingItem.name} use${uses === 1 ? "" : "s"} left` : `From ${grantingItem.name}`;
+  } else if (baseLevel > 0) {
+    castLevel = Number(row.castLevel || baseLevel);
+    const max = spellSlotsFor(cls, character.level)[castLevel - 1] || 0;
+    const used = Number(character.spellSlotUsage?.[castLevel] || 0);
+    if (!max || used >= max) return;
+    character.spellSlotUsage[castLevel] = used + 1;
+    row.castLevel = castLevel;
+    const left = max - used - 1;
+    status = `${left} ${ordinal(castLevel)}-level slot${left === 1 ? "" : "s"} left`;
   }
-  const baseLevel = spellLevelForRow(row);
-  if (baseLevel === 0) {
-    const cantripConcentration = spellConcentrationLabel(row);
-    if (cantripConcentration) {
-      character.concentration = cantripConcentration;
-      persistAndRender();
-    }
-    return;
-  }
-  const castLevel = Number(row.castLevel || button.dataset.castLevel || baseLevel);
-  const slots = spellSlotsFor(currentClass(), character.level);
-  const max = slots[castLevel - 1] || 0;
-  const used = Number(character.spellSlotUsage?.[castLevel] || 0);
-  if (!max || used >= max) return;
-  character.spellSlotUsage[castLevel] = used + 1;
-  row.castLevel = castLevel;
-  const concentration = spellConcentrationLabel(row);
   if (concentration) character.concentration = concentration;
   persistAndRender();
-  const left = max - used - 1;
-  showToast(`<span class="toast-label">Cast ${escapeHtml(spellDisplayName(row))}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${left} ${ordinal(castLevel)}-level slot${left === 1 ? "" : "s"} left${concentration ? ` · concentrating` : ""}</span>`);
+  const effect = spellEffectRoll(row, castLevel);
+  showToast(`<span class="toast-label">Cast ${escapeHtml(name)}${castLevel > baseLevel ? ` at ${ordinal(castLevel)} level` : ""}</span><span>${escapeHtml(status)}${concentration ? " · concentrating" : ""}</span>`, {
+    actions: effect ? [{ label: `${effect.label} (${effect.formula})`, run: () => rollFromInput(`${name} ${effect.kind}`, effect.formula, "normal") }] : [],
+    duration: 9000
+  });
+}
+
+// ponytail: reads dice, upcast increments, and cantrip scaling from the spell text; SRD phrasing only
+function spellEffectRoll(row, castLevel) {
+  const detail = row.custom || spellDetails[row.index] || {};
+  const text = [detail.desc].flat().filter(Boolean).join(" ");
+  const base = text.match(/\b(\d+)d(\d+)\b/);
+  if (!base) return null;
+  const sides = Number(base[2]);
+  let count = Number(base[1]);
+  const baseLevel = spellLevelForRow(row);
+  const higher = [detail.higher_level].flat().filter(Boolean).join(" ");
+  const perSlot = higher.match(/(\d+)d(\d+)\s+for each slot level above/i);
+  if (perSlot && Number(perSlot[2]) === sides && castLevel > baseLevel) count += Number(perSlot[1]) * (castLevel - baseLevel);
+  if (baseLevel === 0 && /5th level/i.test(`${text} ${higher}`)) count *= 1 + [5, 11, 17].filter(level => character.level >= level).length;
+  const healing = /regains?\s+(a number of\s+)?hit points/i.test(text);
+  const ability = currentClass().spellAbility;
+  const modifier = /spellcasting ability modifier/i.test(text) && ABILITIES.some(([id]) => id === ability) ? mod(ability) : 0;
+  return {
+    formula: `${count}d${sides}${modifier ? formatMod(modifier) : ""}`,
+    kind: healing ? "healing" : "damage",
+    label: healing ? "Roll healing" : "Roll damage"
+  };
 }
 
 function spellRowForElement(element) {
@@ -206,7 +245,7 @@ function spellRowForElement(element) {
 }
 
 function spellConcentrationLabel(row) {
-  if (row.custom?.desc?.toLowerCase().includes("concentration")) return row.custom.name || "Custom spell";
+  if (row.custom) return /concentration/i.test(`${row.custom.duration || ""} ${row.custom.desc || ""}`) ? row.custom.name || "Custom spell" : "";
   const detail = spellDetails[row.index];
   return detail?.concentration ? detail.name : "";
 }
@@ -219,11 +258,14 @@ function renderSpellRows() {
     const section = document.createElement("section");
     section.className = "spell-section";
     const rows = character.spells.filter(row => spellLevelForRow(row) === level);
+    const cap = level === 0 ? cantripCap() : null;
+    if (level === 0 && !cap && !rows.length) return;
+    const chosen = rows.filter(spellRowHasSpell).length;
     section.innerHTML = `
       <div class="spell-section-head">
         <div>
           <h3>${spellLevelLabel(level)}</h3>
-          <span>${rows.filter(spellRowHasSpell).length} selected</span>
+          <span class="${cap !== null && chosen > cap ? "over-cap" : ""}">${cap ? `${chosen} / ${cap} known${chosen > cap ? ` · ${chosen - cap} over` : ""}` : `${chosen} selected`}</span>
         </div>
         <button type="button" class="ghost" data-add-spell-level="${level}">Add ${level === 0 ? "Cantrip" : "Spell"}</button>
       </div>
@@ -269,6 +311,7 @@ function renderSpellRows() {
         const label = prepared.closest("label");
         label.classList.add("is-always");
         label.lastChild.textContent = " Always prepared";
+        remove.style.display = "none";
       }
       if (grantingItem) {
         const label = prepared.closest("label");
@@ -316,8 +359,9 @@ function renderSpellRows() {
 }
 
 function fillSpellSelect(select, currentValue, choices = spellChoices(currentValue)) {
+  const sameLevel = choices.length > 0 && choices.every(item => item.level === choices[0].level);
   select.innerHTML = `<option value="">Choose spell...</option><option value="${CUSTOM_SPELL_VALUE}">Custom spell...</option>` + choices
-    .map(item => `<option value="${item.index}">${item.name} (${item.level === 0 ? "Cantrip" : ordinal(item.level)})</option>`)
+    .map(item => `<option value="${escapeHtml(item.index)}">${escapeHtml(item.name)}${sameLevel ? "" : ` (${item.level === 0 ? "Cantrip" : ordinal(item.level)})`}</option>`)
     .join("");
   select.value = currentValue || "";
 }
@@ -418,17 +462,19 @@ function renderSpellCard(card, rowOrIndex) {
   const summary = allSpells.find(item => item.index === index);
   const detail = spellDetails[index];
   if (!detail) {
-    card.innerHTML = `<strong>${summary?.name || index}</strong><br><span>Loading details...</span>`;
+    card.innerHTML = `<strong>${escapeHtml(summary?.name || index)}</strong><br><span>Loading details...</span>`;
     loadSpellDetail(index);
     return;
   }
   const classes = (detail.classes || []).map(item => item.name || item).join(", ");
+  const higher = [detail.higher_level].flat().filter(Boolean).join(" ");
   card.innerHTML = `
-    <strong>${detail.name}</strong> ${detail.level === 0 ? "Cantrip" : ordinal(detail.level)}
-    <br>${detail.casting_time || ""} · ${detail.range || ""} · ${(detail.components || []).join(", ")}
-    <br>${detail.concentration ? "Concentration · " : ""}${detail.duration || ""}
-    <br>${truncate((detail.desc || []).join(" "), 260)}
-    <br><span>${detail.local ? "Original mechanical summary — full text in your sourcebook" : `API classes: ${classes || "custom/homebrew"}`}</span>
+    <strong>${escapeHtml(detail.name)}</strong> ${detail.level === 0 ? "Cantrip" : ordinal(detail.level)}${detail.ritual ? " · Ritual" : ""}
+    <br>${escapeHtml(detail.casting_time || "")} · ${escapeHtml(detail.range || "")} · ${escapeHtml((detail.components || []).join(", "))}${detail.material ? ` (${escapeHtml(detail.material)})` : ""}
+    <br>${detail.concentration ? "Concentration · " : ""}${escapeHtml(detail.duration || "")}
+    ${(detail.desc || []).map(paragraph => `<p>${escapeHtml(paragraph)}</p>`).join("")}
+    ${higher ? `<p><strong>At higher levels.</strong> ${escapeHtml(higher)}</p>` : ""}
+    <span>${detail.local ? "Original mechanical summary — full text in your sourcebook" : `Classes: ${escapeHtml(classes || "custom/homebrew")}`}</span>
     ${spellCastControls(row, detail.level ?? baseLevel)}
   `;
 }
@@ -442,7 +488,8 @@ function renderPrepSuggestions() {
   const mode = document.querySelector("#prepMode")?.value || "combat";
   const cls = currentClass();
   const limit = preparedLimitFor(cls);
-  const known = allSpells.filter(spell => spellMatchesClass(spell, cls) && spell.level > 0 && spell.level <= maxSpellLevelFor(cls, character.level));
+  const have = new Set(character.spells.filter(row => row.prepared || spellAlwaysPrepared(row) || row.itemId).map(row => row.index));
+  const known = allSpells.filter(spell => spellMatchesClass(spell, cls) && spell.level > 0 && spell.level <= maxSpellLevelFor(cls, character.level) && !have.has(spell.index));
   const preferred = PREP_SUGGESTIONS[mode] || [];
   const suggestions = [
     ...preferred.map(index => known.find(spell => spell.index === index)).filter(Boolean),
@@ -457,7 +504,7 @@ function renderPrepSuggestions() {
     }
   });
   document.querySelector("#prepSuggestions").innerHTML = unique.length
-    ? unique.map(spell => `<span>${escapeHtml(spell.name)}</span>`).join("")
+    ? unique.map(spell => `<button type="button" class="ghost" data-prep-add="${escapeHtml(spell.index)}" title="Add as a prepared spell">+ ${escapeHtml(spell.name)}</button>`).join("")
     : `<span>No suggestions for this class yet.</span>`;
 }
 
@@ -631,11 +678,26 @@ function quickCastState(row, level) {
   if (preparedCaster && !row.prepared && !spellAlwaysPrepared(row)) return { label: "Cast", disabled: true, title: "Prepare this spell to cast it" };
   const slots = spellSlotsFor(cls, character.level);
   const options = castLevelOptions(level, slots);
-  const selected = normalizeCastLevel(row, level, options);
+  let selected = normalizeCastLevel(row, level, options);
+  if (slotRemaining(selected, slots[selected - 1] || 0) <= 0) {
+    const open = options.find(option => slotRemaining(option, slots[option - 1] || 0) > 0);
+    if (open) selected = row.castLevel = open;
+  }
   const remaining = slotRemaining(selected, slots[selected - 1] || 0);
   return {
     label: `Cast ${ordinal(selected)}`,
     disabled: remaining <= 0,
     title: remaining > 0 ? `${remaining} ${ordinal(selected)}-level slot${remaining === 1 ? "" : "s"} left` : "No slots left at this level"
   };
+}
+
+function addSuggestedSpell(index) {
+  const spell = allSpells.find(item => item.index === index);
+  if (!spell) return;
+  const existing = character.spells.find(row => row.index === index);
+  if (existing) existing.prepared = true;
+  else character.spells.push({ id: crypto.randomUUID(), index, level: spell.level, prepared: true });
+  persistAndRender();
+  loadSpellDetail(index);
+  showToast(`<span class="toast-label">Prepared ${escapeHtml(spell.name)}</span><span>${preparedSpellCount()} of ${preparedLimitFor(currentClass())} prepared</span>`);
 }
