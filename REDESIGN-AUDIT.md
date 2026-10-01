@@ -117,28 +117,39 @@ Audit of the whole UI against the redesign checklist, followed by the rules the 
   - The container queries on spell rows and ability tiles.
   - The 981 to 1279px two-column layout and the phone reflow at 980px and below.
 
-## Structure, round 2 (reference-driven)
+## Structure, round 3 (current)
 
-**References:**
-- **Tidy 5e Sheets, "Quadrone" layout:**
-  - a hero with the portrait, keeping HP and vitals together
-  - a sidebar for skills
-  - separate play and edit modes
-- **D&D Beyond-style layout:**
-  - a header banner and a row of ability cards
-  - a skills column next to a tabbed box
+**Layout:** character info and skills stay in the sticky left column. A later attempt moved them into a top hero; that was reverted.
 
-**Structure:**
-- **Top nav:** a floating pill holding the character switcher, search, Builder / Party / Campaign, Rest, Checklist, Level up and the Menu.
-- **Character hero:** a gapless 12-column grid with `grid-auto-flow: dense`.
-  - Row 1: the portrait (2 columns, spanning both rows), identity (4) and six stat tiles (6).
-  - Row 2: the portrait continues (2) next to six ability cards with their saves (10).
-- **Sticky sidebar:** HP with Damage and Heal, the concentration and dying prompts, skills and passives.
-- **Tabs:** Combat, Spells (casters only), Inventory, Roleplay and Features.
-- **Play mode by default.** Build values read as text: scores, proficiencies, AC, speed, max HP, and the action and resource definitions. The add and remove buttons are hidden.
-  - Proficiencies show as dots.
-  - **Edit sheet** unlocks all of it, and the hero gets an accent ring while you edit.
-  - Live state stays editable in both modes: HP, temp HP, resource counts, slots, inventory and notes.
-- **Phones:** one column in play order: name, HP, stat tiles, then abilities, skills and passives (collapsed), then the tabs.
+**Left column, in play order:**
+1. The identity block: a "Level N Species Class" pill above the name, a size and details line under it, and the Edit / Done switch.
+2. The HP block:
+   - Current HP is the largest number on the sheet.
+   - Damage, amount and Heal sit under it.
+   - At 0 HP, death-save pips and a roll button appear inside the block.
+   - A hit dice line ("Hit dice 6/7 d8") with a Spend button.
+3. The concentration prompt, directly under HP, where damage is entered.
+4. The stat tiles:
+   - Row 1: AC (framed by a shield, second-largest number), Initiative and Speed in feet.
+   - Row 2: Conditions (including exhaustion), Inspiration and Prof. bonus.
+5. Abilities with saves: the modifier is large, the score small, and the save sits in each card.
+6. Passive Perception, Investigation and Insight, followed by special senses (darkvision).
+7. Skills.
 
-**Not adopted from gpt-taste:** the hero / story page flow, scroll-pinned GSAP sections and stock photography. Those suit a landing page, not a sheet used during play. The motion that was kept is feedback only: tiles lift on hover, panels fade in with a stagger, and everything is off under reduced motion.
+**Research basis:**
+- Creation steps and the build vs. live split from the 2014 and 2024 rules.
+- Placement and hierarchy patterns from the 2014 and 2024 WotC sheets, D&D Beyond, Foundry / Tidy 5e and Roll20. All of them make HP the dominant element, keep AC next to it, keep hit dice and death saves with HP, and run AC / Initiative / Speed as a row.
+
+**Visual system (high-end-visual-design, adapted for a play tool):**
+- **Shells:** double-bezel. Every section, the sidebar, the tab bar, the nav, menus, dialogs and toasts sit in a tinted tray ring with a hairline around an inner panel with concentric corners and a top highlight. It is drawn with box-shadow only, so no extra markup.
+- **Shape:** pills for buttons, tabs, chips and the nav. 12px for fields and rows, 20px for sections.
+- **Icons:** Phosphor Light.
+- **Button-in-button:** the primary actions (Level up, Roll) carry their icon in a nested orb that shifts on hover.
+- **Menu:** the hamburger morphs into an X. The menu is a glass panel whose items reveal in a stagger.
+- **Motion:**
+  - Spring-like easing, `cubic-bezier(0.32, 0.72, 0, 1)`.
+  - The nav, sidebar and tabs settle in on load.
+  - Blocks fade up as they enter the viewport, using CSS scroll-driven animation, so content can never stay hidden.
+  - Everything is off under reduced motion.
+- **Background:** a soft accent glow on the page plus the existing fixed grain layer.
+- **Not adopted:** the skill's massive section padding (py-24 and up), eyebrow badges on every heading, and the full-screen menu overlay. A character sheet needs its information density at the table, and the menu holds form controls.

@@ -74,7 +74,7 @@ function structuredCloneSafe(value) {
 
 // Toasts stack (newest at the bottom, max 3) so a result or an Undo isn't replaced by the next toast.
 function icon(name) {
-  return `<i class="ph ph-${name}" aria-hidden="true"></i>`;
+  return `<i class="ph-light ph-${name}" aria-hidden="true"></i>`;
 }
 
 function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {

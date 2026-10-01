@@ -46,20 +46,20 @@ function renderIdentityDisplay() {
   // Play mode by default: build values read as text; Edit unlocks scores, proficiencies, actions and trackers.
   document.body.classList.toggle("is-editing", !character.identityLocked);
   const lock = document.querySelector("#identityLock");
-  lock.innerHTML = character.identityLocked ? `${icon("pencil-simple")}Edit sheet` : `${icon("check")}Done`;
+  lock.innerHTML = character.identityLocked ? `${icon("pencil-simple")}Edit` : `${icon("check")}Done`;
   lock.classList.toggle("primary", !character.identityLocked);
   lock.title = character.identityLocked ? "Edit details, scores, proficiencies, actions and trackers" : "Back to play mode";
-  document.querySelector("#heroPortrait").innerHTML = `${icon(CLASS_GLYPHS[character.classId] || "sparkle")}<span>${character.level}</span>`;
   const classLine = [
     `Level ${character.level}`,
     character.species,
     getClasses()[character.classId]?.name || ""
   ].filter(Boolean).join(" ");
   const detailLine = [
+    speciesSize(character.species),
     character.subclassName,
     character.background,
     character.alignment
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(", ");
   document.querySelector("#identityDisplay").innerHTML = `
     <strong>${escapeHtml(character.name || "Unnamed Character")}</strong>
     <span>${escapeHtml(classLine)}</span>
@@ -277,7 +277,20 @@ function renderSenses() {
   document.querySelector("#senses").innerHTML = senses.map(([skill, label]) => {
     const ability = SKILLS.find(([id]) => id === skill)[2];
     return `<div class="sense-row"><strong>${10 + skillBonus(skill, ability)}</strong><span>${label}</span></div>`;
-  }).join("");
+  }).join("") + specialSensesHtml();
+}
+
+// Darkvision from the species preset (60 ft) or any "Darkvision N ft" written in features.
+function specialSensesHtml() {
+  const written = String(character.features || "").match(/darkvision\D{0,12}(\d+)/i);
+  const preset = SPECIES_PRESETS.find(([name]) => name === character.species);
+  const range = written ? Number(written[1]) : preset && /darkvision/i.test(preset[2]) ? 60 : 0;
+  return range ? `<p class="special-senses">${icon("eye")}Darkvision ${range} ft</p>` : "";
+}
+
+function speciesSize(species) {
+  if (!SPECIES_PRESETS.some(([name]) => name === species)) return "";
+  return /gnome|halfling/i.test(species) ? "Small" : "Medium";
 }
 
 function renderDeathSaves() {

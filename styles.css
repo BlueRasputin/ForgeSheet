@@ -1,5 +1,6 @@
 /* ForgeSheet
-   Shape rule: controls and inner rows 8px, compact chips under 28px 6px, sections and dialogs 12px, status chips fully round.
+   Shape rule: buttons, tabs, chips and the nav are pills; fields and inner rows 12px; compact chips 8px;
+   sections are 20px "double-bezel" shells (a tinted tray ring around an inner panel with concentric corners).
    Color rule: one accent per theme. good / warn / bad appear only for HP state, death saves, encumbrance and warnings.
    Z-index scale: base 1, sticky 20, menu 40, toast 60. */
 
@@ -7,11 +8,14 @@
   color-scheme: light;
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --ease: cubic-bezier(0.23, 1, 0.32, 1);
-  --fast: 160ms;
-  --r-chip: 6px;
-  --r-control: 8px;
-  --r-card: 12px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --fast: 220ms;
+  --slow: 640ms;
+  --r-chip: 8px;
+  --r-control: 12px;
+  --r-card: 20px;
+  --highlight: rgba(255, 255, 255, 0.75);
+  --ambient: rgba(24, 24, 32, 0.16);
   --z-base: 1;
   --z-sticky: 20;
   --z-menu: 40;
@@ -47,6 +51,16 @@ body {
   --good-soft: color-mix(in srgb, var(--good) 12%, var(--surface));
   --warn-soft: color-mix(in srgb, var(--warn) 13%, var(--surface));
   --bad-soft: color-mix(in srgb, var(--bad) 11%, var(--surface));
+  --shell: color-mix(in srgb, var(--ink) 4%, var(--bg));
+  --shell-line: color-mix(in srgb, var(--ink) 9%, transparent);
+  --core-line: color-mix(in srgb, var(--ink) 7%, transparent);
+  /* Double bezel: tray ring, hairline, soft ambient lift, inner top highlight, inner hairline. */
+  --bezel:
+    0 0 0 6px var(--shell),
+    0 0 0 7px var(--shell-line),
+    0 28px 56px -28px var(--ambient),
+    inset 0 1px 0 var(--highlight),
+    inset 0 0 0 1px var(--core-line);
 }
 
 /* Fantasy: pale stone with a forest accent */
@@ -70,6 +84,7 @@ body[data-theme="light"] {
   --shadow-md: 0 1px 2px rgba(38, 44, 30, 0.07), 0 8px 24px -6px rgba(38, 44, 30, 0.16);
   --shadow-lg: 0 2px 6px rgba(38, 44, 30, 0.08), 0 24px 60px -12px rgba(38, 44, 30, 0.34);
   --backdrop: rgba(24, 30, 20, 0.5);
+  --ambient: rgba(38, 44, 30, 0.18);
 }
 
 /* Dark: graphite with a warm coral accent */
@@ -95,6 +110,8 @@ body[data-theme="dark"] {
   --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.5), 0 28px 70px -12px rgba(0, 0, 0, 0.75);
   --backdrop: rgba(0, 0, 0, 0.62);
   --grain: 0.05;
+  --highlight: rgba(255, 255, 255, 0.06);
+  --ambient: rgba(0, 0, 0, 0.55);
   --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
 }
 
@@ -120,6 +137,8 @@ body[data-theme="retro"] {
   --shadow-lg: 6px 6px 0 rgba(18, 10, 4, 0.45);
   --backdrop: rgba(18, 10, 4, 0.62);
   --grain: 0.07;
+  --highlight: rgba(255, 252, 240, 0.7);
+  --ambient: rgba(10, 6, 2, 0.5);
 }
 
 /* ===== Base ===== */
@@ -142,7 +161,11 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 560px at 8% -12%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 62%),
+    radial-gradient(900px 520px at 100% 0%, color-mix(in srgb, var(--ink) 4%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 0.875rem;
@@ -216,7 +239,7 @@ code {
   font-size: 0.8125em;
 }
 
-.ph {
+.ph-light {
   flex: none;
   font-size: 1.1em;
   line-height: 1;
@@ -370,8 +393,8 @@ button {
   gap: 6px;
   min-height: 32px;
   border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  padding: 0 12px;
+  border-radius: 999px;
+  padding: 0 14px;
   background: var(--surface);
   color: var(--ink);
   font-size: 0.8125rem;
@@ -526,9 +549,9 @@ a:focus-visible {
 /* ===== App shell and top bar ===== */
 
 .app-shell {
-  width: min(1680px, 100% - 32px);
+  width: min(1680px, 100% - 48px);
   margin: 0 auto;
-  padding: 12px 0 40px;
+  padding: 20px 0 56px;
 }
 
 .visually-hidden {
@@ -542,15 +565,17 @@ a:focus-visible {
 
 /* The top nav is the one pill-shaped container: a floating bar above the sheet. */
 .topbar {
+  position: relative;
+  z-index: var(--z-menu);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border: 0;
   border-radius: 999px;
   padding: 6px 8px 6px 6px;
   background: color-mix(in srgb, var(--surface) 86%, transparent);
-  box-shadow: var(--shadow-md), inset 0 1px 0 color-mix(in srgb, white 40%, transparent);
+  box-shadow: var(--bezel);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   backdrop-filter: blur(14px) saturate(140%);
 }
@@ -604,7 +629,7 @@ a:focus-visible {
   max-width: 260px;
 }
 
-.top-search .ph {
+.top-search .ph-light {
   position: absolute;
   top: 50%;
   left: 10px;
@@ -691,16 +716,107 @@ body.role-dm .top-nav [data-tab="party"]:not(.active) {
   z-index: var(--z-menu);
   display: grid;
   gap: 1px;
-  min-width: 250px;
+  min-width: 260px;
   max-height: calc(100dvh - 90px);
   overflow-y: auto;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-card);
-  padding: 6px;
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
-  animation: rise-in 160ms var(--ease);
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: var(--bezel), var(--shadow-lg);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  transform-origin: top right;
+  animation: menu-in 360ms var(--ease);
 }
+
+.file-menu-items > * {
+  animation: rise-in 420ms var(--ease) both;
+}
+.file-menu-items > :nth-child(2) {
+  animation-delay: 44ms;
+}
+
+.file-menu-items > :nth-child(3) {
+  animation-delay: 66ms;
+}
+
+.file-menu-items > :nth-child(4) {
+  animation-delay: 88ms;
+}
+
+.file-menu-items > :nth-child(5) {
+  animation-delay: 110ms;
+}
+
+.file-menu-items > :nth-child(6) {
+  animation-delay: 132ms;
+}
+
+.file-menu-items > :nth-child(7) {
+  animation-delay: 154ms;
+}
+
+.file-menu-items > :nth-child(8) {
+  animation-delay: 176ms;
+}
+
+.file-menu-items > :nth-child(9) {
+  animation-delay: 198ms;
+}
+
+.file-menu-items > :nth-child(10) {
+  animation-delay: 220ms;
+}
+
+.file-menu-items > :nth-child(11) {
+  animation-delay: 242ms;
+}
+
+.file-menu-items > :nth-child(12) {
+  animation-delay: 264ms;
+}
+
+.file-menu-items > :nth-child(13) {
+  animation-delay: 286ms;
+}
+
+.file-menu-items > :nth-child(14) {
+  animation-delay: 308ms;
+}
+
+.file-menu-items > :nth-child(15) {
+  animation-delay: 330ms;
+}
+
+.file-menu-items > :nth-child(16) {
+  animation-delay: 352ms;
+}
+
+.file-menu-items > :nth-child(17) {
+  animation-delay: 374ms;
+}
+
+.file-menu-items > :nth-child(18) {
+  animation-delay: 396ms;
+}
+
+.file-menu-items > :nth-child(19) {
+  animation-delay: 418ms;
+}
+
+.file-menu-items > :nth-child(20) {
+  animation-delay: 440ms;
+}
+
+.file-menu-items > :nth-child(21) {
+  animation-delay: 462ms;
+}
+
+.file-menu-items > :nth-child(22) {
+  animation-delay: 484ms;
+}
+
 
 .file-menu-items button {
   justify-content: flex-start;
@@ -780,8 +896,8 @@ body.split-view .split-toolbar #swapSplitPanels {
 .search-results {
   display: none;
   grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
-  gap: 8px;
-  margin-top: 8px;
+  gap: 20px;
+  margin-top: 20px;
 }
 
 .search-results.active {
@@ -790,10 +906,11 @@ body.split-view .split-toolbar #swapSplitPanels {
 }
 
 .search-results article {
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-card);
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: var(--surface);
+  box-shadow: var(--bezel);
 }
 
 .search-results p {
@@ -801,101 +918,7 @@ body.split-view .split-toolbar #swapSplitPanels {
   color: var(--muted);
 }
 
-/* ===== Character hero: a gapless 12-column bento ===== */
-/* Row 1: portrait (2, spans both rows) + identity (4) + six stat tiles (6) = 12.
-   Row 2: portrait (2, continued) + six ability cards (10) = 12. */
-
-.sheet-hero {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-flow: dense;
-  gap: 8px;
-  margin-top: 12px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: calc(var(--r-card) + 4px);
-  padding: 10px;
-  background: var(--surface);
-}
-
-.sheet-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(60% 120% at 0% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
-    radial-gradient(40% 80% at 100% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%);
-}
-
-.hero-portrait {
-  position: relative;
-  grid-column: span 2;
-  grid-row: span 2;
-  display: grid;
-  place-items: center;
-  min-height: 150px;
-  overflow: hidden;
-  border-radius: var(--r-card);
-  background:
-    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 55%, white 10%), transparent 60%),
-    linear-gradient(160deg, var(--accent), var(--accent-strong));
-  color: var(--on-accent);
-}
-
-.hero-portrait .ph {
-  font-size: 4rem;
-  opacity: 0.92;
-  transition: transform 600ms var(--ease);
-}
-
-.sheet-hero:hover .hero-portrait .ph {
-  transform: scale(1.06) rotate(-4deg);
-}
-
-.hero-portrait span {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: grid;
-  place-items: center;
-  min-width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  padding: 0 8px;
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  color: var(--ink);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.sheet-hero > .identity-block {
-  grid-column: span 4;
-  align-self: center;
-  padding: 4px 6px;
-}
-
-.sheet-hero > .stat-tile-group {
-  grid-column: span 6;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.hero-abilities {
-  grid-column: span 10;
-}
-
-.hero-abilities > summary {
-  display: none;
-}
-
-.hero-abilities .ability-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-body.is-editing .sheet-hero {
+body.is-editing .sheet-sidebar {
   border-color: var(--accent-line);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
@@ -908,9 +931,9 @@ body.is-editing .sheet-hero {
 
 .edit-toggle {
   position: absolute;
-  top: 0;
-  right: 0;
-  min-height: 30px;
+  top: -2px;
+  right: -2px;
+  min-height: 28px;
   padding: 0 10px;
   font-size: 0.75rem;
 }
@@ -919,24 +942,25 @@ body.is-editing .sheet-hero {
 
 .sheet-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 26px;
   align-items: start;
-  margin-top: 12px;
+  margin-top: 26px;
 }
 
 .sheet-sidebar {
   position: sticky;
-  top: 12px;
+  top: 19px;
   display: grid;
-  gap: 12px;
-  max-height: calc(100dvh - 24px);
+  gap: 14px;
+  max-height: calc(100dvh - 38px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-card);
-  padding: 12px;
+  padding: 16px;
   background: var(--surface);
+  box-shadow: var(--bezel);
 }
 
 .sheet-main {
@@ -970,21 +994,21 @@ body.is-editing .sheet-hero {
   font-size: 0.75rem;
 }
 
-details:is(.side-section, .hero-abilities) > summary {
+details.side-section > summary {
   list-style: none;
   cursor: pointer;
 }
 
-details:is(.side-section, .hero-abilities) > summary::-webkit-details-marker {
+details.side-section > summary::-webkit-details-marker {
   display: none;
 }
 
-details:is(.side-section, .hero-abilities) .ph-caret-right {
+details.side-section .ph-caret-right {
   color: var(--muted);
   transition: transform var(--fast) var(--ease);
 }
 
-details:is(.side-section, .hero-abilities)[open] .ph-caret-right {
+details.side-section[open] .ph-caret-right {
   transform: rotate(90deg);
 }
 
@@ -1005,21 +1029,28 @@ details:is(.side-section, .hero-abilities)[open] .ph-caret-right {
 
 .identity-block.is-locked .identity-display {
   display: grid;
-  gap: 3px;
-  padding-right: 96px;
+  gap: 2px;
+  padding-right: 64px;
 }
 
 .identity-display strong {
-  font-size: 1.625rem;
+  font-size: 1.375rem;
   font-weight: 650;
   letter-spacing: -0.025em;
   line-height: 1.15;
 }
 
 .identity-display span {
-  color: var(--ink-soft);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  order: -1;
+  justify-self: start;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .identity-display em {
@@ -1104,8 +1135,8 @@ details:is(.side-section, .hero-abilities)[open] .ph-caret-right {
 }
 
 .hp-fields #hpInput {
-  min-height: 40px;
-  font-size: 2rem;
+  min-height: 44px;
+  font-size: 2.25rem;
   font-weight: 700;
   letter-spacing: -0.03em;
 }
@@ -1232,7 +1263,7 @@ details:is(.side-section, .hero-abilities)[open] .ph-caret-right {
 
 .stat-tile strong {
   display: block;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.015em;
 }
@@ -1244,8 +1275,52 @@ details:is(.side-section, .hero-abilities)[open] .ph-caret-right {
   padding: 0;
   background: transparent;
   text-align: center;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 650;
+}
+
+.stat-tile .with-unit {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+}
+
+.stat-tile .with-unit input {
+  width: 2.6ch;
+  text-align: right;
+}
+
+.stat-tile .with-unit small {
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+/* AC is the second most important number, framed by a shield. */
+.ac-tile {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ac-tile > .ph-shield {
+  position: absolute;
+  top: 64%;
+  left: 50%;
+  z-index: -1;
+  color: color-mix(in srgb, var(--accent) 22%, transparent);
+  font-size: 4.25rem;
+  transform: translate(-50%, -50%);
+}
+
+.ac-tile > span {
+  margin-top: 4px;
+}
+
+.ac-tile input {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .stat-tile input:focus {
@@ -1367,10 +1442,10 @@ button.stat-tile {
   padding: 0 10px;
   background: transparent;
   color: var(--ink);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 650;
   letter-spacing: -0.02em;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .ability-box,
@@ -1571,11 +1646,12 @@ button.stat-tile {
 
 .block {
   min-width: 0;
-  margin-bottom: 12px;
-  border: 1px solid var(--line);
+  margin-bottom: 22px;
+  border: 0;
   border-radius: var(--r-card);
-  padding: 14px 16px;
+  padding: 18px 20px;
   background: var(--surface);
+  box-shadow: var(--bezel);
 }
 
 .block-head {
@@ -1605,7 +1681,7 @@ button.stat-tile {
 .sync-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  gap: 22px;
 }
 
 .spell-layout {
@@ -1671,17 +1747,17 @@ details.fold:not([open]) > summary {
 
 .tabs {
   position: sticky;
-  top: 12px;
+  top: 19px;
   z-index: var(--z-sticky);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  padding: 4px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: var(--shadow-sm);
+  border: 0;
+  border-radius: 999px;
+  padding: 5px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: var(--bezel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
@@ -1742,7 +1818,7 @@ body:not(.is-caster) .tab[data-tab="spells"] {
 /* ===== Panels and split view ===== */
 
 .deck-shell {
-  margin-top: 12px;
+  margin-top: 26px;
 }
 
 .panel-deck {
@@ -1757,20 +1833,8 @@ body:not(.is-caster) .tab[data-tab="spells"] {
   display: block;
 }
 
-.panel.active > * {
-  animation: rise-in 260ms var(--ease) both;
-}
-
-.panel.active > :nth-child(2) {
-  animation-delay: 40ms;
-}
-
-.panel.active > :nth-child(3) {
-  animation-delay: 80ms;
-}
-
-.panel.active > :nth-child(n + 4) {
-  animation-delay: 120ms;
+.panel.active {
+  animation: fade-in 260ms var(--ease);
 }
 
 body.split-view .panel-deck {
@@ -2705,7 +2769,7 @@ details.equipment-spell > summary {
 
 .spell-section {
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--core-line);
   border-radius: var(--r-card);
   background: var(--surface);
 }
@@ -2805,7 +2869,7 @@ details.equipment-spell > summary {
   color: var(--muted);
 }
 
-.spell-expand .ph {
+.spell-expand .ph-light {
   transition: transform var(--fast) var(--ease);
 }
 
@@ -2813,7 +2877,7 @@ details.equipment-spell > summary {
   color: var(--accent);
 }
 
-.spell-row.is-expanded .spell-expand .ph {
+.spell-row.is-expanded .spell-expand .ph-light {
   transform: rotate(90deg);
 }
 
@@ -3053,7 +3117,7 @@ details.equipment-spell > summary {
   font-weight: 600;
 }
 
-.party-badges .ph {
+.party-badges .ph-light {
   margin-right: 3px;
 }
 
@@ -3172,17 +3236,21 @@ body:not(.role-dm) .dm-only {
   display: none !important;
 }
 
+body:not(.role-dm) .sync-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* ===== Dialogs ===== */
 
 dialog {
   width: min(760px, 100vw - 32px);
   max-height: calc(100dvh - 32px);
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
+  border: 0;
+  border-radius: calc(var(--r-card) + 4px);
   padding: 0;
   background: var(--surface);
   color: var(--ink);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--bezel), var(--shadow-lg);
 }
 
 dialog[open] {
@@ -3574,6 +3642,7 @@ dialog.create-dialog {
   gap: 4px;
   min-height: 0;
   border: 1px solid transparent;
+  border-radius: var(--r-control);
   padding: 14px 10px 12px;
   background: var(--inset);
   color: var(--ink);
@@ -3720,16 +3789,17 @@ dialog.create-dialog {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 10px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--r-card);
   padding: 10px 10px 10px 14px;
   background: var(--surface);
   color: var(--ink);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--bezel), var(--shadow-lg);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(10px) scale(0.98);
-  transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  transform: translateY(14px) scale(0.98);
+  filter: blur(4px);
+  transition: opacity 420ms var(--ease), transform 420ms var(--ease), filter 420ms var(--ease);
 }
 
 .app-toast::before {
@@ -3745,6 +3815,7 @@ dialog.create-dialog {
   opacity: 1;
   pointer-events: auto;
   transform: none;
+  filter: none;
 }
 
 .app-toast[data-tone="crit"]::before {
@@ -3797,6 +3868,171 @@ dialog.create-dialog {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
+}
+
+/* ===== Signature details ===== */
+
+/* Button-in-button: the trailing icon sits in its own orb, flush with the pill's inner edge. */
+.has-orb {
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.btn-orb {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--on-accent) 18%, transparent);
+  transition: transform var(--slow) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .has-orb:hover .btn-orb {
+    transform: translate(2px, -1px) scale(1.06);
+  }
+}
+
+/* Hamburger lines morph into an X when the menu opens. */
+.menu-toggle {
+  width: 36px;
+  justify-content: center;
+  padding: 0;
+}
+
+.burger {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 10px;
+}
+
+.burger span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 420ms var(--ease);
+}
+
+.burger span:first-child {
+  top: 0;
+}
+
+.burger span:last-child {
+  bottom: 0;
+}
+
+.file-menu[open] .burger span:first-child {
+  transform: translateY(4.25px) rotate(45deg);
+}
+
+.file-menu[open] .burger span:last-child {
+  transform: translateY(-4.25px) rotate(-45deg);
+}
+
+/* Death saves take over the HP block at 0 HP; hit dice sit with HP. */
+.hp-box .death-saves-block {
+  display: none;
+  margin: 0;
+}
+
+.hp-box[data-state="down"] .death-saves-block {
+  display: grid;
+}
+
+.hp-box .death-saves {
+  padding: 8px;
+  background: var(--surface);
+}
+
+.hp-hitdice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--core-line);
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.hp-hitdice button {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+}
+
+.special-senses {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.hit-dice-field {
+  max-width: 220px;
+  margin-bottom: 12px;
+}
+
+/* Entrance: the shell settles in once; blocks fade up as they scroll into view. */
+@media (prefers-reduced-motion: no-preference) {
+  .topbar,
+  .sheet-sidebar,
+  .tabs {
+    animation: settle-in var(--slow) var(--ease) both;
+  }
+
+  .sheet-sidebar {
+    animation-delay: 80ms;
+  }
+
+  .tabs {
+    animation-delay: 140ms;
+  }
+
+}
+
+/* Scroll-driven reveal: tied to each block's position in the viewport, so nothing can stay hidden.
+   Browsers without scroll timelines simply show the blocks. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .panel .block {
+      animation: reveal-up var(--ease) both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+    filter: blur(6px);
+  }
+}
+
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
 }
 
 /* ===== Feedback ===== */
@@ -3871,8 +4107,8 @@ dialog.create-dialog {
 
 @media screen and (min-width: 1280px) {
   .spell-layout > .spell-control {
-    top: calc(var(--tabs-height, 46px) + 24px);
-    max-height: calc(100dvh - var(--tabs-height, 46px) - 36px);
+    top: calc(var(--tabs-height, 46px) + 40px);
+    max-height: calc(100dvh - var(--tabs-height, 46px) - 56px);
   }
 }
 
@@ -3911,20 +4147,6 @@ dialog.create-dialog {
     grid-column: 1 / -1;
   }
 
-  .sheet-hero {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-
-  .hero-portrait {
-    display: none;
-  }
-
-  .sheet-hero > .identity-block,
-  .sheet-hero > .stat-tile-group,
-  .hero-abilities {
-    grid-column: 1 / -1;
-  }
-
   .sheet-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -3932,28 +4154,23 @@ dialog.create-dialog {
   .sheet-sidebar {
     position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: dense;
     align-items: start;
     max-height: none;
     overflow: visible;
   }
 
-  .sheet-sidebar > .sheet-alerts,
-  .sheet-sidebar > #skillsSection {
+  .sheet-sidebar > :is(.identity-block, .sheet-alerts, details.side-section) {
     grid-column: 1 / -1;
   }
 
-  .sheet-sidebar {
-    grid-auto-flow: dense;
+  .ability-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
-  .sheet-sidebar > .hp-box {
-    grid-column: 1;
-  }
-
-  .sheet-sidebar > details.side-section:not(#skillsSection) {
-    grid-column: 2;
-    border-top: 0;
-    padding-top: 0;
+  #skills {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
   }
 
   .topbar {
@@ -4051,18 +4268,24 @@ dialog.create-dialog {
 
   .top-search {
     order: 3;
-    flex: 1 1 100%;
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .top-nav {
-    order: 4;
-    flex: 1 1 100%;
+    order: 3;
+    flex: 0 0 auto;
     border-left: 0;
     padding-left: 0;
   }
 
   .top-nav button {
-    flex: 1;
+    width: 36px;
+    padding: 0;
+  }
+
+  .autosave {
+    display: none;
   }
 
   .btn-label {
@@ -4074,77 +4297,37 @@ dialog.create-dialog {
     padding: 0 9px;
   }
 
-  /* Phones: one column in play order. Name, HP, stat tiles, abilities, skills, then the tabs. */
-  main {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  .sheet-hero,
-  .sheet-layout,
+  /* Phones: the sidebar is already in play order (name, HP, stat tiles, abilities, passives, skills), then the tabs. */
   .sheet-sidebar {
-    display: contents;
-  }
-
-  .sheet-hero::before {
-    content: none;
-  }
-
-  .sheet-hero > .identity-block { order: 1; }
-  .sheet-sidebar > .hp-box { order: 2; }
-  .sheet-sidebar > .sheet-alerts { order: 3; }
-  .sheet-hero > .stat-tile-group { order: 4; }
-  .hero-abilities { order: 5; }
-  #skillsSection { order: 6; }
-  .sheet-sidebar > details.side-section:not(#skillsSection) { order: 7; }
-  .sheet-main { order: 8; }
-
-  .sheet-hero > .identity-block {
-    align-self: stretch;
-  }
-
-  .sheet-sidebar > details.side-section:not(#skillsSection) {
-    grid-column: auto;
-  }
-
-  .sheet-hero > .identity-block,
-  .hero-abilities,
-  .sheet-sidebar > details.side-section {
-    border: 1px solid var(--line);
-    border-radius: var(--r-card);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
     padding: 12px;
-    background: var(--surface);
+  }
+
+  .sheet-layout {
+    gap: 22px;
+    margin-top: 20px;
+  }
+
+  .topbar {
+    gap: 6px;
+  }
+
+  .top-actions .has-orb {
+    padding: 0 4px;
   }
 
   .hp-box {
-    border: 1px solid var(--line);
+    gap: 6px;
+    padding: 8px 10px;
   }
 
-  .hero-abilities > summary {
-    display: flex;
-  }
-
-  .hero-abilities[open] > summary {
-    margin-bottom: 8px;
-  }
-
-  .hero-abilities .ability-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .stat-tile-group,
-  .sheet-hero > .stat-tile-group {
+  .ability-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   #skills {
     grid-template-columns: 1fr;
-  }
-
-  .identity-block.is-locked .identity-display {
-    padding-right: 104px;
   }
 
   body.split-view .panel-deck {
@@ -4242,28 +4425,6 @@ body.print-compact main {
   font-size: 9px;
 }
 
-body.print-compact .sheet-hero {
-  margin-top: 0;
-  padding: 6px;
-}
-
-body.print-compact .hero-portrait,
-body.print-compact .sheet-hero::before {
-  display: none;
-}
-
-body.print-compact .sheet-hero > .identity-block {
-  grid-column: span 3;
-}
-
-body.print-compact .sheet-hero > .stat-tile-group {
-  grid-column: span 9;
-}
-
-body.print-compact .hero-abilities {
-  grid-column: span 12;
-}
-
 body.print-compact .sheet-layout {
   grid-template-columns: 210px minmax(0, 1fr);
   gap: 6px;
@@ -4356,6 +4517,9 @@ body.print-compact .deck-shell {
 }
 
 body.print-compact .block {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
   margin-bottom: 6px;
   padding: 6px 8px;
   box-shadow: none;

@@ -72,9 +72,9 @@ function renderCombatDashboard() {
   const actions = ["Action", "Bonus Action", "Reaction", "Movement"];
   const temp = Number(character.tempHp || 0);
   document.querySelector("#combatSummary").textContent = `${character.hp}/${character.maxHp} HP${temp ? ` +${temp} temp` : ""} · AC ${character.ac} · ${character.conditions.length || 0} condition${character.conditions.length === 1 ? "" : "s"}`;
-  document.querySelector("#conditionsMini").textContent = character.conditions.length
-    ? character.conditions.join(", ")
-    : "None";
+  const exhaustion = Number(character.exhaustion || 0);
+  const conditionList = [...character.conditions, ...(exhaustion ? [`Exhaustion ${exhaustion}`] : [])];
+  document.querySelector("#conditionsMini").textContent = conditionList.length ? conditionList.join(", ") : "None";
   renderConcentrationPrompt();
   renderDyingPrompt();
   document.querySelector("#combatDashboard").innerHTML = `
@@ -86,24 +86,9 @@ function renderCombatDashboard() {
   `;
 }
 
+// Death saves render inside the HP box at 0 HP (renderDeathSaves), so this prompt stays empty.
 function renderDyingPrompt() {
-  const root = document.querySelector("#dyingPrompt");
-  if (Number(character.hp) > 0) {
-    root.innerHTML = "";
-    return;
-  }
-  document.querySelector("#recoveryDetails").open = true;
-  const successes = character.deathSaveSuccesses;
-  const failures = character.deathSaveFailures;
-  const status = failures >= 3
-    ? "Dead: three failed death saves."
-    : successes >= 3
-      ? "Stable at 0 HP. Healing brings you back."
-      : `Dying at 0 HP: ${successes} success${successes === 1 ? "" : "es"}, ${failures} failure${failures === 1 ? "" : "s"}.`;
-  root.innerHTML = `
-    <span><strong>${status}</strong></span>
-    ${successes < 3 && failures < 3 ? `<button type="button" class="secondary" data-dying-roll>Roll death save</button>` : ""}
-  `;
+  document.querySelector("#dyingPrompt").innerHTML = "";
 }
 
 function renderConcentrationPrompt() {
@@ -410,7 +395,7 @@ function renderRestPreview() {
     ...character.classOptions.filter(item => item.reset === "long" || item.reset === "short")
   ].map(item => item.name).filter(Boolean);
   document.querySelector("#restSummary").textContent = character.restLog || "No rest taken yet";
-  document.querySelector("#hitDiceSummary").textContent = `${Math.max(0, character.level - character.hitDiceUsed)} / ${character.level} hit dice available`;
+  document.querySelector("#hitDiceSummary").textContent = `Hit dice ${Math.max(0, character.level - character.hitDiceUsed)}/${character.level} d${currentClass().hitDie}`;
   document.querySelector("#restPreview").innerHTML = `
     <article><strong>Short rest</strong><span>${escapeHtml(shortRefresh.join(", ") || "No short-rest resources tracked.")}</span></article>
     <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, item spell uses${longRefresh.length ? `, ${escapeHtml(longRefresh.join(", "))}` : ""}</span></article>
@@ -546,7 +531,7 @@ function renderResources() {
   const template = document.querySelector("#resourceRowTemplate");
   root.innerHTML = "";
   if (!character.resources.length) {
-    root.innerHTML = `<p class="empty-state">No resources tracked yet. Choose Edit sheet to add one.</p>`;
+    root.innerHTML = `<p class="empty-state">No resources tracked yet. Choose Edit to add one.</p>`;
     return;
   }
   character.resources.forEach(resource => {
@@ -735,7 +720,7 @@ function renderActions() {
   root.innerHTML = "";
   const visible = character.actions.filter(action => actionTypeFilter === "all" || action.type === actionTypeFilter);
   if (!visible.length) {
-    root.innerHTML = `<p class="empty-state">${character.actions.length ? "No actions of this type." : "No actions yet. Choose Edit sheet to add attacks or generate them from your gear."}</p>`;
+    root.innerHTML = `<p class="empty-state">${character.actions.length ? "No actions of this type." : "No actions yet. Choose Edit to add attacks or generate them from your gear."}</p>`;
     return;
   }
   visible.forEach(action => {
