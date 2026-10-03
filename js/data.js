@@ -7,6 +7,10 @@ const SYNC_CONFIG_KEY = "forgesheet.sync.v1";
 const THEME_KEY = "forgesheet.theme.v1";
 const BACKGROUND_KEY = "forgesheet.background.v1";
 const VIEW_LAYOUT_KEY = "forgesheet.viewLayout.v1";
+const PREFS_KEY = "forgesheet.prefs.v1";
+// Paste your Firebase project's web config JSON here when you deploy, so players can sign in without pasting it.
+// The web config is public by design; Firestore rules (firestore.rules) are what protect the data.
+const FIREBASE_DEFAULT_CONFIG = "";
 const CUSTOM_SPELL_VALUE = "__custom_spell__";
 const CUSTOM_CLASS_VALUE = "__custom_class__";
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
@@ -221,7 +225,7 @@ const CLASS_SKILL_CHOICES = {
 const SUBCLASS_EXTRAS = {
   "battle-master": { trackers: level => level >= 3 ? [["Superiority Dice", level >= 15 ? 6 : level >= 7 ? 5 : 4, "short"]] : [] },
   // Restore Balance: uses equal to your proficiency bonus, regained on a long rest (Tasha's).
-  "clockwork-soul": { trackers: level => [["Restore Balance", Math.ceil(level / 4) + 1, "long"]] },
+  "clockwork-soul": { trackers: (level, prof) => [["Restore Balance", prof, "long"]] },
   hexblade: { armor: ["Medium armor, shields"], weapons: ["Martial weapons"], trackers: () => [["Hexblade's Curse", 1, "short"]] },
   "eldritch-knight": {},
   champion: {},
@@ -232,11 +236,15 @@ const SUBCLASS_EXTRAS = {
   soulknife: { trackers: (level, prof) => level >= 3 ? [["Psionic Energy Dice", prof * 2, "long"]] : [] },
   "rune-knight": { trackers: (level, prof) => level >= 3 ? [["Giant's Might", prof, "long"]] : [] },
   "echo-knight": { trackers: () => [["Unleash Incarnation", Math.max(1, mod("con")), "long"]] },
-  "wild-magic": { trackers: () => [["Tides of Chaos", 1, "long"]] },
+  "wild-magic": { classId: "sorcerer", trackers: () => [["Tides of Chaos", 1, "long"]] },
   stars: { trackers: (level, prof) => [["Star Map Guiding Bolt", prof, "long"]] },
   peace: { trackers: (level, prof) => [["Emboldening Bond", prof, "long"]] },
   "war-magic": {},
   "life": { armor: ["Heavy armor"] },
+  "nature": { armor: ["Heavy armor"] },
+  "order": { armor: ["Heavy armor"] },
+  "twilight": { armor: ["Heavy armor"], weapons: ["Martial weapons"] },
+  "death": { weapons: ["Martial weapons"] },
   "war": { armor: ["Heavy armor"], weapons: ["Martial weapons"] },
   "tempest": { armor: ["Heavy armor"], weapons: ["Martial weapons"] },
   "forge": { armor: ["Heavy armor"] },
@@ -349,9 +357,9 @@ const RULES_REFERENCE = [
   rule("condition", "Grappled", "A grappled creature's speed becomes 0. The condition ends if the grappler is incapacitated or moved away."),
   rule("condition", "Incapacitated", "An incapacitated creature cannot take actions or reactions."),
   rule("condition", "Invisible", "An invisible creature is impossible to see without special senses. Its attacks have advantage, and attacks against it have disadvantage."),
-  rule("condition", "Paralyzed", "A paralyzed creature is incapacitated, cannot move or speak, fails Strength and Dexterity saves, and nearby hits are critical hits."),
+  rule("condition", "Paralyzed", "A paralyzed creature is incapacitated, cannot move or speak, fails Strength and Dexterity saves. Attack rolls against it have advantage, and hits from within 5 feet are critical hits."),
   rule("condition", "Poisoned", "A poisoned creature has disadvantage on attack rolls and ability checks."),
-  rule("condition", "Prone", "A prone creature's only movement option is crawling unless it stands. Melee attacks within 5 feet have advantage; ranged attacks have disadvantage."),
+  rule("condition", "Prone", "A prone creature's only movement option is crawling unless it stands, and it has disadvantage on attack rolls. Attacks against it from within 5 feet have advantage; attacks from farther away have disadvantage."),
   rule("condition", "Restrained", "Speed becomes 0, attacks against the creature have advantage, its attacks have disadvantage, and it has disadvantage on Dexterity saves."),
   rule("condition", "Stunned", "A stunned creature is incapacitated, cannot move, speaks falteringly, fails Strength and Dexterity saves, and attacks against it have advantage."),
   rule("class", "Artificer Infusions", "Track known infusions, infused items, active items, and whether an infusion is replaced on level-up."),
@@ -394,8 +402,8 @@ const ARTIFICER_SPELLS = new Set([
   "enlarge-reduce", "heat-metal", "invisibility", "lesser-restoration", "levitate", "magic-mouth",
   "magic-weapon", "protection-from-poison", "rope-trick", "see-invisibility", "spider-climb", "web",
   "blink", "create-food-and-water", "dispel-magic", "fly", "glyph-of-warding", "haste",
-  "protection-from-energy", "revivify", "water-breathing", "water-walk",
-  "arcane-eye", "fabricate", "freedom-of-movement", "secret-chest", "secret-chest",
+  "elemental-weapon", "protection-from-energy", "revivify", "water-breathing", "water-walk",
+  "arcane-eye", "fabricate", "freedom-of-movement", "secret-chest",
   "faithful-hound", "private-sanctum", "resilient-sphere", "stone-shape", "stoneskin",
   "animate-objects", "arcane-hand", "arcane-hand", "creation", "greater-restoration", "wall-of-stone"
 ]);
@@ -447,7 +455,7 @@ const EXPANDED_SUBCLASS_SPELLS = {
   "great-old-one": ["dissonant-whispers", "hideous-laughter", "detect-thoughts", "phantasmal-force", "clairvoyance", "sending", "dominate-beast", "black-tentacles", "dominate-person", "telekinesis"],
   celestial: ["cure-wounds", "guiding-bolt", "flaming-sphere", "lesser-restoration", "daylight", "revivify", "guardian-of-faith", "wall-of-fire", "flame-strike", "greater-restoration"],
   hexblade: ["shield", "wrathful-smite", "blur", "branding-smite", "blink", "elemental-weapon", "phantasmal-killer", "staggering-smite", "banishing-smite", "cone-of-cold"],
-  fathomless: ["create-or-destroy-water", "thunderwave", "gust-of-wind", "silence", "lightning-bolt", "sleet-storm", "control-water", "watery-sphere", "arcane-hand", "cone-of-cold"],
+  fathomless: ["create-or-destroy-water", "thunderwave", "gust-of-wind", "silence", "lightning-bolt", "sleet-storm", "control-water", "summon-elemental", "arcane-hand", "cone-of-cold"],
   genie: ["detect-evil-and-good", "phantasmal-force", "create-food-and-water", "phantasmal-killer", "creation", "wish"],
   undying: ["false-life", "ray-of-sickness", "blindness-deafness", "silence", "feign-death", "speak-with-dead", "aura-of-life", "death-ward", "contagion", "legend-lore"],
   undead: ["bane", "false-life", "blindness-deafness", "phantasmal-force", "phantom-steed", "speak-with-dead", "death-ward", "greater-invisibility", "antilife-shell", "cloudkill"]
@@ -494,7 +502,7 @@ const LOCAL_SPELLS = [
     "A creature you can see makes a Wisdom save or is compelled to duel you: it has disadvantage on attacks against creatures other than you, and must make a Wisdom save to move more than 30 feet away from you."),
   localSpell("crusaders-mantle", "Crusader's Mantle", 3, ["paladin"], "1 action", "Self (30-foot radius)", ["V"], "Concentration, up to 1 minute", true,
     "Holy power radiates from you. Each nonhostile creature in the aura, including you, deals an extra 1d4 radiant damage when it hits with a weapon attack."),
-  localSpell("elemental-weapon", "Elemental Weapon", 3, ["paladin"], "1 action", "Touch", ["V", "S"], "Concentration, up to 1 hour", true,
+  localSpell("elemental-weapon", "Elemental Weapon", 3, ["paladin", "artificer"], "1 action", "Touch", ["V", "S"], "Concentration, up to 1 hour", true,
     "A nonmagical weapon becomes a +1 magic weapon and deals an extra 1d4 damage of a type you choose (acid, cold, fire, lightning, or thunder) on a hit. With a 5th- or 6th-level slot it is +2 and 2d4; 7th level or higher, +3 and 3d4."),
   localSpell("feign-death", "Feign Death", 3, ["bard", "cleric", "druid", "wizard"], "1 action (ritual)", "Touch", ["V", "S", "M"], "1 hour", false,
     "A willing creature appears dead to all outward inspection. It is blinded and incapacitated, its speed drops to 0, it resists all damage except psychic, and diseases and poisons have no effect on it until the spell ends."),

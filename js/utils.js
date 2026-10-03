@@ -124,10 +124,6 @@ function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
   return toast;
 }
 
-function hideToast() {
-  document.querySelectorAll("#toastStack .app-toast").forEach(toast => toast.remove());
-}
-
 // "Oath of Devotion", "Life Domain", "Gloomstalker" and "gloom-stalker" all resolve to the same table key.
 function normalizedSubclassKey(text) {
   return slug(String(text || ""))

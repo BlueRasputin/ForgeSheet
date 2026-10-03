@@ -44,10 +44,13 @@ async function initAccount() {
   }
 }
 
-async function signInWithGoogle() {
+const AUTH_PROVIDERS = { google: ["GoogleAuthProvider", "Google"], github: ["GithubAuthProvider", "GitHub"] };
+
+async function signInWith(provider) {
   const status = document.querySelector("#accountStatus");
+  const [providerClass, label] = AUTH_PROVIDERS[provider];
   if (!syncSettings.firebaseConfigText) {
-    status.textContent = "Paste your Firebase web config below first, then sign in.";
+    status.textContent = "Cloud saves aren't set up yet: paste a Firebase web config under Game session first.";
     return;
   }
   try {
@@ -58,10 +61,16 @@ async function signInWithGoogle() {
       syncState.auth = authApi.getAuth(app);
       authApi.onAuthStateChanged(syncState.auth, handleAuthState);
     }
-    status.textContent = "Opening Google sign-in...";
-    await syncState.authApi.signInWithPopup(syncState.auth, new syncState.authApi.GoogleAuthProvider());
-  } catch {
-    status.textContent = "Sign-in failed. Enable the Google provider under Firebase Authentication and allow localhost.";
+    status.textContent = `Opening ${label} sign-in...`;
+    await syncState.authApi.signInWithPopup(syncState.auth, new syncState.authApi[providerClass]());
+  } catch (error) {
+    status.textContent = {
+      "auth/account-exists-with-different-credential": `That email already signs in with another provider. Use that one instead of ${label}.`,
+      "auth/popup-closed-by-user": "Sign-in was cancelled.",
+      "auth/popup-blocked": "The browser blocked the sign-in window. Allow pop-ups for this site and try again.",
+      "auth/operation-not-allowed": `${label} sign-in is off. Enable it under Firebase Authentication → Sign-in method.`,
+      "auth/unauthorized-domain": "This site isn't an authorized domain. Add it under Firebase Authentication → Settings."
+    }[error?.code] || `Sign-in failed (${error?.code || "unknown error"}).`;
   }
 }
 
@@ -69,6 +78,8 @@ async function signOutOfAccount() {
   if (syncState.auth && syncState.authApi) await syncState.authApi.signOut(syncState.auth);
 }
 
+// Merge cloud and device copies by updatedAt, then upload what this device has newer.
+// Characters signed to another account on this device are never uploaded to this one.
 async function handleAuthState(user) {
   syncState.user = user;
   renderAccountPanel();
@@ -76,10 +87,21 @@ async function handleAuthState(user) {
   try {
     const fs = await ensureFirestore();
     const snap = await fs.getDocs(fs.collection(syncState.db, `users/${user.uid}/characters`));
+    const cloud = new Map();
     snap.docs.forEach(docSnap => {
       const data = docSnap.data();
-      if (data?.character?.sheetId) characterLibrary[data.character.sheetId] = normalizeCharacter(data.character);
+      if (data?.character?.sheetId) cloud.set(data.character.sheetId, normalizeCharacter(data.character));
     });
+    cloud.forEach((remote, sheetId) => {
+      const local = characterLibrary[sheetId];
+      if (!local || (remote.updatedAt || 0) > (local.updatedAt || 0)) characterLibrary[sheetId] = remote;
+    });
+    saveCharacterLibrary();
+    const uploads = Object.values(characterLibrary).filter(item => (!item.ownerUid || item.ownerUid === user.uid) && (!cloud.has(item.sheetId) || (item.updatedAt || 0) > (cloud.get(item.sheetId).updatedAt || 0)));
+    await Promise.all(uploads.map(item => {
+      item.ownerUid = user.uid;
+      return fs.setDoc(fs.doc(syncState.db, `users/${user.uid}/characters/${item.sheetId}`), { character: item, updatedAt: fs.serverTimestamp() });
+    }));
     saveCharacterLibrary();
     const classSnap = await fs.getDocs(fs.collection(syncState.db, `users/${user.uid}/classes`));
     classSnap.docs.forEach(docSnap => {
@@ -89,7 +111,7 @@ async function handleAuthState(user) {
     saveCustomClasses();
     if (characterLibrary[character.sheetId]) character = normalizeCharacter(characterLibrary[character.sheetId]);
     renderAll();
-    queueCloudSave();
+    renderAccountPanel(`${cloud.size} in the cloud, ${uploads.length} uploaded from this device`);
   } catch {
     document.querySelector("#accountStatus").textContent = "Signed in, but loading cloud data failed. Check Firestore rules.";
   }
@@ -171,6 +193,8 @@ async function saveCharacterToCloud() {
   if (!syncState.user) return;
   try {
     const fs = await ensureFirestore();
+    if (character.ownerUid && character.ownerUid !== syncState.user.uid) return;
+    character.ownerUid = syncState.user.uid;
     const ref = fs.doc(syncState.db, `users/${syncState.user.uid}/characters/${character.sheetId}`);
     await fs.setDoc(ref, { character, updatedAt: fs.serverTimestamp() });
     renderAccountPanel(`Cloud save ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
@@ -191,17 +215,17 @@ async function deleteCharacterFromCloud(sheetId) {
 
 function renderAccountPanel(note = "") {
   const status = document.querySelector("#accountStatus");
-  const signIn = document.querySelector("#googleSignIn");
+  const signIn = document.querySelector("#signInButtons");
   const signOut = document.querySelector("#googleSignOut");
   if (!status) return;
   if (syncState.user) {
-    status.textContent = `Signed in as ${syncState.user.displayName || syncState.user.email}. Characters sync to your Firebase database.${note ? ` ${note}.` : ""}`;
+    status.textContent = `Signed in as ${syncState.user.displayName || syncState.user.email || "your account"}. Every character on this device syncs to your account and comes back on any device you sign in from.${note ? ` ${note}.` : ""}`;
     signIn.hidden = true;
     signOut.hidden = false;
   } else {
     status.textContent = syncSettings.firebaseConfigText
-      ? "Not signed in. Sign in with Google to save characters to the cloud and restore them after closing the browser."
-      : "Paste a Firebase web config below, then sign in with Google to enable cloud saves.";
+      ? "Not signed in. Sign in with Google or GitHub to save your characters online and open them on any device."
+      : "Cloud saves need a Firebase project: paste its web config under Game session, then sign in.";
     signIn.hidden = false;
     signOut.hidden = true;
   }
@@ -221,7 +245,7 @@ function loadSyncSettings() {
     const stored = JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY)) || {};
     const params = new URLSearchParams(location.search);
     return {
-      firebaseConfigText: stored.firebaseConfigText || "",
+      firebaseConfigText: stored.firebaseConfigText || FIREBASE_DEFAULT_CONFIG,
       campaignId: params.get("campaign") || stored.campaignId || "",
       role: params.get("role") || stored.role || "player",
       playerName: stored.playerName || "",
@@ -408,7 +432,7 @@ function syncCharacterSummary() {
     className: cls.name,
     classId: character.classId,
     subclassName: character.subclassName,
-    level: character.level,
+    level: totalLevel(),
     hp: character.hp,
     maxHp: character.maxHp,
     ac: character.ac,
@@ -442,8 +466,8 @@ function partyStatusPayload() {
     name: character.name || "",
     playerName: syncSettings.playerName || "",
     ownerUid: syncState.user?.uid || null,
-    level: Number(character.level || 1),
-    classLabel: [currentClass().name, character.subclassName].filter(Boolean).join(" · "),
+    level: totalLevel(),
+    classLabel: character.multiclasses?.length ? classLabel() : [currentClass().name, character.subclassName].filter(Boolean).join(" · "),
     species: character.species || "",
     hp,
     maxHp,
@@ -464,7 +488,7 @@ function partyStatusPayload() {
     saves: Object.fromEntries(ABILITIES.map(([id]) => [id, saveBonus(id)])),
     spellSave: currentClass().casterType !== "none" && ABILITIES.some(([id]) => id === currentClass().spellAbility) ? 8 + proficiencyBonus() + mod(currentClass().spellAbility) : null,
     resources: (character.resources || []).map(item => ({ name: item.name, current: Number(item.current), max: Number(item.max), reset: item.reset })),
-    spellSlots: spellSlotsFor(currentClass(), character.level).map((count, index) => ({ level: index + 1, max: count, remaining: slotRemaining(index + 1, count) })).filter(slot => slot.max > 0),
+    spellSlots: characterSpellSlots().map((count, index) => ({ level: index + 1, max: count, remaining: slotRemaining(index + 1, count) })).filter(slot => slot.max > 0),
     updatedAtMs: Date.now()
   };
 }
@@ -480,7 +504,7 @@ function renderDmRoster(sheets) {
     <article class="dm-sheet">
       <div>
         <strong>${escapeHtml(sheet.characterName || "Unnamed")}</strong>
-        <span>${escapeHtml(sheet.playerName || "Player")} · ${escapeHtml(sheet.className || "Class")} ${sheet.level || "?"}${sheet.subclassName ? ` · ${escapeHtml(sheet.subclassName)}` : ""}</span>
+        <span>${escapeHtml(sheet.playerName || "Player")} · ${escapeHtml(sheet.className || "Class")} ${escapeHtml(String(sheet.level || "?"))}${sheet.subclassName ? ` · ${escapeHtml(sheet.subclassName)}` : ""}</span>
       </div>
       <div class="dm-sheet-stats">
         <span>AC ${escapeHtml(sheet.ac ?? "-")}</span>

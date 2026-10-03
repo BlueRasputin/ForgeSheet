@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Each player's own characters and custom classes: only that signed-in account.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Live game sessions. Any signed-in player in the session can read and update sheets
+    // (the DM sends items by writing to a player's sheet), but documents must keep their shape.
+    match /campaigns/{campaignId}/sheets/{sheetId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.data.character is map
+        && request.resource.data.partyStatus is map;
+      allow delete: if false;
+    }
+    // The activity log is append-only.
+    match /campaigns/{campaignId}/activity/{entryId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.message is string && request.resource.data.message.size() < 500;
+    }
+
+    // Class share codes: anyone can read, signed-in users create, nobody rewrites someone else's class.
+    match /sharedClasses/{code} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(["class", "sharedBy", "createdAt"])
+        && request.resource.data["class"] is map
+        && request.resource.data["class"].name is string
+        && request.resource.data["class"].name.size() <= 80
+        && request.resource.data["class"].table is list
+        && request.resource.data["class"].table.size() <= 20;
+    }
+  }
+}

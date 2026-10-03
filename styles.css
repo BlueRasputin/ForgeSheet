@@ -288,7 +288,8 @@ textarea {
   color: inherit;
 }
 
-label {
+label,
+.field-label {
   display: grid;
   gap: 4px;
   color: var(--muted);
@@ -1382,7 +1383,7 @@ button.stat-tile {
   transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 
-.conditions-tile p {
+.conditions-tile .conditions-mini {
   display: -webkit-box;
   max-width: 100%;
   margin: 0;
@@ -1477,7 +1478,6 @@ button.stat-tile {
   font-size: 0.75rem;
   font-weight: 600;
   appearance: auto;
-  -moz-appearance: number-input;
 }
 
 .ability-box > input::-webkit-inner-spin-button {
@@ -3276,7 +3276,8 @@ dialog::backdrop {
   font-size: 1.0625rem;
 }
 
-menu {
+menu,
+.dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -4267,11 +4268,6 @@ body:not(.is-editing) :is(.skill-row, .ability-save) input[type="checkbox"]:disa
     border-radius: 22px;
   }
 
-  #skills {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 16px;
-  }
-
   .tabs {
     position: static;
     flex-wrap: nowrap;
@@ -4469,6 +4465,595 @@ body:not(.is-editing) :is(.skill-row, .ability-save) input[type="checkbox"]:disa
   .flash-target {
     outline: 3px solid var(--accent);
   }
+}
+
+/* ===== Settings, homebrew, edition badges ===== */
+
+.settings-group {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  padding: 10px 14px 14px;
+}
+
+.settings-group legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: end;
+}
+
+.settings-row input[type="color"] {
+  width: 56px;
+  height: 34px;
+  padding: 2px;
+}
+
+.homebrew-list {
+  display: grid;
+  gap: 6px;
+}
+
+.homebrew-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--r-chip);
+  padding: 4px 4px 4px 10px;
+  background: var(--warn-soft);
+}
+
+.homebrew-rule {
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-chip);
+  padding: 10px 12px;
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+
+.edition-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.edition-badge {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0 7px;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.edition-badge[data-edition="2024"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* ===== Easy mode ===== */
+
+.easy-hint,
+.easy-only {
+  display: none;
+}
+
+body.easy-mode .easy-hint {
+  display: block;
+  margin: 0 0 8px;
+  border-radius: var(--r-chip);
+  padding: 6px 10px;
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+body.easy-mode .easy-only {
+  display: block;
+}
+
+body.easy-mode .advanced {
+  display: none;
+}
+
+.turn-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.turn-guide-grid article {
+  display: grid;
+  gap: 4px;
+  border-radius: var(--r-control);
+  padding: 10px 12px;
+  background: var(--inset);
+}
+
+.turn-guide-grid strong {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ===== Action economy (Baldur's Gate 3 colors: green action, orange bonus, purple reaction) ===== */
+
+body {
+  --cost-action: #3c9a4f;
+  --cost-bonus: #d9822b;
+  --cost-reaction: #8b5fd1;
+}
+
+.action-filters {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cost-dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  vertical-align: 1px;
+}
+
+.cost-dot.cost-action {
+  background: var(--cost-action);
+}
+
+.cost-dot.cost-bonus {
+  border-radius: 1px;
+  background: var(--cost-bonus);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.cost-dot.cost-reaction {
+  border-radius: 2px;
+  background: var(--cost-reaction);
+  transform: rotate(45deg) scale(0.85);
+}
+
+.action-row[data-cost] {
+  border-left: 3px solid var(--line);
+}
+
+.action-row[data-cost="cost-action"] {
+  border-left-color: var(--cost-action);
+}
+
+.action-row[data-cost="cost-bonus"] {
+  border-left-color: var(--cost-bonus);
+}
+
+.action-row[data-cost="cost-reaction"] {
+  border-left-color: var(--cost-reaction);
+}
+
+.common-action {
+  display: grid;
+  grid-template-columns: auto minmax(110px, 0.35fr) 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 4px;
+}
+
+.common-action > span:not(.cost-dot) {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 640px) {
+  .common-action {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .common-action > span:not(.cost-dot) {
+    grid-column: 2 / -1;
+  }
+}
+
+/* ===== Sidebar class resources ===== */
+
+.side-resources {
+  display: grid;
+  gap: 6px;
+}
+
+.side-resource {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  border-radius: var(--r-control);
+  padding: 6px 8px;
+  background: var(--inset);
+}
+
+.side-resource.is-spent .res-name {
+  color: var(--muted);
+}
+
+.res-name {
+  flex: 1 1 120px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.res-name em {
+  color: var(--accent-strong);
+  font-style: normal;
+  font-family: var(--font-mono);
+}
+
+.res-recharge {
+  border-radius: 999px;
+  padding: 0 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.res-pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.res-pip {
+  width: 16px;
+  min-height: 16px;
+  height: 16px;
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+}
+
+.res-pip.filled {
+  background: var(--accent);
+}
+
+.res-stepper {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.res-stepper button,
+.res-roll {
+  min-height: 26px;
+  padding: 0 6px;
+}
+
+body:not(.is-editing) .resources-row {
+  display: none;
+}
+
+/* ===== Dice ===== */
+
+.dice-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dice-picker button {
+  min-height: 30px;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+}
+
+dialog.roll-dialog {
+  width: min(440px, 100vw - 32px);
+}
+
+.roll-body {
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+
+.roll-formula {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.dice-tray {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  min-height: 84px;
+  perspective: 600px;
+}
+
+.die {
+  width: 76px;
+  height: 76px;
+  overflow: visible;
+}
+
+.die .die-body > * {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.die .die-body > .facet {
+  fill: none;
+  stroke-width: 1.5;
+  opacity: 0.45;
+}
+
+.die text {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.die.is-idle {
+  opacity: 0.45;
+}
+
+.die.is-dropped {
+  opacity: 0.35;
+}
+
+.dice-more {
+  align-self: center;
+  color: var(--muted);
+}
+
+.dice-tray[data-tone="crit"].is-landed .die:not(.is-dropped) .die-body > :first-child {
+  fill: color-mix(in srgb, #f4c542 35%, var(--surface));
+  stroke: #c99a06;
+}
+
+.dice-tray[data-tone="fumble"].is-landed .die:not(.is-dropped) .die-body > :first-child {
+  stroke: var(--bad);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dice-tray.is-rolling .die {
+    animation: die-tumble 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+
+  .dice-tray.is-rolling .die:nth-child(2n) {
+    animation-duration: 0.9s;
+  }
+
+  .dice-tray.is-landed .die:not(.is-dropped) {
+    animation: die-land 0.35s var(--ease);
+  }
+
+  .dice-tray[data-tone="crit"].is-landed .die:not(.is-dropped) {
+    animation: die-land 0.35s var(--ease), die-glow 1.2s ease-out;
+  }
+
+  .dice-tray[data-tone="fumble"].is-landed .die:not(.is-dropped) {
+    animation: die-shake 0.45s ease;
+  }
+}
+
+@keyframes die-tumble {
+  0% { transform: translate(-60px, -40px) rotate(-200deg) scale(0.6); opacity: 0; }
+  40% { opacity: 1; }
+  70% { transform: translate(6px, 4px) rotate(18deg) scale(1.05); }
+  100% { transform: none; }
+}
+
+@keyframes die-land {
+  0% { transform: scale(1.15); }
+  100% { transform: none; }
+}
+
+@keyframes die-glow {
+  0% { filter: drop-shadow(0 0 0 #f4c542); }
+  30% { filter: drop-shadow(0 0 14px #f4c542); }
+  100% { filter: drop-shadow(0 0 0 transparent); }
+}
+
+@keyframes die-shake {
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+
+.roll-adv {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.roll-adv-toggles {
+  display: flex;
+  gap: 6px;
+}
+
+.adv-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.roll-mode {
+  display: grid;
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.roll-mode[data-mode="advantage"] {
+  color: var(--good);
+}
+
+.roll-mode[data-mode="disadvantage"] {
+  color: var(--bad);
+}
+
+.roll-mode small {
+  color: var(--muted);
+}
+
+.roll-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.roll-input-field {
+  width: 130px;
+  text-align: left;
+}
+
+.roll-input {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.roll-error {
+  margin: 0;
+  color: var(--bad);
+}
+
+.roll-digital {
+  justify-content: center;
+}
+
+.roll-result {
+  display: grid;
+  gap: 4px;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.roll-result.is-hidden {
+  opacity: 0;
+}
+
+.roll-total {
+  font-family: var(--font-mono);
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.roll-result[data-tone="crit"] .roll-total,
+.roll-result[data-tone="crit"] .roll-flag {
+  color: #b8860b;
+}
+
+.roll-result[data-tone="fumble"] .roll-total,
+.roll-result[data-tone="fumble"] .roll-flag {
+  color: var(--bad);
+}
+
+.roll-result > span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+.roll-outcome {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.roll-followups,
+.roll-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ===== Level up ===== */
+
+.level-section {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 14px;
+  border: 0;
+  padding: 0;
+}
+
+.level-section legend {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.level-class-option {
+  gap: 8px;
+}
+
+.level-multiclass {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-left: 26px;
+}
+
+.level-multiclass[hidden] {
+  display: none;
+}
+
+.level-multiclass p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.level-warning {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.level-hp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.level-hp-row input {
+  width: 80px;
+}
+
+.sign-in-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sign-in-buttons[hidden] {
+  display: none;
 }
 
 /* ===== Print ===== */

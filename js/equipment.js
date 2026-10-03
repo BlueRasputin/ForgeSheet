@@ -91,7 +91,19 @@ function handleEquipmentInput(event) {
     persistAndRender();
     return;
   }
-  if (event.target.classList.contains("equipment-attuned")) item.attuned = event.target.checked;
+  if (event.target.classList.contains("equipment-attuned")) {
+    const attuned = character.equipment.filter(entry => entry.attuned && entry !== item).length;
+    // DMG p.138: a creature can be attuned to no more than three magic items at a time.
+    if (event.target.checked && attuned >= 3 && !isRuleBroken("attunement-limit")) {
+      event.target.checked = false;
+      breakRule("attunement-limit", "You're already attuned to 3 magic items, the most a creature can be attuned to at once. End an attunement first, or allow more.", () => {
+        item.attuned = true;
+        persistAndRender();
+      });
+      return;
+    }
+    item.attuned = event.target.checked;
+  }
   if (event.target.classList.contains("equipment-notes")) item.notes = event.target.value;
   if (event.target.classList.contains("equipment-grant-spell")) {
     item.grantSpell = event.target.value;

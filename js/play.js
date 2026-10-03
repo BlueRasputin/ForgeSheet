@@ -1,7 +1,7 @@
 // RAW uses and recharge timing for each class's core limited features (2014 rules).
-function classFeatureTrackers(cls = currentClass(), level = character.level) {
+function classFeatureTrackers(cls = currentClass(), level = character.level, subclassName = character.subclassName, shared = true) {
   const chaMod = Math.max(1, mod("cha"));
-  const prof = Math.ceil(level / 4) + 1;
+  const prof = proficiencyBonus();
   const byClass = {
     fighter: [
       ["Second Wind", 1, "short"],
@@ -11,7 +11,11 @@ function classFeatureTrackers(cls = currentClass(), level = character.level) {
     monk: [level >= 2 ? ["Ki Points", level, "short"] : null],
     // Archdruid (20): unlimited Wild Shape, so no tracker.
     druid: [level >= 2 && level < 20 ? ["Wild Shape", 2, "short"] : null],
-    cleric: [level >= 2 ? ["Channel Divinity", level >= 18 ? 3 : level >= 6 ? 2 : 1, "short"] : null],
+    cleric: [
+      level >= 2 ? ["Channel Divinity", level >= 18 ? 3 : level >= 6 ? 2 : 1, "short"] : null,
+      // PHB p.59: after a success, not again for 7 days; after a failure, again after a long rest.
+      level >= 10 ? ["Divine Intervention", 1, "long"] : null
+    ],
     paladin: [
       ["Divine Sense", Math.max(1, 1 + mod("cha")), "long"],
       ["Lay on Hands (HP pool)", level * 5, "long"],
@@ -28,14 +32,26 @@ function classFeatureTrackers(cls = currentClass(), level = character.level) {
     artificer: [level >= 7 ? ["Flash of Genius", Math.max(1, mod("int")), "long"] : null],
     bloodhunter: [["Blood Maledict", level >= 17 ? 4 : level >= 13 ? 3 : level >= 6 ? 2 : 1, "short"]]
   };
-  const extras = lookupBySubclass(SUBCLASS_EXTRAS)?.trackers?.(level, prof) || [];
-  const feats = hasFeat("Lucky") ? [["Luck Points", 3, "long"]] : [];
-  if (cls.id === "druid" && level >= 2 && lookupBySubclass({ land: true })) extras.push(["Natural Recovery", 1, "long"]);
+  const extra = lookupBySubclass(SUBCLASS_EXTRAS, subclassName);
+  const extras = (!extra?.classId || extra.classId === cls.id) ? extra?.trackers?.(level, prof) || [] : [];
+  const feats = shared && hasFeat("Lucky") ? [["Luck Points", 3, "long"]] : [];
+  if (cls.id === "druid" && level >= 2 && lookupBySubclass({ land: true }, subclassName)) extras.push(["Natural Recovery", 1, "long"]);
   return [...(byClass[cls.id] || []), ...extras, ...feats].filter(Boolean).map(([name, max, reset]) => ({ name, max, reset }));
 }
 
+// Every class's trackers, multiclass levels included. A feature two classes share keeps the larger pool.
+function allClassTrackers() {
+  const byName = new Map();
+  const secondary = (character.multiclasses || []).flatMap(entry => classFeatureTrackers(entryClass({ ...entry, key: entry.id }), entry.level, entry.subclassName, false));
+  const pact = multiclassPactTracker();
+  [...classFeatureTrackers(), ...secondary, ...(pact ? [{ name: pact[0], max: pact[1], reset: pact[2] }] : [])].forEach(tracker => {
+    if (!byName.has(tracker.name) || byName.get(tracker.name).max < tracker.max) byName.set(tracker.name, tracker);
+  });
+  return [...byName.values()];
+}
+
 function ensureClassResources() {
-  const expected = classFeatureTrackers();
+  const expected = allClassTrackers();
   const manualNames = new Set(character.resources.filter(item => !item.auto).map(item => item.name.toLowerCase()));
   let changed = false;
   character.resources = character.resources.filter(item => {
@@ -62,13 +78,101 @@ function ensureClassResources() {
   if (changed) persist();
 }
 
+// The die a resource spends, when it has one (Bardic Inspiration, Superiority and Psionic Energy dice).
+function resourceDie(name) {
+  const level = character.level;
+  const bard = classEntries().find(entry => entry.classId === "bard")?.level || 0;
+  const fighter = classEntries().find(entry => entry.classId === "fighter")?.level || 0;
+  if (name === "Bardic Inspiration" && bard) return bard >= 15 ? 12 : bard >= 10 ? 10 : bard >= 5 ? 8 : 6;
+  if (name === "Superiority Dice") return fighter >= 18 ? 12 : fighter >= 10 ? 10 : 8;
+  if (name === "Psionic Energy Dice") return level >= 17 ? 12 : level >= 11 ? 10 : level >= 5 ? 8 : 6;
+  return 0;
+}
+
+function renderSideResources() {
+  const root = document.querySelector("#sideResources");
+  const resources = (character.resources || []).filter(item => item.name && Number(item.max) > 0);
+  document.querySelector("#sideResourcesSection").hidden = !resources.length;
+  document.querySelector("#sideResourcesSummary").textContent = resources.length ? `${resources.length}` : "";
+  root.innerHTML = resources.map(item => {
+    const current = Number(item.current || 0);
+    const max = Number(item.max || 0);
+    const die = resourceDie(item.name);
+    const recharge = { short: "SR", long: "LR" }[item.reset] || "";
+    // Up to 10 uses read best as pips; bigger pools (Ki, Lay on Hands) get a stepper.
+    const counter = max <= 10
+      ? `<span class="res-pips" role="group" aria-label="${escapeHtml(item.name)}: ${current} of ${max}">${Array.from({ length: max }, (_, index) => `<button type="button" class="res-pip ${index < current ? "filled" : ""}" data-res-pip="${index}" aria-pressed="${index < current}" aria-label="${escapeHtml(item.name)} use ${index + 1}"></button>`).join("")}</span>`
+      : `<span class="res-stepper"><button type="button" class="ghost" data-res-step="-1" aria-label="Spend one ${escapeHtml(item.name)}">${icon("minus")}</button><b>${current}/${max}</b><button type="button" class="ghost" data-res-step="1" aria-label="Regain one ${escapeHtml(item.name)}">${icon("plus")}</button></span>`;
+    return `
+      <div class="side-resource ${current ? "" : "is-spent"}" data-res-id="${escapeHtml(item.id)}">
+        <span class="res-name">${escapeHtml(item.name)}${die ? ` <em>d${die}</em>` : ""}</span>
+        ${recharge ? `<span class="res-recharge" title="${recharge === "SR" ? "Refills on a short or long rest" : "Refills on a long rest"}">${recharge}</span>` : ""}
+        ${counter}
+        ${die ? `<button type="button" class="ghost res-roll" data-res-roll ${current ? "" : "disabled"} title="Spend one and roll a d${die}">${icon("dice-five")}<span class="visually-hidden">Roll</span></button>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function handleSideResourceClick(event) {
+  const row = event.target.closest("[data-res-id]");
+  const resource = row && character.resources.find(item => item.id === row.dataset.resId);
+  if (!resource) return;
+  const max = Number(resource.max || 0);
+  const pip = event.target.closest("[data-res-pip]");
+  if (pip) {
+    const value = Number(pip.dataset.resPip) + 1;
+    // Clicking the last filled pip spends it; any other pip sets the count there.
+    resource.current = Number(resource.current) === value ? value - 1 : value;
+    persistAndRender();
+    return;
+  }
+  const step = event.target.closest("[data-res-step]");
+  if (step) {
+    resource.current = clamp(Number(resource.current || 0) + Number(step.dataset.resStep), 0, max);
+    persistAndRender();
+    return;
+  }
+  if (event.target.closest("[data-res-roll]") && Number(resource.current) > 0) {
+    resource.current = Number(resource.current) - 1;
+    persistAndRender();
+    const die = resourceDie(resource.name);
+    rollFromInput(`${resource.name} (${resource.current}/${max} left)`, `1d${die}`, "normal", [{ label: "Undo spend", run: () => { resource.current = Math.min(max, Number(resource.current) + 1); persistAndRender(); } }]);
+  }
+}
+
+// Easy mode: what this character can do on a turn, grouped like the action bar in Baldur's Gate 3.
+function renderTurnGuide() {
+  const root = document.querySelector("#turnGuide");
+  if (!prefs.easyMode) {
+    root.innerHTML = "";
+    return;
+  }
+  const names = type => character.actions.filter(action => action.type === type).map(action => action.name);
+  const spells = character.spells.filter(row => spellRowHasSpell(row) && (spellLevelForRow(row) === 0 || row.prepared || spellAlwaysPrepared(row))).length;
+  const groups = [
+    ["Move", "cost-free", [`Up to ${effectiveSpeed()} ft. You can split it before and after your action.`]],
+    ["Action (one)", "cost-action", [...names("Action"), spells ? "Cast a spell" : "", "Dash, Disengage, Dodge, Help, Hide, Search"].filter(Boolean)],
+    ["Bonus action (one, if something gives you one)", "cost-bonus", names("Bonus Action").length ? names("Bonus Action") : ["Nothing yet. Some spells, class features and two-weapon fighting use it."]],
+    ["Reaction (one per round, even on others' turns)", "cost-reaction", ["Opportunity attack when an enemy leaves your reach", ...names("Reaction")]],
+    ["Free", "cost-free", ["Talk, draw or sheathe a weapon, open a door"]]
+  ];
+  root.innerHTML = `
+    <div class="block-head"><h2>On your turn</h2><button type="button" class="ghost" data-kind-jump="common">See all common actions</button></div>
+    <div class="turn-guide-grid">
+      ${groups.map(([title, cost, items]) => `
+        <article><strong><span class="cost-dot ${cost}" aria-hidden="true"></span>${escapeHtml(title)}</strong><span>${items.map(escapeHtml).join(" · ")}</span></article>`).join("")}
+    </div>`;
+}
+
 function renderPlayTools() {
+  renderTurnGuide();
   ensureClassResources();
   ensureFeatureActions();
   renderCombatDashboard();
   renderDiceRoller();
   renderRestPreview();
   renderResources();
+  renderSideResources();
   renderEquipment();
   renderClassOptions();
   renderConditions();
@@ -117,16 +221,13 @@ function handleConcentrationPromptClick(event) {
   if (event.target.closest("[data-roll-concentration]")) {
     const dc = pendingConcentrationDc;
     pendingConcentrationDc = null;
-    const result = rollWithConditions(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`, "save", "con", [], "concentration");
-    if (!result) return;
-    if (result.total >= dc) {
-      showToast(`<span class="toast-label">Concentration held</span><span class="toast-roll"><b>${result.total}</b><small>vs DC ${dc} · still concentrating on ${escapeHtml(character.concentration)}</small></span>`, { tone: "crit" });
-      return;
-    }
-    const lost = character.concentration;
-    character.concentration = "";
-    persistAndRender();
-    showToast(`<span class="toast-label">Concentration lost</span><span class="toast-roll"><b>${result.total}</b><small>vs DC ${dc} · ${escapeHtml(lost)} ends</small></span>`, { tone: "fumble" });
+    rollWithConditions(`Concentration save (DC ${dc})`, `1d20${formatMod(saveBonus("con"))}`, "save", "con", [], "concentration", result => {
+      if (result.total >= dc) return `Held: still concentrating on ${character.concentration}.`;
+      const lost = character.concentration;
+      character.concentration = "";
+      persistAndRender();
+      return `Lost: ${lost} ends.`;
+    });
     return;
   }
   if (event.target.closest("[data-dismiss-concentration]")) {
@@ -396,19 +497,17 @@ function disadvantageSources(kind, ability = "") {
 }
 
 // Advantage and disadvantage cancel out (PHB p. 173) no matter how many sources of each.
-function rollModeFor(kind, ability = "", context = "") {
+// picked: the Advantage / Disadvantage toggles in the roll modal. They add to what the sheet detects, so a
+// character who normally has advantage but is told to roll with disadvantage rolls flat.
+function rollModeFor(kind, ability = "", context = "", picked = {}) {
   const feature = advantageSource(kind, ability, context);
-  const picked = document.querySelector("#rollMode").value;
   const sources = disadvantageSources(kind, ability);
-  const advantage = Boolean(feature) || picked === "advantage";
-  const disadvantage = sources.length > 0 || picked === "disadvantage";
-  if (advantage && disadvantage) {
-    const against = sources.length ? sources.join(", ") : "chosen disadvantage";
-    return { mode: "normal", note: feature ? `${feature} advantage and ${against} cancel out` : `${against} cancels advantage` };
-  }
-  if (advantage) return { mode: "advantage", note: feature ? `${feature}: advantage` : "" };
-  if (sources.length) return { mode: "disadvantage", note: `${sources.join(", ")}: disadvantage` };
-  return { mode: picked, note: "" };
+  const forAdvantage = [feature, picked.advantage ? "you chose advantage" : ""].filter(Boolean);
+  const against = [...sources, picked.disadvantage ? "you chose disadvantage" : ""].filter(Boolean);
+  if (forAdvantage.length && against.length) return { mode: "normal", note: `${forAdvantage.join(", ")} and ${against.join(", ")} cancel out` };
+  if (forAdvantage.length) return { mode: "advantage", note: feature ? `${feature}: advantage` : "" };
+  if (against.length) return { mode: "disadvantage", note: sources.length ? `${sources.join(", ")}: disadvantage` : "" };
+  return { mode: "normal", note: "" };
 }
 
 // Class features and feats that grant advantage on their own.
@@ -417,6 +516,7 @@ function advantageSource(kind, ability, context) {
   if (character.raging && ability === "str" && (kind === "check" || kind === "save")) return "Rage";
   if (kind === "save" && ability === "dex" && currentClass().id === "barbarian" && character.level >= 2 && !["Blinded", "Deafened"].some(name => active.includes(name)) && !incapacitatedBy()) return "Danger Sense";
   if (context === "concentration" && hasFeat("War Caster")) return "War Caster";
+  if (kind === "attack" && active.includes("Invisible")) return "Invisible";
   return "";
 }
 
@@ -486,7 +586,11 @@ function rollDeathSave() {
     showToast(`<span class="toast-label">No death save needed</span><span>${Number(character.hp) > 0 ? "You're above 0 HP." : character.deathSaveFailures >= 3 ? "Three failures: the character is dead." : "You're stable."}</span>`);
     return;
   }
-  const roll = rollDie(20);
+  // A death save is a saving throw, so exhaustion 3+ gives it disadvantage.
+  openRoll({ label: "Death save", formula: "1d20", kind: "save", onResult: result => applyDeathSave(naturalD20(result)) });
+}
+
+function applyDeathSave(roll) {
   let outcome;
   if (roll === 20) {
     character.deathSaveSuccesses = 0;
@@ -503,9 +607,9 @@ function rollDeathSave() {
     character.deathSaveFailures = clamp(character.deathSaveFailures + 1, 0, 3);
     outcome = "Failure";
   }
-  character.rollHistory = [{ label: `Death save: ${outcome}`, formula: "1d20", mode: "normal", total: roll, parts: [`d20[${roll}]`] }, ...(character.rollHistory || [])].slice(0, 25);
+  character.rollHistory[0].label = `Death save: ${outcome}`;
   persistAndRender();
-  showToast(`<span class="toast-label">Death save · ${escapeHtml(outcome)}</span><span class="toast-roll"><b>${roll}</b><small>${character.deathSaveSuccesses} success${character.deathSaveSuccesses === 1 ? "" : "es"} · ${character.deathSaveFailures} failure${character.deathSaveFailures === 1 ? "" : "s"}</small></span>`, { tone: roll >= 10 ? "crit" : "fumble" });
+  return `${outcome}. ${character.deathSaveSuccesses} success${character.deathSaveSuccesses === 1 ? "" : "es"}, ${character.deathSaveFailures} failure${character.deathSaveFailures === 1 ? "" : "s"}.`;
 }
 
 function rollAbilityCheck(ability) {
@@ -513,9 +617,8 @@ function rollAbilityCheck(ability) {
   rollWithConditions(`${name} check`, `1d20${formatMod(mod(ability) + untrainedBonus(ability))}`, "check", ability);
 }
 
-function rollWithConditions(label, formula, kind, ability = "", actions = [], context = "") {
-  const { mode, note } = rollModeFor(kind, ability, context);
-  return rollFromInput(note ? `${label} (${note})` : label, formula, mode, actions);
+function rollWithConditions(label, formula, kind, ability = "", actions = [], context = "", onResult = null) {
+  openRoll({ label, formula, kind, ability, context, actions, onResult });
 }
 
 function rollSavingThrow(ability, actions = []) {
@@ -527,7 +630,7 @@ function rollSavingThrow(ability, actions = []) {
     showToast(`<span class="toast-label">${escapeHtml(name)} save: automatic failure</span><span>${escapeHtml(failedBy)} creatures fail Strength and Dexterity saves.</span>`, { tone: "fumble" });
     return null;
   }
-  return rollWithConditions(`${name} save`, `1d20${formatMod(saveBonus(ability))}`, "save", ability, actions);
+  rollWithConditions(`${name} save`, `1d20${formatMod(saveBonus(ability))}`, "save", ability, actions);
 }
 
 function rollSkillCheck(skill) {
@@ -563,24 +666,13 @@ function renderDiceRoller() {
   `).join("") || `<p class="empty-state">No roll history yet.</p>`;
 }
 
-function rollFromInput(label = "Custom Roll", formula = document.querySelector("#rollFormula").value, mode = document.querySelector("#rollMode").value, actions = [], detail = "") {
+function rollFromInput(label = "Custom roll", formula = document.querySelector("#rollFormula").value, mode = "normal", actions = [], detail = "", onResult = null) {
   const problem = formulaProblem(formula || "1d20");
   if (problem) {
     showToast(`<span class="toast-label">Can't roll "${escapeHtml(formula)}"</span><span>${problem}</span>`, { tone: "fumble" });
-    return null;
+    return;
   }
-  const result = rollFormula(formula || "1d20", mode);
-  character.rollHistory = [{ label, formula: result.formula, mode, total: result.total, parts: result.parts }, ...(character.rollHistory || [])].slice(0, 25);
-  persistAndRender();
-  const natural = naturalD20(result);
-  const tone = natural === 20 ? "crit" : natural === 1 ? "fumble" : "";
-  const toastActions = typeof actions === "function" ? actions(result) : actions;
-  showToast(`
-    <span class="toast-label">${escapeHtml(label)}${natural === 20 ? " · natural 20!" : natural === 1 ? " · natural 1" : ""}</span>
-    <span class="toast-roll"><b>${result.total}</b><small>${escapeHtml(result.parts.join(" + "))}${mode !== "normal" ? ` · ${mode}` : ""}</small></span>
-    ${detail ? `<span class="toast-detail">${escapeHtml(detail)}</span>` : ""}
-  `, { tone, actions: toastActions, duration: detail ? 10000 : 7000 });
-  return result;
+  openRoll({ label, formula: formula || "1d20", mode, actions, detail, onResult });
 }
 
 function formulaProblem(formula) {
@@ -597,6 +689,28 @@ function naturalD20(result) {
   return Number(String(result.parts[0] || "").match(/^1d20\[(\d+)\]$/)?.[1]) || null;
 }
 
+// Clicking d6 three times builds "3d6"; another die type is added as a new term.
+function handleDiePicker(event) {
+  const button = event.target.closest("[data-add-die]");
+  if (!button) return;
+  const input = document.querySelector("#rollFormula");
+  if (button.dataset.addDie === "clear") {
+    input.value = "";
+    input.focus();
+    return;
+  }
+  const sides = button.dataset.addDie;
+  const terms = input.value.replace(/\s+/g, "").match(/[+-]?[^+-]+/g) || [];
+  const index = terms.findIndex(term => new RegExp(`^\\+?(\\d*)d${sides}$`).test(term));
+  if (index >= 0) {
+    const count = Number(terms[index].match(/(\d*)d/)[1] || 1) + 1;
+    terms[index] = `${index ? "+" : ""}${count}d${sides}`;
+  } else {
+    terms.push(`${terms.length ? "+" : ""}1d${sides}`);
+  }
+  input.value = terms.join("");
+}
+
 function handleRollHistoryClick(event) {
   const button = event.target.closest(".reroll");
   if (!button) return;
@@ -604,48 +718,9 @@ function handleRollHistoryClick(event) {
   if (roll) rollFromInput(roll.label, roll.formula, roll.mode);
 }
 
-function rollFormula(formula, mode = "normal") {
-  const cleaned = String(formula).replace(/\s+/g, "").toLowerCase();
-  const tokens = cleaned.match(/[+-]?[^+-]+/g) || ["1d20"];
-  const parts = [];
-  let total = 0;
-  tokens.forEach(token => {
-    const sign = token.startsWith("-") ? -1 : 1;
-    const body = token.replace(/^[+-]/, "");
-    // NdS, with an optional rN suffix that rerolls results of N or lower once (Great Weapon Fighting).
-    const dice = body.match(/^(\d*)d(\d+)(?:r(\d+))?$/);
-    if (dice) {
-      const count = clamp(Number(dice[1] || 1), 1, 100);
-      const sides = clamp(Number(dice[2]), 2, 1000);
-      const reroll = Number(dice[3] || 0);
-      const rolls = Array.from({ length: count }, () => {
-        const first = rollDie(sides);
-        return first <= reroll ? rollDie(sides) : first;
-      });
-      const used = mode === "advantage" && count === 1 && sides === 20
-        ? [Math.max(rolls[0], rollDie(20))]
-        : mode === "disadvantage" && count === 1 && sides === 20
-          ? [Math.min(rolls[0], rollDie(20))]
-          : rolls;
-      const subtotal = used.reduce((sum, value) => sum + value, 0) * sign;
-      total += subtotal;
-      parts.push(`${sign < 0 ? "-" : ""}${body}[${used.join(",")}]`);
-    } else {
-      const value = Number(body || 0) * sign;
-      total += value;
-      parts.push(String(value));
-    }
-  });
-  return { formula: cleaned || "1d20", parts, total };
-}
-
-function rollDie(sides) {
-  return Math.floor(Math.random() * sides) + 1;
-}
-
 function renderRestPreview() {
   const shortRefresh = [
-    ...(isPactCaster() ? [{ name: "Pact magic slots" }] : []),
+    ...(slotsArePact() ? [{ name: "Pact magic slots" }] : []),
     ...character.resources.filter(item => item.reset === "short"),
     ...character.classOptions.filter(item => item.reset === "short")
   ].map(item => item.name).filter(Boolean);
@@ -654,7 +729,7 @@ function renderRestPreview() {
     ...character.classOptions.filter(item => item.reset === "long" || item.reset === "short")
   ].map(item => item.name).filter(Boolean);
   document.querySelector("#restSummary").textContent = character.restLog || "No rest taken yet";
-  document.querySelector("#hitDiceSummary").textContent = `Hit dice ${Math.max(0, character.level - character.hitDiceUsed)}/${character.level} d${currentClass().hitDie}`;
+  document.querySelector("#hitDiceSummary").textContent = `Hit dice ${Math.max(0, totalLevel() - character.hitDiceUsed)} of ${hitDiceText()}`;
   document.querySelector("#restPreview").innerHTML = `
     <article><strong>Short rest</strong><span>${escapeHtml(shortRefresh.join(", ") || "No short-rest resources tracked.")}</span></article>
     <article><strong>Long rest</strong><span>HP, spell slots, 1 exhaustion, item spell uses${longRefresh.length ? `, ${escapeHtml(longRefresh.join(", "))}` : ""}</span></article>
@@ -664,18 +739,26 @@ function renderRestPreview() {
   }
 }
 
+// ponytail: a multiclass character spends the primary class's die; add a die picker if players ask.
 function spendHitDie() {
-  if (character.hitDiceUsed >= character.level) return;
+  if (character.hitDiceUsed >= totalLevel()) return;
   const cls = currentClass();
-  const face = rollDie(cls.hitDie);
-  const heal = Math.max(1, face + mod("con"));
-  character.hitDiceUsed += 1;
-  character.hp = Math.min(effectiveMaxHp(), Number(character.hp || 0) + heal);
-  character.rollHistory = [{ label: "Hit die healing", formula: `1d${cls.hitDie}${formatMod(mod("con"))}`, mode: "normal", total: heal, parts: [`1d${cls.hitDie}[${face}]`, String(mod("con"))] }, ...(character.rollHistory || [])].slice(0, 25);
-  persistAndRender();
-  const left = character.level - character.hitDiceUsed;
-  const more = left > 0 && character.hp < effectiveMaxHp() ? [{ label: `Spend another (${left} left)`, run: spendHitDie }] : [];
-  showToast(`<span class="toast-label">Hit die · 1d${cls.hitDie}${formatMod(mod("con"))}</span><span class="toast-roll"><b>+${heal} HP</b><small>${character.hp}/${effectiveMaxHp()} HP · ${left} hit ${left === 1 ? "die" : "dice"} left</small></span>`, { actions: more, duration: 9000 });
+  openRoll({
+    label: "Hit die healing",
+    formula: `1d${cls.hitDie}${formatMod(mod("con"))}`,
+    onResult: result => {
+      const heal = Math.max(1, result.total);
+      character.hitDiceUsed += 1;
+      character.hp = Math.min(effectiveMaxHp(), Number(character.hp || 0) + heal);
+      persistAndRender();
+      const left = totalLevel() - character.hitDiceUsed;
+      return `+${heal} HP: ${character.hp}/${effectiveMaxHp()} HP, ${left} hit ${left === 1 ? "die" : "dice"} left.`;
+    },
+    actions: () => {
+      const left = totalLevel() - character.hitDiceUsed;
+      return left > 0 && character.hp < effectiveMaxHp() ? [{ label: `Spend another (${left} left)`, run: spendHitDie }] : [];
+    }
+  });
 }
 
 function takeRest(type) {
@@ -685,7 +768,7 @@ function takeRest(type) {
   }
   const before = structuredCloneSafe(character);
   character.raging = false;
-  if (type === "short" && isPactCaster()) {
+  if (type === "short" && slotsArePact()) {
     character.spellSlotUsage = {};
   }
   // A short rest is an hour: concentration on a spell lasting an hour or less has run out.
@@ -706,7 +789,7 @@ function takeRest(type) {
     character.spellSlotUsage = {};
     // Petrification needs magic to end; the rest wears off over 8 hours.
     character.conditions = (character.conditions || []).filter(condition => condition === "Exhaustion" || condition === "Petrified");
-    character.hitDiceUsed = Math.max(0, Number(character.hitDiceUsed || 0) - Math.max(1, Math.floor(character.level / 2)));
+    character.hitDiceUsed = Math.max(0, Number(character.hitDiceUsed || 0) - Math.max(1, Math.floor(totalLevel() / 2)));
     character.concentration = "";
     (character.equipment || []).forEach(item => {
       item.grantUsed = 0;
@@ -726,7 +809,7 @@ function takeRest(type) {
     label: "Undo",
     run: undoLastRest
   }];
-  const hitDiceLeft = character.level - character.hitDiceUsed;
+  const hitDiceLeft = totalLevel() - character.hitDiceUsed;
   if (type === "short" && hitDiceLeft > 0 && character.hp < effectiveMaxHp()) actions.push({ label: `Spend a hit die (${hitDiceLeft} left)`, run: spendHitDie });
   if (type === "short" && arcaneRecoveryPlan().length) actions.push({ label: recoveryFeatureName(), run: useArcaneRecovery });
   const changes = restChanges(before, character);
@@ -766,7 +849,7 @@ function undoRest(before, after) {
     const change = delta(level, before.spellSlotUsage, after.spellSlotUsage);
     if (change) character.spellSlotUsage[level] = Math.max(0, Number(character.spellSlotUsage[level] || 0) + change);
   });
-  character.hitDiceUsed = clamp(Number(character.hitDiceUsed || 0) + delta("hitDiceUsed"), 0, character.level);
+  character.hitDiceUsed = clamp(Number(character.hitDiceUsed || 0) + delta("hitDiceUsed"), 0, totalLevel());
   ["resources", "classOptions"].forEach(key => (character[key] || []).forEach(entry => {
     const old = (before[key] || []).find(item => item.id === entry.id);
     const rested = (after[key] || []).find(item => item.id === entry.id);
@@ -1053,19 +1136,91 @@ function handleConditionClick(event) {
     return;
   }
   const active = new Set(character.conditions || []);
-  if (active.has(button.dataset.condition)) active.delete(button.dataset.condition);
-  else active.add(button.dataset.condition);
+  const adding = !active.has(button.dataset.condition);
+  if (adding) active.add(button.dataset.condition);
+  else active.delete(button.dataset.condition);
   character.conditions = Array.from(active);
+  // Being incapacitated ends concentration (PHB p.203).
+  const lost = adding && INCAPACITATING.includes(button.dataset.condition) && character.concentration;
+  if (lost) character.concentration = "";
   persistAndRender();
+  if (lost) showToast(`<span class="toast-label">Concentration on ${escapeHtml(lost)} ends</span><span>You're ${escapeHtml(button.dataset.condition.toLowerCase())}, and incapacitated creatures can't concentrate.</span>`, { tone: "fumble" });
 }
 
 let actionTypeFilter = "all";
+let actionKindFilter = "all";
 
+// Baldur's Gate-style filters: by what the action costs and by what kind of thing it is.
 function handleActionFilterClick(event) {
-  const button = event.target.closest("[data-action-filter]");
-  if (!button) return;
-  actionTypeFilter = button.dataset.actionFilter;
-  renderActions();
+  const cost = event.target.closest("[data-action-filter]");
+  const kind = event.target.closest("[data-kind-filter]");
+  if (cost) actionTypeFilter = cost.dataset.actionFilter;
+  if (kind) actionKindFilter = kind.dataset.kindFilter;
+  if (cost || kind) renderActions();
+}
+
+function actionKind(action) {
+  if (action.source?.spell) return "spell";
+  if (action.source?.feature) return "feature";
+  if (action.source?.weapon || /^\s*[+-]?\d/.test(action.attack || "")) return "attack";
+  return "feature";
+}
+
+// The actions every creature has (PHB ch.9), with a roll where one applies.
+const COMMON_ACTIONS = [
+  ["Action", "Attack", "Make one weapon attack (more with Extra Attack)."],
+  ["Action", "Cast a Spell", "Cast a spell with a casting time of 1 action."],
+  ["Action", "Dash", "Gain extra movement equal to your speed this turn."],
+  ["Action", "Disengage", "Your movement doesn't provoke opportunity attacks this turn."],
+  ["Action", "Dodge", "Attacks against you have disadvantage and you make DEX saves with advantage until your next turn."],
+  ["Action", "Help", "Give an ally advantage on their next ability check, or on their next attack against a creature within 5 ft of you."],
+  ["Action", "Hide", "Make a Dexterity (Stealth) check to hide.", "stealth"],
+  ["Action", "Ready", "Choose a trigger and an action; use your reaction to do it when the trigger happens."],
+  ["Action", "Search", "Look for something: Wisdom (Perception) or Intelligence (Investigation).", "perception"],
+  ["Action", "Use an Object", "Use an object that needs your action, like drinking a potion."],
+  ["Action", "Grapple", "Replaces one attack. Strength (Athletics) vs. the target's Athletics or Acrobatics.", "athletics"],
+  ["Action", "Shove", "Replaces one attack. Knock prone or push 5 ft: Athletics vs. Athletics or Acrobatics.", "athletics"],
+  ["Bonus Action", "Two-Weapon Fighting", "After attacking with a light melee weapon, attack with another light weapon in your other hand. No ability modifier to its damage unless negative."],
+  ["Reaction", "Opportunity Attack", "When a creature you can see leaves your reach, make one melee attack against it."],
+  ["Free", "Interact with an Object", "Once per turn for free: draw or sheathe a weapon, open a door, pick up an item."],
+  ["Free", "Drop Prone", "Fall prone without using movement."],
+  ["Free", "Stand Up", "Costs half your movement."],
+  ["Free", "Speak", "Brief words or gestures on your turn."]
+];
+
+// 2014 DMG potion healing.
+const HEALING_POTIONS = { "potion of healing": "2d4+2", "potion of greater healing": "4d4+4", "potion of superior healing": "8d4+8", "potion of supreme healing": "10d4+20" };
+
+function consumableItems() {
+  return (character.equipment || []).filter(item => Number(item.quantity ?? 1) > 0 && /potion|scroll|elixir|oil of|antitoxin|healer's kit/i.test(item.name || ""));
+}
+
+function useConsumable(id) {
+  const item = (character.equipment || []).find(entry => entry.id === id);
+  if (!item) return;
+  item.quantity = Math.max(0, Number(item.quantity ?? 1) - 1);
+  persistAndRender();
+  const heal = HEALING_POTIONS[String(item.name).toLowerCase().trim()];
+  const undo = { label: "Undo", run: () => { item.quantity = Number(item.quantity) + 1; persistAndRender(); } };
+  if (heal) {
+    rollFromInput(`${item.name} healing`, heal, "normal", result => [{ label: `Heal me +${result.total}`, run: () => healBy(result.total) }, undo]);
+    return;
+  }
+  showToast(`<span class="toast-label">Used ${escapeHtml(item.name)}</span><span>${Number(item.quantity)} left.</span>`, { actions: [undo] });
+}
+
+function commonActionsHtml() {
+  return COMMON_ACTIONS.filter(([type]) => actionTypeFilter === "all" || actionTypeFilter === type).map(([type, name, text, skill]) => `
+    <article class="common-action">
+      <span class="cost-dot ${costClass(type)}" title="${escapeHtml(type)}"></span>
+      <strong>${escapeHtml(name)}</strong>
+      <span>${escapeHtml(text)}</span>
+      ${skill ? `<button type="button" class="secondary" data-common-roll="${skill}">Roll ${escapeHtml(SKILLS.find(([id]) => id === skill)?.[1] || skill)}</button>` : ""}
+    </article>`).join("");
+}
+
+function costClass(type) {
+  return { Action: "cost-action", "Bonus Action": "cost-bonus", Reaction: "cost-reaction" }[type] || "cost-free";
 }
 
 // Actions made by Generate Actions remember what they came from and recompute as scores and levels change.
@@ -1106,12 +1261,34 @@ function renderActions() {
   const root = document.querySelector("#actionRows");
   const template = document.querySelector("#actionRowTemplate");
   document.querySelectorAll("[data-action-filter]").forEach(button => {
-    button.classList.toggle("active", button.dataset.actionFilter === actionTypeFilter);
+    const on = button.dataset.actionFilter === actionTypeFilter;
+    button.classList.toggle("active", on);
+    button.setAttribute("aria-pressed", String(on));
+  });
+  document.querySelectorAll("[data-kind-filter]").forEach(button => {
+    const on = button.dataset.kindFilter === actionKindFilter;
+    button.classList.toggle("active", on);
+    button.setAttribute("aria-pressed", String(on));
   });
   root.innerHTML = "";
-  const visible = character.actions.filter(action => actionTypeFilter === "all" || action.type === actionTypeFilter);
+  if (actionKindFilter === "common") {
+    root.innerHTML = commonActionsHtml() || `<p class="empty-state">No common actions of this type.</p>`;
+    return;
+  }
+  if (actionKindFilter === "item") {
+    const items = actionTypeFilter === "all" || actionTypeFilter === "Action" ? consumableItems() : [];
+    root.innerHTML = items.length ? items.map(item => `
+      <article class="common-action">
+        <span class="cost-dot cost-action" title="Action"></span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>${Number(item.quantity ?? 1)} left${HEALING_POTIONS[String(item.name).toLowerCase().trim()] ? ` · heals ${HEALING_POTIONS[String(item.name).toLowerCase().trim()]}` : ""}. Drinking or using it takes an action.</span>
+        <button type="button" class="secondary" data-use-consumable="${escapeHtml(item.id)}">Use</button>
+      </article>`).join("") : `<p class="empty-state">No potions, scrolls or other consumables in your inventory.</p>`;
+    return;
+  }
+  const visible = character.actions.filter(action => (actionTypeFilter === "all" || action.type === actionTypeFilter) && (actionKindFilter === "all" || actionKind(action) === actionKindFilter));
   if (!visible.length) {
-    root.innerHTML = `<p class="empty-state">${character.actions.length ? "No actions of this type." : "No actions yet. Choose Edit to add attacks or generate them from your gear."}</p>`;
+    root.innerHTML = `<p class="empty-state">${character.actions.length ? "Nothing matches these filters." : "No actions yet. Choose Edit to add attacks or generate them from your gear."}</p>`;
     return;
   }
   visible.forEach(action => {
@@ -1122,6 +1299,7 @@ function renderActions() {
     node.querySelector(".action-attack").value = action.attack;
     node.querySelector(".action-damage").value = action.damage;
     node.querySelector(".action-notes").value = action.notes;
+    node.dataset.cost = costClass(action.type);
     syncActionButtons(node, action);
     root.appendChild(node);
   });
@@ -1169,6 +1347,10 @@ function doubleDice(formula) {
 }
 
 function handleActionClick(event) {
+  const commonRoll = event.target.closest("[data-common-roll]");
+  if (commonRoll) rollSkillCheck(commonRoll.dataset.commonRoll);
+  const consumable = event.target.closest("[data-use-consumable]");
+  if (consumable) useConsumable(consumable.dataset.useConsumable);
   const row = event.target.closest(".action-row");
   const action = row && character.actions.find(item => item.id === row.dataset.actionId);
   if (!action) return;
@@ -1192,9 +1374,10 @@ function handleActionClick(event) {
   persistAndRender();
 }
 
-function rollActionAttack(action, suffix = "", confirmed = false) {
+// next: an extra follow-up (the next Flurry of Blows strike) offered after this attack.
+function rollActionAttack(action, suffix = "", confirmed = false, next = null) {
   const name = action.name || "Action";
-  if (!confirmed && blockedByIncapacitation(() => rollActionAttack(action, suffix, true))) return;
+  if (!confirmed && blockedByIncapacitation(() => rollActionAttack(action, suffix, true, next))) return;
   const damage = actionDamageFormula(action);
   const bonus = String(action.attack || "").match(/^\s*([+-]?\d+)/)?.[1];
   if (bonus === undefined) {
@@ -1202,9 +1385,15 @@ function rollActionAttack(action, suffix = "", confirmed = false) {
     return;
   }
   const label = `${action.type === "Free" ? name : `${name} to hit`}${suffix}`;
-  const { mode, note } = rollModeFor("attack");
   const traits = actionTraits(action);
-  rollFromInput(note ? `${label} (${note})` : label, `1d20${formatMod(Number(bonus))}`, mode, result => damageFollowUps(name, damage, naturalD20(result), traits));
+  openRoll({
+    label,
+    formula: `1d20${formatMod(Number(bonus))}`,
+    kind: "attack",
+    critOn: traits.weapon ? critThreshold() : 20,
+    actions: result => damageFollowUps(name, damage, naturalD20(result), traits),
+    carry: next ? [next] : []
+  });
 }
 
 // What kind of attack an action row is, from its source weapon or its own text.
@@ -1243,6 +1432,8 @@ function damageRiders(options = {}) {
   if (character.concentration === "Hex") riders.push({ name: "Hex", formula: "1d6" });
   if (options.weapon && character.concentration === "Hunter's Mark") riders.push({ name: "Hunter's Mark", formula: "1d6" });
   if (hexbladeCurseActive()) riders.push({ name: "Curse", formula: String(proficiencyBonus()), flat: true });
+  // Improved Divine Smite (PHB p.85): every melee weapon hit deals an extra 1d8 radiant from 11th level.
+  if (options.weapon && options.melee && currentClass().id === "paladin" && character.level >= 11) riders.push({ name: "Improved Divine Smite", formula: "1d8" });
   // Sneak Attack needs a finesse or ranged weapon (PHB p.96).
   if (options.weapon && (options.finesse || options.ranged) && currentClass().id === "rogue") riders.push({ name: "Sneak Attack", formula: `${Math.ceil(character.level / 2)}d6` });
   return riders;
@@ -1264,9 +1455,11 @@ function critThreshold() {
 }
 
 // Brutal Critical: extra weapon damage dice on a melee crit (1/2/3 at 9/13/17).
+// Half-Orc Savage Attacks (PHB p.41) adds one more die on a melee weapon crit.
 function brutalCriticalDice() {
-  if (currentClass().id !== "barbarian") return 0;
-  return character.level >= 17 ? 3 : character.level >= 13 ? 2 : character.level >= 9 ? 1 : 0;
+  const savage = /half-orc/i.test(character.species || "") ? 1 : 0;
+  if (currentClass().id !== "barbarian") return savage;
+  return savage + (character.level >= 17 ? 3 : character.level >= 13 ? 2 : character.level >= 9 ? 1 : 0);
 }
 
 function damageFollowUps(name, formula, natural, options = {}) {
@@ -1303,7 +1496,7 @@ function damageFollowUps(name, formula, natural, options = {}) {
 // Divine Smite (PHB p.85): after a melee weapon hit, spend a slot for 2d8 radiant +1d8 per slot level above 1st (max 5d8).
 function smiteActions(isCrit, options) {
   if (currentClass().id !== "paladin" || character.level < 2 || !options.weapon || !options.melee) return [];
-  const slots = spellSlotsFor(currentClass(), character.level);
+  const slots = characterSpellSlots();
   const open = slots.map((count, index) => index + 1).filter(level => slotRemaining(level, slots[level - 1] || 0) > 0);
   if (!open.length) return [];
   const choices = [...new Set([open[0], open[open.length - 1]])];
@@ -1331,7 +1524,7 @@ function extraAttacks() {
   const cls = currentClass().id;
   const level = character.level;
   if (cls === "fighter") return level >= 20 ? 4 : level >= 11 ? 3 : level >= 5 ? 2 : 1;
-  if (["barbarian", "monk", "paladin", "ranger"].includes(cls) && level >= 5) return 2;
+  if (["barbarian", "bloodhunter", "monk", "paladin", "ranger"].includes(cls) && level >= 5) return 2;
   // Subclass Extra Attack: Valor/Swords bards and Bladesingers at 6th, Battle Smith/Armorer artificers at 5th.
   if (level >= 6 && lookupBySubclass({ valor: true, swords: true, bladesinging: true })) return 2;
   if (level >= 5 && lookupBySubclass({ "battle-smith": true, armorer: true })) return 2;
@@ -1491,13 +1684,16 @@ function useFeatureAction(action, confirmed = false) {
   };
   const undo = spent ? [{ label: "Undo", run: () => { refund(); persistAndRender(); } }] : [];
   if (use.kind === "attacks") {
-    showToast(`<span class="toast-label">${escapeHtml(name)}</span><span>${escapeHtml(status)}</span>`, { actions: undo });
-    for (let index = 1; index <= use.attacks; index += 1) rollActionAttack(action, ` ${index} of ${use.attacks}`, true);
+    const strike = index => rollActionAttack(action, ` ${index} of ${use.attacks}${index === 1 && status ? ` (${status})` : ""}`, true,
+      index < use.attacks ? { label: `Next strike (${index + 1} of ${use.attacks})`, run: () => strike(index + 1) } : null);
+    strike(1);
     return;
   }
   if (use.kind === "heal") {
-    const result = rollFromInput(`${name}${status ? ` (${status})` : ""}`, use.roll, "normal");
-    if (result) healBy(result.total);
+    rollFromInput(`${name}${status ? ` (${status})` : ""}`, use.roll, "normal", [], "", result => {
+      healBy(result.total);
+      return `Healed: ${character.hp}/${effectiveMaxHp()} HP.`;
+    });
     return;
   }
   if (use.kind === "roll") {
@@ -1603,7 +1799,7 @@ function flexibleCastingMenu() {
     showToast(`<span class="toast-label">Flexible Casting</span><span>Sorcery points aren't tracked on this sheet.</span>`);
     return;
   }
-  const slots = spellSlotsFor(currentClass(), character.level);
+  const slots = characterSpellSlots();
   const actions = [];
   Object.entries(SLOT_POINT_COST).forEach(([level, cost]) => {
     const spent = Number(character.spellSlotUsage?.[level] || 0);

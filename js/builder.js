@@ -1,5 +1,3 @@
-let pendingLevelChoices = [];
-
 function renderBuilderTools() {
   renderBuilderWizard();
   renderBackgroundTools();
@@ -19,30 +17,6 @@ function renderBuilderWizard() {
       ${item.tab ? `<button class="ghost" type="button" data-builder-tab="${item.tab}">${item.done ? "Review" : "Go"}</button>` : ""}
     </article>
   `).join("");
-}
-
-function builderStepHint(id) {
-  return {
-    identity: "Add name, species, and background.",
-    class: "Choose class, subclass, and level.",
-    abilities: "Set all six ability scores.",
-    proficiencies: "Pick skill proficiencies.",
-    equipment: "Add starting gear or catalog items.",
-    spells: "Choose class spells if your class casts.",
-    personality: "Generate or write roleplay details."
-  }[id] || "Review this section.";
-}
-
-function builderStepTab(id) {
-  return {
-    identity: "rp",
-    class: "features",
-    abilities: "#abilities",
-    proficiencies: "#skills",
-    equipment: "inventory",
-    spells: "spells",
-    personality: "rp"
-  }[id] || "actions";
 }
 
 function handleBuilderWizardClick(event) {
@@ -232,7 +206,7 @@ const MULTICLASS_REQUIREMENTS = {
   wizard: [["int"]]
 };
 
-function multiclassRequirements(classId) {
+function multiclassCheck(classId) {
   const describe = id => {
     const groups = MULTICLASS_REQUIREMENTS[id];
     if (!groups) return null;
@@ -243,22 +217,62 @@ function multiclassRequirements(classId) {
     return { met: parts.every(part => part.met), text: parts.map(part => part.text).join(", ") };
   };
   const target = describe(classId);
-  if (!target) return "Custom class: check DM prerequisites.";
-  const current = currentClass();
-  const own = current.id !== classId ? describe(current.id) : null;
-  const met = target.met && (!own || own.met);
-  return `${getClasses()[classId]?.name || classId}: ${target.text}.${own ? ` Current class (${current.name}): ${own.text}.` : ""} ${met ? "Prerequisites met." : "Prerequisites not met."}`;
+  if (!target) return { met: true, text: "Custom class: check prerequisites with your DM." };
+  // You need the prerequisites of every class you already have, too (PHB p.163).
+  const owned = classEntries().filter(entry => entry.classId !== classId).map(entry => ({ name: getClasses()[entry.classId]?.name || entry.classId, check: describe(entry.classId) })).filter(item => item.check);
+  const met = target.met && owned.every(item => item.check.met);
+  const text = `${getClasses()[classId]?.name || classId}: ${target.text}.${owned.map(item => ` ${item.name}: ${item.check.text}.`).join("")}`;
+  return { met, text: `${text} ${met ? "Prerequisites met." : "Prerequisites not met."}` };
 }
 
-let pendingLevelSubclass = "";
+function multiclassRequirements(classId) {
+  return multiclassCheck(classId).text;
+}
 
-// The class as it will be after this level-up, including a subclass chosen in the dialog.
-function levelUpClass() {
-  const base = currentClass();
-  if (!pendingLevelSubclass || base.casterType !== "none") return base;
-  const official = officialSubclasses.find(item => item.index === pendingLevelSubclass);
-  const casting = lookupBySubclass(SUBCLASS_CASTING, official?.name);
-  return casting ? { ...base, ...casting } : base;
+// PHB p.164: what a new class grants when you multiclass into it (ERLW p.56 for the artificer).
+const MULTICLASS_PROFICIENCIES = {
+  artificer: { armor: "Light armor, medium armor, shields", tools: "Thieves' tools, tinker's tools" },
+  barbarian: { armor: "Shields", weapons: "Simple weapons, martial weapons" },
+  bard: { armor: "Light armor", tools: "One musical instrument", skills: 1 },
+  cleric: { armor: "Light armor, medium armor, shields" },
+  druid: { armor: "Light armor, medium armor, shields" },
+  fighter: { armor: "Light armor, medium armor, shields", weapons: "Simple weapons, martial weapons" },
+  monk: { weapons: "Simple weapons, shortswords" },
+  paladin: { armor: "Light armor, medium armor, shields", weapons: "Simple weapons, martial weapons" },
+  ranger: { armor: "Light armor, medium armor, shields", weapons: "Simple weapons, martial weapons", skills: 1 },
+  rogue: { armor: "Light armor", tools: "Thieves' tools", skills: 1 },
+  sorcerer: {},
+  warlock: { armor: "Light armor", weapons: "Simple weapons" },
+  wizard: {}
+};
+
+// The level-up plan the dialog edits; nothing touches the sheet until Level up is pressed.
+let levelPlan = null;
+
+// 2024 rules: every class picks its subclass at 3rd level.
+function subclassUnlockLevel(classId, rules) {
+  return rules === "2024" ? 3 : SUBCLASS_LEVEL[classId] || 3;
+}
+
+function levelTarget() {
+  const plan = levelPlan;
+  if (plan.target === "new") {
+    const base = getClasses()[plan.newClassId];
+    return base ? { key: "new", classId: base.id, from: 0, to: 1, cls: base, rules: plan.newRules, subclassName: "" } : null;
+  }
+  const entry = classEntries().find(item => item.key === plan.target) || classEntries()[0];
+  let cls = entryClass(entry);
+  // A subclass picked in this dialog can make a martial class a caster (Eldritch Knight, Arcane Trickster).
+  if (plan.subclass && cls.casterType === "none") {
+    const official = officialSubclasses.find(item => item.index === plan.subclass);
+    const casting = lookupBySubclass(SUBCLASS_CASTING, official?.name);
+    if (casting) cls = { ...cls, ...casting };
+  }
+  return { key: entry.key, classId: entry.classId, from: entry.level, to: entry.level + 1, cls, rules: entry.rules, subclassName: entry.subclassName };
+}
+
+function averageHitDieGain(cls) {
+  return Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp();
 }
 
 function levelUpPicks(cls, from, to) {
@@ -269,101 +283,311 @@ function levelUpPicks(cls, from, to) {
 }
 
 function openLevelDialog() {
-  if (character.level >= 20) return;
-  pendingLevelSubclass = "";
-  const nextLevel = character.level + 1;
-  const cls = currentClass();
-  const unlock = SUBCLASS_LEVEL[cls.id] || 3;
-  const subclassOptions = officialSubclasses.filter(item => item.classIndex === cls.id);
-  const needsSubclass = !character.subclassName && nextLevel >= unlock && subclassOptions.length;
-  document.querySelector("#levelDialogTitle").textContent = `${cls.name} level ${nextLevel}`;
+  if (totalLevel() >= 20 && !isRuleBroken("level-cap")) {
+    breakRule("level-cap", "Characters top out at level 20. Past that, the DMG suggests Epic Boons instead of levels.", openLevelDialog);
+    return;
+  }
+  levelPlan = { target: "primary", newClassId: "", newRules: "2014", subclass: "", hp: null, choices: [] };
+  renderLevelDialog();
+  document.querySelector("#levelDialog").showModal();
+}
+
+function renderLevelDialog() {
+  const plan = levelPlan;
+  const owned = new Set(classEntries().map(entry => entry.classId));
+  const newOptions = Object.values(getClasses()).filter(cls => !owned.has(cls.id));
+  if (!plan.newClassId) plan.newClassId = newOptions[0]?.id || "";
+  const target = levelTarget();
+  document.querySelector("#levelDialogTitle").textContent = `Level up to ${totalLevel() + 1}`;
+  const check = plan.target === "new" && plan.newClassId ? multiclassCheck(plan.newClassId) : null;
+  document.querySelector("#levelClassChoice").innerHTML = `
+    <legend>Which class gains the level?</legend>
+    ${classEntries().map(entry => `
+      <label class="inline-check level-class-option">
+        <input type="radio" name="levelTarget" value="${escapeHtml(entry.key)}" ${plan.target === entry.key ? "checked" : ""}>
+        <span>${escapeHtml(getClasses()[entry.classId]?.name || entry.classId)} ${entry.level} → ${entry.level + 1}</span>
+        <span class="edition-badge" data-edition="${entry.rules}">${entry.rules}</span>
+      </label>`).join("")}
+    ${newOptions.length ? `
+      <label class="inline-check level-class-option">
+        <input type="radio" name="levelTarget" value="new" ${plan.target === "new" ? "checked" : ""}>
+        <span>Multiclass into a new class</span>
+      </label>
+      <div class="level-multiclass" ${plan.target === "new" ? "" : "hidden"}>
+        <label>New class
+          <select id="levelNewClass">${newOptions.map(cls => `<option value="${escapeHtml(cls.id)}" ${cls.id === plan.newClassId ? "selected" : ""}>${escapeHtml(cls.name)}</option>`).join("")}</select>
+        </label>
+        <label>Rules edition
+          <select id="levelNewRules">
+            <option value="2014" ${plan.newRules === "2014" ? "selected" : ""}>2014</option>
+            <option value="2024" ${plan.newRules === "2024" ? "selected" : ""}>2024</option>
+          </select>
+        </label>
+        ${check ? `<p class="${check.met ? "muted" : "level-warning"}">${escapeHtml(check.text)}</p>` : ""}
+        ${plan.newClassId && MULTICLASS_PROFICIENCIES[plan.newClassId] ? `<p class="muted">You gain: ${escapeHtml(multiclassGrantText(plan.newClassId))}</p>` : ""}
+      </div>` : ""}
+  `;
+  if (!target) return;
+  const cls = target.cls;
+  const average = averageHitDieGain(cls);
+  if (plan.hp === null || plan.hpClass !== cls.id) {
+    plan.hp = average;
+    plan.hpClass = cls.id;
+  }
+  document.querySelector("#levelHp").innerHTML = `
+    <label>Hit points gained
+      <span class="level-hp-row">
+        <input id="levelHpInput" type="number" min="1" max="99" value="${plan.hp}">
+        <button type="button" class="ghost" data-level-hp="average">Average (${average})</button>
+        <button type="button" class="ghost" data-level-hp="roll">${icon("dice-five")}Roll 1d${cls.hitDie}${formatMod(mod("con") + sheetExtraHp())}</button>
+      </span>
+    </label>`;
+  renderLevelSummaryAndChoices();
+}
+
+function multiclassGrantText(classId) {
+  const grant = MULTICLASS_PROFICIENCIES[classId] || {};
+  return [grant.armor, grant.weapons, grant.tools, grant.skills ? `${grant.skills} skill from the class list` : ""].filter(Boolean).join(", ") || "no new proficiencies";
+}
+
+function renderLevelSummaryAndChoices() {
+  const plan = levelPlan;
+  const target = levelTarget();
+  if (!target) return;
+  const { cls, from, to, rules } = target;
+  const row = cls.table[to - 1] || {};
+  const profNow = proficiencyBonus(totalLevel());
+  const profNext = proficiencyBonus(totalLevel() + 1);
+  const multiclassed = Boolean(character.multiclasses?.length) || target.key === "new";
+  document.querySelector("#levelSummary").innerHTML = `
+    <div><span class="edition-badge" data-edition="${rules}">${rules} rules</span> ${escapeHtml(cls.name)} level ${to}</div>
+    <div>Proficiency bonus: ${formatMod(profNext)}${profNext !== profNow ? ` (up from ${formatMod(profNow)})` : ""} · Hit dice gain a d${cls.hitDie}</div>
+    <div>Features: ${escapeHtml(row.features || "No new class feature this level.")}</div>
+    ${cls.casterType === "none" ? "" : `<div>${multiclassed ? "Spell slots follow the multiclass spellcaster table (PHB p.165)." : `Spell slots: ${spellSlotsFor(cls, to).map((count, index) => count ? `${ordinal(index + 1)} ×${count}` : "").filter(Boolean).join(" · ") || "none yet"}`}</div>`}
+    ${rules === "2024" ? `<div class="muted">2024 rules: check the 2024 Player's Handbook for this level's features; ForgeSheet's automation follows the 2014 tables.</div>` : ""}
+  `;
+  const subclassOptions = officialSubclasses.filter(item => item.classIndex === target.classId);
+  const needsSubclass = !target.subclassName && to >= subclassUnlockLevel(target.classId, rules) && subclassOptions.length;
   document.querySelector("#levelSubclass").innerHTML = needsSubclass ? `
     <label>Choose your ${escapeHtml(subclassOptions[0].flavor || "subclass")}
       <select id="levelSubclassSelect">
         <option value="">Decide later</option>
-        ${subclassOptions.map(item => `<option value="${escapeHtml(item.index)}">${escapeHtml(item.name)}</option>`).join("")}
+        ${subclassOptions.map(item => `<option value="${escapeHtml(item.index)}" ${plan.subclass === item.index ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("")}
       </select>
     </label>` : "";
-  document.querySelector("#levelAsiPrompt").innerHTML = asiLevelsFor(cls).has(nextLevel) ? `
-    <fieldset class="level-asi">
-      <legend>Ability score improvement</legend>
-      <label class="inline-check"><input type="radio" name="asiMode" value="asi" checked> Raise scores: +1 and +1 (choose the same ability twice for +2)</label>
-      <div class="level-asi-picks">
-        ${["asiFirst", "asiSecond"].map(id => `<select id="${id}">${ABILITIES.map(([ability, label]) => `<option value="${ability}" ${Number(character.abilities[ability]) >= 20 ? "disabled" : ""}>${label} (${character.abilities[ability]})</option>`).join("")}</select>`).join("")}
-      </div>
-      <label class="inline-check"><input type="radio" name="asiMode" value="feat"> Take a feat instead
-        <select id="asiFeat">${FEAT_PRESETS.filter(name => name !== "Ability Score Improvement").map(name => {
-          const blocked = featBlocked(name);
-          return `<option value="${escapeHtml(name)}" ${blocked ? "disabled" : ""}>${escapeHtml(name)}${blocked ? ` (${escapeHtml(blocked)})` : ""}</option>`;
-        }).join("")}</select>
-        <select id="asiFeatAbility" aria-label="Ability the feat raises" hidden></select>
-      </label>
-    </fieldset>` : "";
-  const featSelect = document.querySelector("#asiFeat");
-  if (featSelect) {
-    const firstOpen = [...featSelect.options].find(option => !option.disabled);
-    if (firstOpen) featSelect.value = firstOpen.value;
-    const syncAbility = () => {
-      const options = FEAT_RULES[featSelect.value]?.ability || [];
-      const pick = document.querySelector("#asiFeatAbility");
-      pick.hidden = !options.length;
-      pick.innerHTML = options.map(id => `<option value="${id}" ${Number(character.abilities[id]) >= 20 ? "disabled" : ""}>+1 ${id.toUpperCase()} (${character.abilities[id]})</option>`).join("");
-      const open = [...pick.options].find(option => !option.disabled);
-      if (open) pick.value = open.value;
-    };
-    featSelect.addEventListener("change", syncAbility);
-    syncAbility();
-  }
-  renderLevelSummaryAndChoices();
-  document.querySelector("#levelDialog").showModal();
-}
-
-function renderLevelSummaryAndChoices() {
-  const nextLevel = character.level + 1;
-  const cls = levelUpClass();
-  const row = cls.table[nextLevel - 1] || {};
-  const profNow = proficiencyBonus(character.level);
-  const profNext = proficiencyBonus(nextLevel);
-  const hpGain = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp();
-  document.querySelector("#levelSummary").innerHTML = `
-    <div>Hit points: +${hpGain} (average), or edit Max HP after applying if you rolled.</div>
-    <div>Hit dice: ${nextLevel}d${cls.hitDie} · Proficiency bonus: ${formatMod(profNext)}${profNext !== profNow ? ` (up from ${formatMod(profNow)})` : ""}</div>
-    <div>Features: ${escapeHtml(row.features || "No new class feature this level.")}</div>
-    ${cls.casterType === "none" ? "" : `
-    <div>Spell slots: ${spellSlotsFor(cls, nextLevel).map((count, index) => count ? `${ordinal(index + 1)} ×${count}` : "").filter(Boolean).join(" · ") || "none yet"}</div>
-    <div>${cls.preparedFormula === "known" ? "Spells known" : "Prepared spell limit"}: ${preparedLimitFor(cls, nextLevel)}${cantripCap(cls, nextLevel) ? ` · Cantrips: ${cantripCap(cls, nextLevel)}` : ""}</div>`}
-  `;
-  const picks = levelUpPicks(cls, character.level, nextLevel);
+  renderLevelAsi(asiLevelsFor(cls).has(to), rules);
+  const picks = target.key === "new" && cls.preparedFormula !== "known" && !cls.knownTable
+    ? { spells: 0, cantrips: cantripCap(cls, 1) }
+    : levelUpPicks(cls, from, to);
+  if (rules === "2024") picks.spells = 0;
   const choices = document.querySelector("#levelSpellChoices");
   choices.innerHTML = "";
-  pendingLevelChoices = [];
+  plan.choices = [];
   const kinds = [...Array(picks.cantrips).fill(0), ...Array(picks.spells).fill("leveled")];
   kinds.forEach(kind => {
     const newRow = { id: crypto.randomUUID(), index: "", prepared: false };
-    pendingLevelChoices.push(newRow);
+    plan.choices.push(newRow);
     const wrapper = document.createElement("div");
     wrapper.className = "level-spell-choice";
-    wrapper.innerHTML = `<select class="spell-select"></select><span class="muted">${kind === 0 ? "New cantrip" : cls.id === "wizard" ? "Spellbook spell" : "New spell"}</span>`;
-    fillSpellSelect(wrapper.querySelector("select"), "", spellChoicesForLevelChoice(kind, cls));
+    wrapper.innerHTML = `<select class="spell-select" aria-label="${kind === 0 ? "New cantrip" : "New spell"}"></select><span class="muted">${kind === 0 ? "New cantrip" : cls.id === "wizard" ? "Spellbook spell" : "New spell"}</span>`;
+    fillSpellSelect(wrapper.querySelector("select"), "", spellChoicesForLevelChoice(kind, cls, to));
     wrapper.querySelector("select").addEventListener("change", event => {
       newRow.index = event.target.value;
-      pendingLevelChoices.forEach(choice => {
+      plan.choices.forEach(choice => {
         if (choice !== newRow && choice.index === newRow.index) choice.index = "";
       });
     });
     choices.appendChild(wrapper);
   });
-  if (!kinds.length && cls.casterType !== "none") choices.innerHTML = `<p class="muted">No new spells to learn this level${cls.preparedFormula === "known" ? "" : " (you prepare from your full class list)"}.</p>`;
+  if (!kinds.length && cls.casterType !== "none") {
+    choices.innerHTML = `<p class="muted">${rules === "2024" ? "2024 casters prepare spells from their class list: update them in the Spells tab after leveling." : `No new spells to learn this level${cls.preparedFormula === "known" ? "" : " (you prepare from your full class list)"}.`}</p>`;
+  }
 }
 
-function spellChoicesForLevelChoice(kind, cls = currentClass()) {
-  const maximum = maxSpellLevelFor(cls, character.level + 1);
+function renderLevelAsi(due, rules) {
+  const root = document.querySelector("#levelAsiPrompt");
+  if (!due) {
+    root.innerHTML = "";
+    return;
+  }
+  root.innerHTML = `
+    <fieldset class="level-asi">
+      <legend>Ability score improvement${rules === "2024" ? " (2024: or any feat you qualify for)" : ""}</legend>
+      <label class="inline-check"><input type="radio" name="asiMode" value="asi" checked> Raise scores: +1 and +1 (pick the same ability twice for +2)</label>
+      <div class="level-asi-picks">
+        ${["asiFirst", "asiSecond"].map((id, index) => `<select id="${id}" aria-label="${index ? "Second" : "First"} ability to raise">${ABILITIES.map(([ability, label]) => `<option value="${ability}">${label} (${character.abilities[ability]})</option>`).join("")}</select>`).join("")}
+      </div>
+      <label class="inline-check"><input type="radio" name="asiMode" value="feat"> Take a feat instead
+        <select id="asiFeat" aria-label="Feat">${FEAT_PRESETS.filter(name => name !== "Ability Score Improvement").map(name => {
+          const blocked = featBlocked(name);
+          return `<option value="${escapeHtml(name)}" ${blocked === "already taken" ? "disabled" : ""}>${escapeHtml(name)}${blocked ? ` (${escapeHtml(blocked)})` : ""}</option>`;
+        }).join("")}</select>
+        <select id="asiFeatAbility" aria-label="Ability the feat raises" hidden></select>
+      </label>
+    </fieldset>`;
+  const featSelect = document.querySelector("#asiFeat");
+  const firstOpen = [...featSelect.options].find(option => !option.disabled && !featBlocked(option.value));
+  if (firstOpen) featSelect.value = firstOpen.value;
+  const syncAbility = () => {
+    const options = FEAT_RULES[featSelect.value]?.ability || [];
+    const pick = document.querySelector("#asiFeatAbility");
+    pick.hidden = !options.length;
+    pick.innerHTML = options.map(id => `<option value="${id}">+1 ${id.toUpperCase()} (${character.abilities[id]})</option>`).join("");
+  };
+  featSelect.addEventListener("change", syncAbility);
+  syncAbility();
+}
+
+function spellChoicesForLevelChoice(kind, cls, toLevel) {
+  const maximum = maxSpellLevelFor(cls, toLevel);
   const selected = new Set(character.spells.map(row => row.index).filter(Boolean));
   return allSpells
     .filter(item => !selected.has(item.index))
     .filter(item => spellMatchesClass(item, cls))
     .filter(item => kind === 0 ? item.level === 0 : item.level > 0 && item.level <= maximum)
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+}
+
+function handleLevelDialogInput(event) {
+  const plan = levelPlan;
+  if (!plan) return;
+  const target = event.target;
+  if (target.name === "levelTarget") {
+    plan.target = target.value;
+    plan.subclass = "";
+    renderLevelDialog();
+  } else if (target.id === "levelNewClass") {
+    plan.newClassId = target.value;
+    renderLevelDialog();
+  } else if (target.id === "levelNewRules") {
+    plan.newRules = target.value;
+    renderLevelDialog();
+  } else if (target.id === "levelSubclassSelect") {
+    plan.subclass = target.value;
+    renderLevelSummaryAndChoices();
+  } else if (target.id === "levelHpInput") {
+    plan.hp = Number(target.value);
+  }
+}
+
+function handleLevelDialogClick(event) {
+  const button = event.target.closest("[data-level-hp]");
+  if (!button) return;
+  const target = levelTarget();
+  if (button.dataset.levelHp === "average") {
+    levelPlan.hp = averageHitDieGain(target.cls);
+    document.querySelector("#levelHpInput").value = levelPlan.hp;
+    return;
+  }
+  // Each level adds at least 1 HP even with a CON penalty (PHB p.15).
+  openRoll({
+    label: `Hit points for ${target.cls.name} ${target.to}`,
+    formula: `1d${target.cls.hitDie}${formatMod(mod("con") + sheetExtraHp())}`,
+    onResult: result => {
+      levelPlan.hp = Math.max(1, result.total);
+      document.querySelector("#levelHpInput").value = levelPlan.hp;
+      return `+${levelPlan.hp} HP goes into the level-up form.`;
+    }
+  });
+}
+
+// Validates the plan; rule breaks ask once, then the level is applied.
+function applyLevelUp(event) {
+  event.preventDefault();
+  const plan = levelPlan;
+  const target = plan && levelTarget();
+  if (!target) return;
+  const hp = Math.round(Number(document.querySelector("#levelHpInput")?.value || plan.hp));
+  if (!Number.isFinite(hp) || hp < 1) {
+    showToast(`<span class="toast-label">Hit points gained must be at least 1</span>`, { tone: "fumble" });
+    return;
+  }
+  plan.hp = hp;
+  if (target.key === "new" && !plan.prereqOk) {
+    const check = multiclassCheck(target.classId);
+    if (!check.met && !isRuleBroken("multiclass-prereq")) {
+      breakRule("multiclass-prereq", check.text, () => { plan.prereqOk = true; document.querySelector("#confirmLevelUp").click(); });
+      return;
+    }
+  }
+  const asiMode = document.querySelector('input[name="asiMode"]:checked')?.value || "";
+  const asiPicks = asiMode === "asi" ? [document.querySelector("#asiFirst").value, document.querySelector("#asiSecond").value] : [];
+  const feat = asiMode === "feat" ? document.querySelector("#asiFeat").value : "";
+  const featAbility = feat && FEAT_RULES[feat]?.ability ? document.querySelector("#asiFeatAbility").value : "";
+  const raised = [...asiPicks, featAbility].filter(Boolean);
+  const over = ABILITIES.find(([id]) => Number(character.abilities[id]) + raised.filter(item => item === id).length > 20);
+  if (over && !plan.capOk && !isRuleBroken("ability-cap")) {
+    breakRule("ability-cap", `${over[1]} would go above 20, the most an ability score can reach without magic.`, () => { plan.capOk = true; document.querySelector("#confirmLevelUp").click(); });
+    return;
+  }
+  if (feat && featBlocked(feat) && !plan.featOk && !isRuleBroken("feat-prereq")) {
+    breakRule("feat-prereq", `${feat} ${featBlocked(feat)}.`, () => { plan.featOk = true; document.querySelector("#confirmLevelUp").click(); });
+    return;
+  }
+  commitLevelUp(target, { hp, asiMode, raised, feat, featAbility });
+}
+
+function commitLevelUp(target, { hp, asiMode, raised, feat, featAbility }) {
+  const plan = levelPlan;
+  const conBefore = mod("con");
+  const levelsBefore = totalLevel();
+  const cap = isRuleBroken("ability-cap") || plan.capOk ? 30 : 20;
+  raised.forEach(ability => {
+    character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, cap);
+  });
+  let featNote = "";
+  if (asiMode === "asi") character.planner.feats.push("Ability Score Improvement");
+  if (feat) {
+    if (featAbility) {
+      featNote = ` +1 ${featAbility.toUpperCase()}`;
+      if (FEAT_RULES[feat]?.saveProficiency && !character.saveProficiencies.includes(featAbility)) {
+        character.saveProficiencies.push(featAbility);
+        featNote += `, ${featAbility.toUpperCase()} save proficiency`;
+      }
+    }
+    character.planner.feats.push(feat);
+    character.features = mergeLines(character.features, [`Feat (level ${levelsBefore + 1}): ${feat}${featNote ? ` (${featNote.trim()})` : ""}`]);
+  }
+  const official = plan.subclass ? officialSubclasses.find(item => item.index === plan.subclass) : null;
+  const cls = target.cls;
+  if (target.key === "primary") {
+    if (official) applyOfficialSubclass(official.index, false);
+    character.level += 1;
+    if (asiMode) character.asiAcknowledgedLevel = character.level;
+    rebuildClassFeatureLines(currentClass(), character.level);
+  } else {
+    let entry = character.multiclasses.find(item => item.id === target.key);
+    if (target.key === "new") {
+      entry = { id: crypto.randomUUID(), classId: target.classId, level: 0, subclassName: "", rules: target.rules };
+      character.multiclasses.push(entry);
+      const grant = MULTICLASS_PROFICIENCIES[target.classId] || {};
+      if (grant.armor) character.backgroundDetails.armor = mergeList(character.backgroundDetails.armor, grant.armor.split(", "));
+      if (grant.weapons) character.backgroundDetails.weapons = mergeList(character.backgroundDetails.weapons, grant.weapons.split(", "));
+      if (grant.tools) character.backgroundDetails.tools = mergeList(character.backgroundDetails.tools, grant.tools.split(", "));
+    }
+    entry.level += 1;
+    if (official) entry.subclassName = official.name;
+    const row = cls.table[entry.level - 1];
+    if (row?.features) character.features = mergeLines(character.features, [`${cls.name} ${entry.level}: ${row.features}`]);
+  }
+  // A higher CON modifier raises HP for every earlier level too; Tough adds 2 per earlier level when taken.
+  const retro = (mod("con") - conBefore) * levelsBefore + (feat === "Tough" ? 2 * levelsBefore : 0);
+  const gained = hp + retro;
+  character.maxHp = Number(character.maxHp || 0) + gained;
+  character.hp = Number(character.hp || 0) + gained;
+  character.hitDice = hitDiceText();
+  plan.choices.filter(row => row.index).forEach(row => {
+    const spell = allSpells.find(item => item.index === row.index);
+    row.level = spell?.level ?? 1;
+    row.prepared = isPreparedCaster(cls) && row.level > 0 && canPrepareAnother();
+    character.spells.push(row);
+  });
+  levelPlan = null;
+  document.querySelector("#levelDialog").close();
+  persistAndRender();
+  celebrate();
+  const grantSkills = target.key === "new" ? MULTICLASS_PROFICIENCIES[target.classId]?.skills : 0;
+  showToast(`<span class="toast-label">Level ${totalLevel()}: ${escapeHtml(cls.name)} ${target.to}</span><span>+${gained} max HP${retro ? ` (${formatMod(retro)} for earlier levels)` : ""}${asiMode === "asi" ? " · ability scores raised" : feat ? ` · ${escapeHtml(feat)}${escapeHtml(featNote)}` : ""}${grantSkills ? ` · pick ${grantSkills} ${escapeHtml(cls.name)} skill in Edit` : ""}</span>`, { tone: "crit", duration: 9000 });
 }
 
 let creationDraft = null;
@@ -1106,58 +1330,3 @@ function renderChecklist() {
   });
 }
 
-function applyLevelUp(event) {
-  event.preventDefault();
-  const nextLevel = character.level + 1;
-  if (pendingLevelSubclass) applyOfficialSubclass(pendingLevelSubclass, false);
-  const cls = currentClass();
-  const asiMode = document.querySelector('input[name="asiMode"]:checked')?.value;
-  const conBefore = mod("con");
-  const levelBefore = character.level;
-  let featNote = "";
-  if (asiMode === "asi") {
-    [document.querySelector("#asiFirst").value, document.querySelector("#asiSecond").value].forEach(ability => {
-      character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, 20);
-    });
-    character.planner.feats.push("Ability Score Improvement");
-  } else if (asiMode === "feat") {
-    const feat = document.querySelector("#asiFeat").value;
-    if (featBlocked(feat)) {
-      showToast(`<span class="toast-label">Can't take ${escapeHtml(feat)}</span><span>${escapeHtml(featBlocked(feat))}.</span>`, { tone: "fumble" });
-      return;
-    }
-    const rule = FEAT_RULES[feat] || {};
-    const ability = rule.ability ? document.querySelector("#asiFeatAbility")?.value : "";
-    if (ability) {
-      character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, 20);
-      featNote = ` +1 ${ability.toUpperCase()}`;
-      if (rule.saveProficiency && !character.saveProficiencies.includes(ability)) {
-        character.saveProficiencies.push(ability);
-        featNote += `, ${ability.toUpperCase()} save proficiency`;
-      }
-    }
-    character.planner.feats.push(feat);
-    character.features = mergeLines(character.features, [`Feat (level ${nextLevel}): ${feat}${featNote ? ` (${featNote.trim()})` : ""}`]);
-  }
-  if (asiMode) character.asiAcknowledgedLevel = nextLevel;
-  character.level = nextLevel;
-  // A higher CON modifier raises HP for every earlier level too; Tough adds 2 per earlier level when taken.
-  const retro = (mod("con") - conBefore) * levelBefore + (asiMode === "feat" && document.querySelector("#asiFeat").value === "Tough" ? 2 * levelBefore : 0);
-  const gained = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp() + retro;
-  character.maxHp = Number(character.maxHp || 0) + gained;
-  character.hp = Number(character.hp || 0) + gained;
-  character.hitDice = `${nextLevel}d${cls.hitDie}`;
-  const preparedCaster = ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula);
-  pendingLevelChoices.filter(row => row.index).forEach(row => {
-    const spell = allSpells.find(item => item.index === row.index);
-    row.level = spell?.level ?? 1;
-    row.prepared = preparedCaster && row.level > 0 && preparedSpellCount() < preparedLimitFor(cls, nextLevel);
-    character.spells.push(row);
-  });
-  rebuildClassFeatureLines(cls, nextLevel);
-  pendingLevelChoices = [];
-  pendingLevelSubclass = "";
-  document.querySelector("#levelDialog").close();
-  persistAndRender();
-  showToast(`<span class="toast-label">Level ${nextLevel}</span><span>+${gained} max HP${retro ? ` (${formatMod(retro)} for earlier levels)` : ""}${asiMode === "asi" ? " · ability scores raised" : asiMode === "feat" ? ` · feat recorded${escapeHtml(featNote)}` : ""}</span>`);
-}

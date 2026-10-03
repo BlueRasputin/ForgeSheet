@@ -43,8 +43,8 @@ function renderPartyDashboard() {
         <strong>${escapeHtml(item.name || "Unnamed")}</strong>
         ${initiative !== null ? `<span class="party-init" title="Latest initiative roll">Init ${initiative}</span>` : ""}
       </div>
-      <span class="party-class">${escapeHtml(cls)} ${item.level || 1}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span>
-      <div class="party-hp"><b>${item.hp ?? "-"}</b>/${effectiveMaxHp(item) || "-"} HP · AC ${item.ac || "-"} · Passive ${passivePerception(item)}</div>
+      <span class="party-class">${escapeHtml(classLabel(item))}${item.subclassName ? ` · ${escapeHtml(item.subclassName)}` : ""}</span>
+      <div class="party-hp"><b>${escapeHtml(String(item.hp ?? "-"))}</b>/${effectiveMaxHp(item) || "-"} HP · AC ${escapeHtml(String(item.ac || "-"))} · Passive ${passivePerception(item)}</div>
       <div class="party-hp-bar" aria-hidden="true"><span style="width:${percent}%"></span></div>
       ${badges.length ? `<p class="party-badges">${badges.map(escapeHtml).join(" · ")}</p>` : ""}
       ${conditions.length ? `<p class="party-conditions">${escapeHtml(conditions.join(", "))}</p>` : ""}

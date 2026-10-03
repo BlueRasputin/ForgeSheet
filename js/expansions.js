@@ -129,7 +129,6 @@
 
   // Grants beyond ability scores, keyed by species name (same shape as data.js SPECIES_GRANTS).
   // Choices the app can't auto-pick (e.g. "two of these skills") go in `feature` as a reminder.
-  const elfWeapons = ["Longsword, shortsword, shortbow, longbow"];
   const tiefling = (cantrip, legacy) => ({ languages: ["Common", "Infernal"], cantrips: cantrip ? [cantrip] : [], feature: legacy });
   const aasimar = { languages: ["Common", "Celestial"], cantrips: ["light"], feature: "Healing Hands: as an action, touch a creature to restore hit points equal to your level, once per long rest." };
   const halfElf = extra => ({ languages: ["Common", "Elvish", "one extra language"], ...extra });

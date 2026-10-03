@@ -45,6 +45,11 @@ function castingShorthand(time) {
 function ensureSubclassSpells() {
   const grants = lookupBySubclass(SUBCLASS_SPELLS) || {};
   const entitled = new Set();
+  // Grant tiers give 1st- through 5th-level spells in order, so the level is known even before the spell list loads.
+  const tierLevel = {};
+  Object.keys(grants).map(Number).sort((a, b) => a - b).forEach((grantLevel, tier) => {
+    grants[grantLevel].forEach(index => { tierLevel[index] = tier + 1; });
+  });
   Object.entries(grants).forEach(([grantLevel, indexes]) => {
     if (character.level >= Number(grantLevel)) indexes.forEach(index => entitled.add(index));
   });
@@ -60,12 +65,11 @@ function ensureSubclassSpells() {
   const known = new Set(character.spells.map(row => row.index).filter(Boolean));
   entitled.forEach(index => {
     if (granted.has(index) && known.has(index)) return;
-    const spellInfo = allSpells.find(item => item.index === index);
-    if (!spellInfo) return;
+    const level = allSpells.find(item => item.index === index)?.level ?? tierLevel[index] ?? 1;
     granted.add(index);
     changed = true;
     if (!known.has(index)) {
-      character.spells.push({ id: crypto.randomUUID(), index, level: spellInfo.level, prepared: spellInfo.level > 0, auto: true });
+      character.spells.push({ id: crypto.randomUUID(), index, level, prepared: level > 0, auto: true });
       known.add(index);
     }
   });
@@ -153,7 +157,7 @@ function renderCombatSpells(cls) {
 }
 
 function renderSlots(cls) {
-  const slots = spellSlotsFor(cls, character.level);
+  const slots = characterSpellSlots();
   const slotGrid = document.querySelector("#slotGrid");
   if (!slots.length) {
     slotGrid.innerHTML = `<div class="slot"><span>Slots</span><strong>-</strong></div>`;
@@ -183,7 +187,7 @@ function handleSlotUsageClick(event) {
   if (!button) return;
   const level = button.dataset.slotLevel;
   const delta = Number(button.dataset.slotDelta);
-  const max = spellSlotsFor(currentClass(), character.level)[Number(level) - 1] || 0;
+  const max = characterSpellSlots()[Number(level) - 1] || 0;
   const currentUsed = Number(character.spellSlotUsage[level] || 0);
   character.spellSlotUsage[level] = clamp(currentUsed - delta, Math.min(0, currentUsed), max);
   persistAndRender();
@@ -266,7 +270,7 @@ function castSpellRow(row, confirmed = {}, overrideLevel = null) {
     if (uses) grantingItem.grantUsed = Number(grantingItem.grantUsed || 0) + 1;
     status = uses ? `${uses - grantingItem.grantUsed} of ${uses} ${grantingItem.name} use${uses === 1 ? "" : "s"} left` : `From ${grantingItem.name}`;
   } else if (baseLevel > 0) {
-    const slots = spellSlotsFor(cls, character.level);
+    const slots = characterSpellSlots();
     castLevel = overrideLevel || Number(row.castLevel || baseLevel);
     if (slotRemaining(castLevel, slots[castLevel - 1] || 0) <= 0) {
       const open = nearestOpenSlot(baseLevel, castLevel, slots);
@@ -349,14 +353,16 @@ function nearestOpenSlot(baseLevel, from, slots) {
 }
 
 // Each attack (beam, ray) is its own d20 with its own damage button; crits double the dice.
-function rollSpellAttack(name, effect, confirmed = false) {
-  if (!confirmed && blockedByIncapacitation(() => rollSpellAttack(name, effect, true))) return;
+function rollSpellAttack(name, effect, confirmed = false, index = 1) {
+  if (!confirmed && blockedByIncapacitation(() => rollSpellAttack(name, effect, true, index))) return;
   const times = Math.max(1, Number(effect.attack.times || 1));
-  for (let index = 1; index <= times; index += 1) {
-    const { mode, note } = rollModeFor("attack");
-    const label = `${name} spell attack${times > 1 ? ` ${index} of ${times}` : ""}${note ? ` (${note})` : ""}`;
-    rollFromInput(label, `1d20${formatMod(effect.attack.bonus)}`, mode, result => damageFollowUps(name, effect.perHit, naturalD20(result)));
-  }
+  openRoll({
+    label: `${name} spell attack${times > 1 ? ` ${index} of ${times}` : ""}`,
+    formula: `1d20${formatMod(effect.attack.bonus)}`,
+    kind: "attack",
+    actions: result => damageFollowUps(name, effect.perHit, naturalD20(result)),
+    carry: index < times ? [{ label: `Next attack (${index + 1} of ${times})`, run: () => rollSpellAttack(name, effect, true, index + 1) }] : []
+  });
 }
 
 function rollSpellEffect(name, effect) {
@@ -432,7 +438,7 @@ function spellEffectRoll(row, castLevel) {
     if (Number(perSlot[2]) === sides) count += Number(perSlot[1]) * steps;
     else if (second && Number(perSlot[2]) === second.sides) second = { ...second, count: second.count + Number(perSlot[1]) * steps };
   }
-  const tiers = [5, 11, 17].filter(level => character.level >= level).length;
+  const tiers = [5, 11, 17].filter(level => totalLevel() >= level).length;
   let beams = 0;
   if (baseLevel === 0 && /more than one beam/i.test(`${text} ${higher}`)) beams = 1 + tiers;
   else if (baseLevel === 0 && /5th level|5th\/11th|damage scales/i.test(`${text} ${higher}`)) count *= 1 + tiers;
@@ -567,6 +573,11 @@ function renderSpellRows() {
         if (row.index) loadSpellDetail(row.index);
       });
       prepared.addEventListener("change", () => {
+        if (prepared.checked && !canPrepareAnother()) {
+          prepared.checked = false;
+          gatePrepare(() => { row.prepared = true; persistAndRender(); });
+          return;
+        }
         row.prepared = prepared.checked;
         persistAndRender();
       });
@@ -620,7 +631,7 @@ function spellLevelForRow(row) {
 
 function visibleSpellLevels() {
   const selectedLevels = character.spells.map(spellLevelForRow);
-  const maxKnownLevel = Math.max(1, maxSpellLevelFor(currentClass(), character.level), ...selectedLevels);
+  const maxKnownLevel = Math.max(1, characterMaxSpellLevel(), ...selectedLevels);
   const levels = new Set([0, ...Array.from({ length: Math.min(9, maxKnownLevel) }, (_, index) => index + 1), ...selectedLevels]);
   return Array.from(levels).filter(level => level >= 0 && level <= 9).sort((a, b) => a - b);
 }
@@ -754,7 +765,7 @@ function spellCastControls(row, baseLevel = spellLevelForRow(row)) {
       </div>
     `;
   }
-  const slots = spellSlotsFor(currentClass(), character.level);
+  const slots = characterSpellSlots();
   const options = castLevelOptions(baseLevel, slots);
   const selected = normalizeCastLevel(row, baseLevel, options);
   const remaining = slotRemaining(selected, slots[selected - 1] || 0);
@@ -771,7 +782,7 @@ function spellCastControls(row, baseLevel = spellLevelForRow(row)) {
   `;
 }
 
-function castLevelOptions(baseLevel, slots = spellSlotsFor(currentClass(), character.level)) {
+function castLevelOptions(baseLevel, slots = characterSpellSlots()) {
   const options = slots
     .map((count, index) => ({ level: index + 1, count }))
     .filter(item => item.level >= baseLevel && item.count > 0)
@@ -906,7 +917,7 @@ function quickCastState(row, level) {
       ? { label: "Ritual", disabled: false, title: "Unprepared: cast it as a ritual from your spellbook" }
       : { label: "Cast", disabled: true, title: "Prepare this spell to cast it" };
   }
-  const slots = spellSlotsFor(cls, character.level);
+  const slots = characterSpellSlots();
   const options = castLevelOptions(level, slots);
   const selected = options.includes(Number(row.castLevel || level)) ? Number(row.castLevel || level) : options[0];
   const remaining = slotRemaining(selected, slots[selected - 1] || 0);
@@ -919,9 +930,44 @@ function quickCastState(row, level) {
     : { label: `Cast ${ordinal(selected)}`, disabled: true, title: "No slots left at this level or higher" };
 }
 
+// Prepared casters (cleric, druid, paladin, wizard, artificer) prepare up to a class limit after each long rest.
+function isPreparedCaster(cls = currentClass()) {
+  return ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula);
+}
+
+function canPrepareAnother() {
+  return !isPreparedCaster() || isRuleBroken("prepared-limit") || preparedSpellCount() < preparedLimitFor(currentClass());
+}
+
+function gatePrepare(proceed) {
+  const cls = currentClass();
+  const limit = preparedLimitFor(cls);
+  const formula = cls.preparedFormula === "levelPlusMod" ? `${cls.name} level + ${String(cls.spellAbility).toUpperCase()} modifier` : `half your ${cls.name} level + ${String(cls.spellAbility).toUpperCase()} modifier`;
+  breakRule("prepared-limit", `You're already at your maximum of ${limit} prepared spells (${formula}). Always-prepared spells from your subclass don't count toward it.`, proceed);
+}
+
+// Adding a spell row past the cantrip or spells-known cap asks first.
+function gateNewSpellRow(level, proceed) {
+  const cls = currentClass();
+  if (level === 0) {
+    const cap = cantripCap(cls);
+    const chosen = character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) === 0 && !spellAlwaysPrepared(row)).length;
+    if (cap && chosen >= cap) return breakRule("cantrip-limit", `You already know ${chosen} of the ${cap} cantrips a level ${character.level} ${cls.name} gets.`, proceed);
+  } else if (cls.preparedFormula === "known") {
+    const cap = knownSpellCap(cls);
+    if (cap !== null && knownSpellCount() >= cap) return breakRule("known-limit", `You already know ${knownSpellCount()} of the ${cap} spells a level ${character.level} ${cls.name} knows. Swap one out on level up instead, or allow extra spells.`, proceed);
+  }
+  proceed();
+  return true;
+}
+
 function addSuggestedSpell(index) {
   const spell = allSpells.find(item => item.index === index);
   if (!spell) return;
+  if (!canPrepareAnother() && !character.spells.find(row => row.index === index && row.prepared)) {
+    gatePrepare(() => addSuggestedSpell(index));
+    return;
+  }
   const existing = character.spells.find(row => row.index === index);
   if (existing) existing.prepared = true;
   else character.spells.push({ id: crypto.randomUUID(), index, level: spell.level, prepared: true });

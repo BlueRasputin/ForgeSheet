@@ -98,9 +98,9 @@ function renderIdentityDisplay() {
   lock.classList.toggle("primary", !character.identityLocked);
   lock.title = character.identityLocked ? "Edit details, scores, proficiencies, actions and trackers" : "Back to play mode";
   const classLine = [
-    `Level ${character.level}`,
+    `Level ${totalLevel()}`,
     character.species,
-    getClasses()[character.classId]?.name || ""
+    character.multiclasses?.length ? `(${classLabel()})` : getClasses()[character.classId]?.name || ""
   ].filter(Boolean).join(" ");
   const detailLine = [
     speciesSize(character.species),
@@ -108,9 +108,11 @@ function renderIdentityDisplay() {
     character.background,
     character.alignment
   ].filter(Boolean).join(", ");
+  const editions = classEntries().map(entry => `<span class="edition-badge" data-edition="${entry.rules}" title="${escapeHtml(getClasses()[entry.classId]?.name || "")} uses the ${entry.rules} rules">${classEntries().length > 1 ? `${escapeHtml(getClasses()[entry.classId]?.name || "")} ` : ""}${entry.rules}</span>`).join("");
   document.querySelector("#identityDisplay").innerHTML = `
     <strong>${escapeHtml(character.name || "Unnamed Character")}</strong>
     <span>${escapeHtml(classLine)}</span>
+    <span class="edition-row">${editions}</span>
     ${detailLine ? `<em>${escapeHtml(detailLine)}</em>` : ""}
   `;
 }
@@ -304,17 +306,26 @@ function handleAbilityInput(event) {
   const before = mod(ability);
   character.abilities[ability] = clamp(Number(event.target.value), 1, 30);
   // CON changes HP at every level you have, not just the next one (PHB p.177).
-  const change = ability === "con" ? (mod("con") - before) * character.level : 0;
+  const levels = totalLevel();
+  const change = ability === "con" ? (mod("con") - before) * levels : 0;
   if (change) {
-    character.maxHp = Math.max(character.level, Number(character.maxHp || 0) + change);
+    character.maxHp = Math.max(levels, Number(character.maxHp || 0) + change);
     character.hp = clamp(Number(character.hp || 0) + change, 0, character.maxHp);
   }
   persistAndRender();
-  if (change) showToast(`<span class="toast-label">Constitution ${formatMod(mod("con"))}</span><span>Max HP ${formatMod(change)} (${formatMod(change / character.level)} for each of your ${character.level} levels).</span>`);
+  if (change) showToast(`<span class="toast-label">Constitution ${formatMod(mod("con"))}</span><span>Max HP ${formatMod(change)} (${formatMod(change / levels)} for each of your ${levels} levels).</span>`);
 }
 
 function saveBonus(ability) {
-  return mod(ability) + (character.saveProficiencies.includes(ability) ? proficiencyBonus() : 0) + itemSaveBonus() + auraOfProtection();
+  return mod(ability) + (saveProficient(ability) ? proficiencyBonus() : 0) + itemSaveBonus() + auraOfProtection();
+}
+
+// Diamond Soul (monk 14): every save. Slippery Mind (rogue 15): Wisdom saves.
+function saveProficient(ability) {
+  const id = currentClass().id;
+  return character.saveProficiencies.includes(ability)
+    || (id === "monk" && character.level >= 14)
+    || (id === "rogue" && character.level >= 15 && ability === "wis");
 }
 
 // "+1 AC and saving throws" (Cloak/Ring of Protection) on equipped, attuned items.

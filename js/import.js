@@ -23,7 +23,14 @@ async function handlePdfImport(event) {
   status.textContent = `Reading ${file.name}...`;
   document.querySelector("#applySheetImport").disabled = true;
   try {
-    const text = await extractTextFromPdf(file);
+    const pdf = await openPdf(file);
+    const embedded = await embeddedForgeSheetData(pdf);
+    if (embedded) {
+      document.querySelector("#importDialog").close();
+      applyImportedData(embedded);
+      return;
+    }
+    const text = await extractTextFromPdf(pdf);
     if (!text.trim()) {
       status.textContent = "No selectable text found. This may be a scanned/image-only PDF.";
       return;
@@ -38,11 +45,14 @@ async function handlePdfImport(event) {
   }
 }
 
-async function extractTextFromPdf(file) {
+async function openPdf(file) {
   const pdfjs = await import(PDFJS_URL);
   pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
   const data = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data }).promise;
+  return pdfjs.getDocument({ data }).promise;
+}
+
+async function extractTextFromPdf(pdf) {
   const pages = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);

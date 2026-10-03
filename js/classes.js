@@ -282,6 +282,73 @@ function isPactCaster(cls = currentClass()) {
   return cls.casterType === "warlock" || cls.casterType === "pactThird";
 }
 
+// Multiclassing: character.level is the primary class's level; extra classes live in character.multiclasses.
+function totalLevel(source = character) {
+  return Number(source.level || 1) + (source.multiclasses || []).reduce((sum, entry) => sum + Number(entry.level || 0), 0);
+}
+
+function classEntries(source = character) {
+  return [
+    { key: "primary", classId: source.classId, level: Number(source.level || 1), subclassName: source.subclassName, rules: source.rulesVersion || "2014" },
+    ...(source.multiclasses || []).map(entry => ({ key: entry.id, ...entry, rules: entry.rules || "2014" }))
+  ];
+}
+
+// The class definition for any class entry, with subclass casting (Eldritch Knight and similar) applied.
+function entryClass(entry) {
+  if (entry.key === "primary") return currentClass();
+  const cls = getClasses()[entry.classId] || BUILT_IN_CLASSES.fighter;
+  const casting = cls.casterType === "none" ? lookupBySubclass(SUBCLASS_CASTING, entry.subclassName) : null;
+  return casting ? { ...cls, ...casting } : cls;
+}
+
+function classLabel(source = character) {
+  const entries = classEntries(source);
+  const name = id => getClasses()[id]?.name || id;
+  if (entries.length === 1) return `${name(source.classId)} ${source.level || 1}`;
+  return entries.map(entry => `${name(entry.classId)} ${entry.level}`).join(" / ");
+}
+
+// PHB p.164: add full caster levels, half of paladin/ranger levels, a third of EK/AT levels (artificer rounds up).
+const MULTICLASS_CASTER_SHARE = {
+  full: level => level,
+  halfRoundDown: level => Math.floor(level / 2),
+  halfRoundUp: level => Math.ceil(level / 2),
+  third: level => Math.floor(level / 3)
+};
+
+function slotCasterEntries() {
+  return classEntries().map(entry => ({ entry, cls: entryClass(entry) })).filter(({ cls }) => MULTICLASS_CASTER_SHARE[cls.casterType]);
+}
+
+// Pact Magic fills the slot grid unless the character also has Spellcasting slots; then it's tracked as a resource.
+function slotsArePact() {
+  if (!character.multiclasses?.length) return isPactCaster();
+  return !slotCasterEntries().length && classEntries().some(entry => isPactCaster(entryClass(entry)));
+}
+
+function characterSpellSlots() {
+  if (!character.multiclasses?.length) return spellSlotsFor(currentClass(), character.level);
+  const casters = slotCasterEntries();
+  if (!casters.length) {
+    const pact = classEntries().find(entry => isPactCaster(entryClass(entry)));
+    return pact ? spellSlotsFor(entryClass(pact), pact.level) : [];
+  }
+  if (casters.length === 1) return spellSlotsFor(casters[0].cls, casters[0].entry.level);
+  const casterLevel = casters.reduce((sum, { cls, entry }) => sum + MULTICLASS_CASTER_SHARE[cls.casterType](entry.level), 0);
+  return FULL_CASTER_SLOTS[casterLevel] || [];
+}
+
+// Pact slots from warlock levels when the slot grid already belongs to Spellcasting (multiclass only).
+function multiclassPactTracker() {
+  if (!character.multiclasses?.length || slotsArePact()) return null;
+  const pact = classEntries().find(entry => isPactCaster(entryClass(entry)));
+  if (!pact) return null;
+  const slots = spellSlotsFor(entryClass(pact), pact.level);
+  const level = slots.length;
+  return level ? [`Pact Magic slots (${ordinal(level)})`, slots[level - 1], "short"] : null;
+}
+
 function knownSpellCap(cls = currentClass(), level = character.level) {
   const table = cls.knownTable || KNOWN_SPELLS[cls.id];
   return table ? table[level - 1] || 0 : null;
@@ -308,6 +375,21 @@ function maxSpellLevelFor(cls, level) {
   // Mystic Arcanum: warlocks pick a 6th/7th/8th/9th-level spell at 11/13/15/17.
   const arcanum = cls.id === "warlock" ? (level >= 17 ? 9 : level >= 15 ? 8 : level >= 13 ? 7 : level >= 11 ? 6 : 0) : 0;
   return Math.max(slotted, arcanum);
+}
+
+// "5d8 + 2d10": one group per hit die size across all classes.
+function hitDiceText(source = character) {
+  const counts = {};
+  classEntries(source).forEach(entry => {
+    const die = (getClasses()[entry.classId] || BUILT_IN_CLASSES.fighter).hitDie;
+    counts[die] = (counts[die] || 0) + Number(entry.level || 0);
+  });
+  return Object.entries(counts).sort(([a], [b]) => b - a).map(([die, count]) => `${count}d${die}`).join(" + ");
+}
+
+function characterMaxSpellLevel() {
+  const slotted = characterSpellSlots().reduce((highest, count, index) => count > 0 ? index + 1 : highest, 0);
+  return Math.max(slotted, ...classEntries().map(entry => maxSpellLevelFor(entryClass(entry), entry.level)));
 }
 
 function asiLevelsFor(cls = currentClass()) {
@@ -407,9 +489,9 @@ function classTableHtml(cls) {
   const rows = cls.table.map(row => {
     const slots = spellSlotsFor(cls, row.level);
     return `<tr class="${row.level === character.level ? "current" : ""}">
-      <td>${row.level}</td>
+      <td>${Number(row.level)}</td>
       <td>${escapeHtml(row.features || "-")}</td>
-      ${caster ? `<td>${row.newSpells || "-"}</td><td>${row.cantrips || "-"}</td><td>${slots.some(Boolean) ? slots.join(" / ") : "-"}</td><td>${preparedLimitFor(cls, row.level) || "-"}</td>` : ""}
+      ${caster ? `<td>${Number(row.newSpells) || "-"}</td><td>${Number(row.cantrips) || "-"}</td><td>${slots.some(Boolean) ? slots.join(" / ") : "-"}</td><td>${preparedLimitFor(cls, row.level) || "-"}</td>` : ""}
     </tr>`;
   }).join("");
   return `
@@ -478,7 +560,7 @@ function renderOfficialSubclassControls() {
     ? matching.length ? "Choose SRD subclass..." : `No SRD ${currentClass().name} subclasses`
     : "SRD subclasses unavailable";
   select.innerHTML = `<option value="">${placeholder}</option>` + options
-    .map(item => `<option value="${item.index}">${item.name}${matching.length ? "" : ` (${item.className})`}</option>`)
+    .map(item => `<option value="${escapeHtml(item.index)}">${escapeHtml(item.name)}${matching.length ? "" : ` (${escapeHtml(item.className)})`}</option>`)
     .join("");
   select.disabled = !officialSubclasses.length;
   select.value = officialSubclasses.some(item => item.index === character.subclass.officialIndex)

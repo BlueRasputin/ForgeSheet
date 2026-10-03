@@ -101,8 +101,13 @@ function normalizeCharacter(value) {
   return {
     ...base,
     ...stored,
-    sheetId: stored.sheetId || base.sheetId,
-    maxHp: stored.maxHp || stored.hp || base.maxHp,
+    // Synced and imported sheets are untrusted: numbers must be numbers and ids plain ids before they reach the page.
+    sheetId: /^[\w-]{1,64}$/.test(String(stored.sheetId || "")) ? stored.sheetId : base.sheetId,
+    level: clamp(Math.round(Number(stored.level) || 1), 1, 20),
+    hp: Number(stored.hp ?? base.hp) || 0,
+    maxHp: Number(stored.maxHp || stored.hp || base.maxHp) || 1,
+    ac: Number(stored.ac ?? base.ac) || 10,
+    speed: Number(stored.speed ?? base.speed) || 0,
     tempHp: clamp(Number(stored.tempHp || 0), 0, 999),
     inspiration: clamp(Number(stored.inspiration || 0), 0, 99),
     identityLocked: stored.identityLocked !== false,
@@ -135,7 +140,16 @@ function normalizeCharacter(value) {
     conditions: stored.conditions || base.conditions,
     exhaustion: Number(stored.exhaustion || 0),
     actions: stored.actions || base.actions,
-    spellSlotUsage: stored.spellSlotUsage || base.spellSlotUsage
+    spellSlotUsage: stored.spellSlotUsage || base.spellSlotUsage,
+    homebrewRules: stored.homebrewRules || {},
+    multiclasses: (Array.isArray(stored.multiclasses) ? stored.multiclasses : []).map(entry => ({
+      id: /^[\w-]{1,64}$/.test(String(entry.id || "")) ? entry.id : crypto.randomUUID(),
+      classId: String(entry.classId || "fighter"),
+      level: clamp(Math.round(Number(entry.level) || 1), 1, 20),
+      subclassName: String(entry.subclassName || ""),
+      rules: entry.rules === "2024" ? "2024" : "2014"
+    })),
+    rulesVersion: stored.rulesVersion === "2024" ? "2024" : "2014"
   };
 }
 
@@ -295,40 +309,50 @@ function resetCharacter() {
   });
 }
 
-function exportCharacterJson() {
-  const blob = new Blob([JSON.stringify({ character, characterLibrary }, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+// all: every character on this device (a backup); otherwise just the open character.
+function exportCharacterJson(all = false) {
+  const payload = all ? { character, characterLibrary } : { character };
+  downloadFile(`${slug(all ? "forgesheet-backup" : character.name || "character")}.json`, JSON.stringify(payload, null, 2), "application/json");
+}
+
+function downloadFile(name, content, type) {
+  const url = URL.createObjectURL(content instanceof Blob ? content : new Blob([content], { type }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${slug(character.name || "character")}-forgesheet.json`;
+  link.download = name;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function importCharacterJson(event) {
   const file = event.target.files?.[0];
+  event.target.value = "";
   if (!file) return;
-  let data;
   try {
-    data = JSON.parse(await file.text());
+    applyImportedData(JSON.parse(await file.text()));
   } catch {
     showToast(`<span class="toast-label">Couldn't import ${escapeHtml(file.name)}</span><span>It isn't valid ForgeSheet JSON.</span>`, { tone: "fumble" });
-    event.target.value = "";
-    return;
   }
-  if (data.characterLibrary) {
-    characterLibrary = Object.fromEntries(Object.entries(data.characterLibrary).map(([id, item]) => [id, normalizeCharacter(item)]));
-  }
-  if (data.character) character = normalizeCharacter(data.character);
-  else if (data.name || data.classId) character = normalizeCharacter(data);
+}
+
+// Shared by JSON and ForgeSheet PDF imports. Imported characters join the library; nothing local is dropped.
+function applyImportedData(data) {
+  const imported = data.characterLibrary ? Object.values(data.characterLibrary) : [];
+  const main = data.character || (data.name || data.classId ? data : null);
+  if (!main && !imported.length) throw new Error("no character in file");
+  imported.forEach(item => {
+    const next = normalizeCharacter(item);
+    characterLibrary[next.sheetId] = next;
+  });
+  if (main) character = normalizeCharacter(main);
   persistAndRender();
-  event.target.value = "";
+  showToast(`<span class="toast-label">Imported ${escapeHtml(main?.name || `${imported.length} characters`)}</span>`);
 }
 
 function renderCharacterManager() {
   const select = document.querySelector("#characterLibrarySelect");
   const characters = Object.values(characterLibrary).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  select.innerHTML = characters.map(item => `<option value="${item.sheetId}">${escapeHtml(item.name || "Unnamed")} - ${escapeHtml(getClasses()[item.classId]?.name || "Class")} ${item.level || 1}</option>`).join("");
+  select.innerHTML = characters.map(item => `<option value="${item.sheetId}">${escapeHtml(item.name || "Unnamed")} - ${escapeHtml(classLabel(item))}</option>`).join("");
   select.value = character.sheetId;
   document.querySelector("#autosaveStatus").textContent = `Autosaved ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   document.querySelector("#themeSelect").value = document.body.dataset.theme;
@@ -383,7 +407,7 @@ function mod(ability) {
   return Math.floor(((character.abilities[ability] || 10) - 10) / 2);
 }
 
-function proficiencyBonus(level = character.level) {
+function proficiencyBonus(level = totalLevel()) {
   return Math.ceil(level / 4) + 1;
 }
 
@@ -465,7 +489,7 @@ function passivePerception(source = character) {
   const wisMod = Math.floor((wisdom - 10) / 2);
   const proficient = source.proficientSkills?.includes("perception");
   const multiplier = source.expertSkills?.includes("perception") ? 2 : 1;
-  const prof = proficiencyBonus(source.level);
+  const prof = proficiencyBonus(totalLevel(source));
   const jack = !proficient && source.classId === "bard" && source.level >= 2 ? Math.floor(prof / 2) : 0;
   return 10 + wisMod + (proficient ? prof * multiplier : jack) + (hasFeat("Observant", source) ? 5 : 0);
 }

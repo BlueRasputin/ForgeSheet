@@ -11,6 +11,7 @@ function init() {
   const savedTheme = localStorage.getItem(THEME_KEY);
   const systemTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "beyond";
   document.body.dataset.theme = THEMES.includes(savedTheme) ? savedTheme : systemTheme;
+  applyAppearance();
   applyCustomBackground();
   ensureCharacterInLibrary();
   buildStaticControls();
@@ -89,6 +90,14 @@ function bindEvents() {
     "armorTrainingInput", "weaponTrainingInput"
   ];
   watched.forEach(id => document.querySelector(`#${id}`).addEventListener("input", handleInput));
+  document.querySelector("#showAllSpells").addEventListener("change", event => {
+    if (!event.target.checked || isRuleBroken("off-list-spells")) return;
+    event.target.checked = false;
+    breakRule("off-list-spells", "Spells from other classes' lists aren't normally available to you (bards get some through Magical Secrets). Show every spell anyway?", () => {
+      event.target.checked = true;
+      renderAll();
+    });
+  });
   document.addEventListener("focusout", event => {
     if (event.target.matches?.('input[type="number"]')) renderAll();
   });
@@ -188,12 +197,6 @@ function bindEvents() {
   });
   const conditionsTile = document.querySelector("#conditionsTile");
   conditionsTile.addEventListener("click", () => goToTarget("#conditionGrid"));
-  conditionsTile.addEventListener("keydown", event => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      goToTarget("#conditionGrid");
-    }
-  });
   document.querySelector("#dyingPrompt").addEventListener("click", event => {
     if (event.target.closest("[data-dying-roll]")) rollDeathSave();
   });
@@ -201,12 +204,14 @@ function bindEvents() {
     const button = event.target.closest("[data-add-spell-level]");
     if (button) {
       const level = Number(button.dataset.addSpellLevel);
-      const id = crypto.randomUUID();
-      character.spells.push({ id, index: "", level, prepared: level > 0 && preparedSpellCount() < preparedLimitFor(currentClass()) });
-      persistAndRender();
-      const select = document.querySelector(`[data-spell-id="${id}"] .spell-select`);
-      select?.scrollIntoView({ block: "center" });
-      select?.focus();
+      gateNewSpellRow(level, () => {
+        const id = crypto.randomUUID();
+        character.spells.push({ id, index: "", level, prepared: level > 0 && canPrepareAnother() });
+        persistAndRender();
+        const select = document.querySelector(`[data-spell-id="${id}"] .spell-select`);
+        select?.scrollIntoView({ block: "center" });
+        select?.focus();
+      });
       return;
     }
     handleSpellCastClick(event);
@@ -253,13 +258,12 @@ function bindEvents() {
   document.querySelector("#duplicateCharacterButton").addEventListener("click", duplicateCharacter);
   document.querySelector("#deleteCharacterButton").addEventListener("click", deleteCharacter);
   document.querySelector("#characterLibrarySelect").addEventListener("change", switchCharacter);
-  document.querySelector("#exportJsonButton").addEventListener("click", exportCharacterJson);
+  document.querySelector("#exportJsonButton").addEventListener("click", () => exportCharacterJson(true));
   document.querySelector("#printSheetButton").addEventListener("click", () => window.print());
   window.addEventListener("beforeprint", preparePrintLayout);
   window.addEventListener("afterprint", resetPrintLayout);
   document.querySelector("#importJsonButton").addEventListener("click", () => document.querySelector("#jsonImportInput").click());
   document.querySelector("#jsonImportInput").addEventListener("change", importCharacterJson);
-  document.querySelector("#themeSelect").addEventListener("input", handleThemeSelect);
   document.querySelector("#builderWizard").addEventListener("click", handleBuilderWizardClick);
   document.querySelector("#applyBackgroundPreset").addEventListener("click", applyBackgroundPreset);
   document.querySelector("#generatePersonalityButton").addEventListener("click", generatePersonality);
@@ -273,11 +277,11 @@ function bindEvents() {
   document.querySelector("#parseSheetImport").addEventListener("click", parseImportDialogText);
   document.querySelector("#applySheetImport").addEventListener("click", applyPendingImport);
   document.querySelector("#levelUpButton").addEventListener("click", openLevelDialog);
-  document.querySelector("#levelSubclass").addEventListener("change", event => {
-    if (event.target.id !== "levelSubclassSelect") return;
-    pendingLevelSubclass = event.target.value;
-    renderLevelSummaryAndChoices();
+  document.querySelector("#levelDialog").addEventListener("change", handleLevelDialogInput);
+  document.querySelector("#levelDialog").addEventListener("input", event => {
+    if (event.target.id === "levelHpInput") handleLevelDialogInput(event);
   });
+  document.querySelector("#levelDialog").addEventListener("click", handleLevelDialogClick);
   document.querySelector("#checklistButton").addEventListener("click", () => document.querySelector("#checklistDialog").showModal());
   document.querySelector("#checklistBody").addEventListener("click", event => {
     const button = event.target.closest("[data-checklist-tab]");
@@ -295,6 +299,36 @@ function bindEvents() {
     if (event.target.closest("[data-undo-rest]")) undoLastRest();
   });
   document.querySelector("#rollDiceButton").addEventListener("click", () => rollFromInput());
+  document.querySelector("#rollFormula").addEventListener("keydown", event => {
+    if (event.key === "Enter") rollFromInput();
+  });
+  document.querySelector(".dice-picker").addEventListener("click", handleDiePicker);
+  document.querySelector("#turnGuide").addEventListener("click", event => {
+    if (!event.target.closest("[data-kind-jump]")) return;
+    actionKindFilter = "common";
+    renderActions();
+    goToTarget("#actionRows");
+  });
+  document.querySelector("#rollDialog").addEventListener("click", handleRollClick);
+  document.querySelector("#rollDialog").addEventListener("change", handleRollChange);
+  document.querySelector("#rollDialog").addEventListener("keydown", handleRollKeydown);
+  document.querySelector("#sideResources").addEventListener("click", handleSideResourceClick);
+  document.querySelector("#settingsButton").addEventListener("click", openSettings);
+  document.querySelector("#settingsDialog").addEventListener("change", handleSettingsInput);
+  document.querySelector("#settingsDialog").addEventListener("input", event => {
+    if (event.target.type === "color") handleSettingsInput(event);
+  });
+  document.querySelector("#settingsDialog").addEventListener("click", handleSettingsClick);
+  document.querySelector("#homebrewAccept").addEventListener("change", event => {
+    document.querySelector("#homebrewConfirm").disabled = !event.target.checked;
+  });
+  document.querySelector("#homebrewDialog").addEventListener("close", handleHomebrewClose);
+  document.querySelector("#exportPdfButton").addEventListener("click", exportCharacterPdf);
+  document.querySelector("#exportCharacterJsonButton").addEventListener("click", () => exportCharacterJson(false));
+  document.querySelector("#aiPromptButton").addEventListener("click", openAiPrompt);
+  document.querySelector("#aiPromptQuestion").addEventListener("input", renderAiPrompt);
+  document.querySelector("#copyAiPrompt").addEventListener("click", copyAiPrompt);
+  document.querySelector("#downloadAiPrompt").addEventListener("click", downloadAiPrompt);
   document.querySelector("#rollHistory").addEventListener("click", handleRollHistoryClick);
   document.querySelector("#addResourceButton").addEventListener("click", addResource);
   document.querySelector("#resourceRows").addEventListener("input", handleResourceInput);
@@ -320,7 +354,8 @@ function bindEvents() {
   document.querySelector("#clearConcentrationButton").addEventListener("click", clearConcentration);
   document.querySelector("#connectSync").addEventListener("click", connectCampaignSync);
   document.querySelector("#disconnectSync").addEventListener("click", disconnectCampaignSync);
-  document.querySelector("#googleSignIn").addEventListener("click", signInWithGoogle);
+  document.querySelector("#googleSignIn").addEventListener("click", () => signInWith("google"));
+  document.querySelector("#githubSignIn").addEventListener("click", () => signInWith("github"));
   document.querySelector("#googleSignOut").addEventListener("click", signOutOfAccount);
   document.querySelector("#generateCode").addEventListener("click", generateSessionCode);
   document.querySelector("#shareClassButton").addEventListener("click", shareCustomClass);
