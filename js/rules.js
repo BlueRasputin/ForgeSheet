@@ -12,9 +12,11 @@ function renderRulesReference() {
     .filter(option => option.name || option.notes)
     .map(option => rule("class", option.name || "Class option", `${option.kind || "custom"} · ${option.notes || "No notes yet."}`));
   const entries = [...RULES_REFERENCE, ...spellRules, ...moduleRules];
+  const rank = entry => entry.title.toLowerCase() === query ? 0 : entry.title.toLowerCase().startsWith(query) ? 1 : entry.title.toLowerCase().includes(query) ? 2 : 3;
   const filtered = entries
     .filter(entry => category === "all" || entry.category === category)
-    .filter(entry => !query || `${entry.title} ${entry.body} ${entry.category}`.toLowerCase().includes(query));
+    .filter(entry => !query || `${entry.title} ${entry.body} ${entry.category}`.toLowerCase().includes(query))
+    .sort((a, b) => (query ? rank(a) - rank(b) : 0));
   document.querySelector("#rulesCount").textContent = `${filtered.length} entr${filtered.length === 1 ? "y" : "ies"}`;
   document.querySelector("#rulesResults").innerHTML = filtered.length
     ? filtered.map(entry => `
@@ -32,6 +34,7 @@ function ruleCategoryLabel(category) {
     core: "Core",
     condition: "Condition",
     action: "Action",
+    combat: "Combat",
     rest: "Rest",
     equipment: "Equipment",
     class: "Class",

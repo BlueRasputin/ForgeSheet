@@ -41,6 +41,7 @@ function defaultCharacter() {
     deathSaveSuccesses: 0,
     deathSaveFailures: 0,
     saveProficiencies: ["con", "int"],
+    expertSkills: [],
     attacks: "",
     features: "",
     inventory: "",
@@ -79,10 +80,16 @@ function defaultCharacter() {
 let character = loadCharacter();
 let characterLibrary = loadCharacterLibrary();
 
+// With no active character saved yet, reopen the most recent library character instead of minting a new blank one.
 function loadCharacter() {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-    return normalizeCharacter(stored);
+    const library = JSON.parse(localStorage.getItem(CHARACTER_LIBRARY_KEY)) || {};
+    const tabSheet = sessionStorage.getItem(ACTIVE_TAB_SHEET_KEY);
+    if (tabSheet && library[tabSheet]) return normalizeCharacter(library[tabSheet]);
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (stored) return normalizeCharacter(stored);
+    const latest = Object.values(library).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    return normalizeCharacter(latest);
   } catch {
     return defaultCharacter();
   }
@@ -94,8 +101,13 @@ function normalizeCharacter(value) {
   return {
     ...base,
     ...stored,
-    sheetId: stored.sheetId || base.sheetId,
-    maxHp: stored.maxHp || stored.hp || base.maxHp,
+    // Synced and imported sheets are untrusted: numbers must be numbers and ids plain ids before they reach the page.
+    sheetId: /^[\w-]{1,64}$/.test(String(stored.sheetId || "")) ? stored.sheetId : base.sheetId,
+    level: clamp(Math.round(Number(stored.level) || 1), 1, 20),
+    hp: Number(stored.hp ?? base.hp) || 0,
+    maxHp: Number(stored.maxHp || stored.hp || base.maxHp) || 1,
+    ac: Number(stored.ac ?? base.ac) || 10,
+    speed: Number(stored.speed ?? base.speed) || 0,
     tempHp: clamp(Number(stored.tempHp || 0), 0, 999),
     inspiration: clamp(Number(stored.inspiration || 0), 0, 99),
     identityLocked: stored.identityLocked !== false,
@@ -128,7 +140,16 @@ function normalizeCharacter(value) {
     conditions: stored.conditions || base.conditions,
     exhaustion: Number(stored.exhaustion || 0),
     actions: stored.actions || base.actions,
-    spellSlotUsage: stored.spellSlotUsage || base.spellSlotUsage
+    spellSlotUsage: stored.spellSlotUsage || base.spellSlotUsage,
+    homebrewRules: stored.homebrewRules || {},
+    multiclasses: (Array.isArray(stored.multiclasses) ? stored.multiclasses : []).map(entry => ({
+      id: /^[\w-]{1,64}$/.test(String(entry.id || "")) ? entry.id : crypto.randomUUID(),
+      classId: String(entry.classId || "fighter"),
+      level: clamp(Math.round(Number(entry.level) || 1), 1, 20),
+      subclassName: String(entry.subclassName || ""),
+      rules: entry.rules === "2024" ? "2024" : "2014"
+    })),
+    rulesVersion: stored.rulesVersion === "2024" ? "2024" : "2014"
   };
 }
 
@@ -141,17 +162,78 @@ function loadCharacterLibrary() {
   }
 }
 
+const removedSheetIds = new Set();
+
+// Merge by character instead of overwriting the whole map, so two open tabs can't erase each other's characters.
 function saveCharacterLibrary() {
-  localStorage.setItem(CHARACTER_LIBRARY_KEY, JSON.stringify(characterLibrary));
+  let stored = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(CHARACTER_LIBRARY_KEY)) || {};
+  } catch {
+    stored = {};
+  }
+  removedSheetIds.forEach(id => delete stored[id]);
+  Object.entries(characterLibrary).forEach(([id, item]) => {
+    if (!stored[id] || (item.updatedAt || 0) >= (stored[id].updatedAt || 0)) stored[id] = item;
+  });
+  localStorage.setItem(CHARACTER_LIBRARY_KEY, JSON.stringify(stored));
+  Object.entries(stored).forEach(([id, item]) => {
+    if (characterLibrary[id] !== item) characterLibrary[id] = normalizeCharacter(item);
+  });
 }
+
+window.addEventListener("storage", event => {
+  if (event.key !== CHARACTER_LIBRARY_KEY) return;
+  characterLibrary = loadCharacterLibrary();
+  const latest = characterLibrary[character.sheetId];
+  if (latest && (latest.updatedAt || 0) > (character.updatedAt || 0)) {
+    character = latest;
+    renderAll();
+    return;
+  }
+  // Another character changed elsewhere: refresh the lists without rebuilding the sheet under the cursor.
+  if (!latest) characterLibrary[character.sheetId] = character;
+  renderCharacterManager();
+  renderPartyDashboard();
+  renderDmItemTools();
+});
+
+window.addEventListener("storage", event => {
+  if (event.key !== CUSTOM_CLASS_KEY) return;
+  customClasses = loadCustomClasses();
+  renderCharacterManager();
+  renderPartyDashboard();
+});
 
 function ensureCharacterInLibrary() {
   characterLibrary[character.sheetId] = structuredCloneSafe(character);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
   saveCharacterLibrary();
 }
 
 function persist() {
   character = normalizeCharacter(character);
+  character.updatedAt = Date.now();
+  try {
+    sessionStorage.setItem(ACTIVE_TAB_SHEET_KEY, character.sheetId);
+  } catch {
+    // sessionStorage can be unavailable (privacy modes); the shared key still works.
+  }
+  const down = Number(character.hp) <= 0;
+  if (!down) {
+    character.deathSaveSuccesses = 0;
+    character.deathSaveFailures = 0;
+  }
+  if (down && !character.conditions.includes("Unconscious")) {
+    character.conditions.push("Unconscious");
+    character.autoUnconscious = true;
+    // Falling unconscious also drops you prone; waking up does not stand you up.
+    if (!character.conditions.includes("Prone")) character.conditions.push("Prone");
+  }
+  if (!down && character.autoUnconscious) {
+    character.conditions = character.conditions.filter(condition => condition !== "Unconscious");
+    character.autoUnconscious = false;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
   characterLibrary[character.sheetId] = structuredCloneSafe(character);
   saveCharacterLibrary();
@@ -164,60 +246,113 @@ function persistAndRender() {
   renderAll();
 }
 
+// Max HP after temporary reductions (life drain and similar), which a long rest clears.
+// Exhaustion 4+ halves the maximum (PHB p.291).
+function effectiveMaxHp(target = character) {
+  const max = Math.max(0, Number(target.maxHp || 0) - Number(target.maxHpReduction || 0));
+  return Number(target.exhaustion || 0) >= 4 ? Math.floor(max / 2) : max;
+}
+
 function duplicateCharacter() {
   character = { ...structuredCloneSafe(character), sheetId: crypto.randomUUID(), name: `${character.name || "Character"} Copy` };
   persistAndRender();
 }
 
 function deleteCharacter() {
-  if (!confirm(`Delete ${character.name || "this character"} from the library?`)) return;
+  showToast(`<span class="toast-label">Delete ${escapeHtml(character.name || "this character")}?</span><span>This removes the character from the library and can't be undone.</span>`, {
+    tone: "fumble",
+    actions: [{ label: "Delete", run: confirmDeleteCharacter }],
+    duration: 10000
+  });
+}
+
+function confirmDeleteCharacter() {
+  const name = character.name || "Character";
   deleteCharacterFromCloud(character.sheetId);
+  removedSheetIds.add(character.sheetId);
   delete characterLibrary[character.sheetId];
   const remaining = Object.values(characterLibrary);
   character = remaining.length ? normalizeCharacter(remaining[0]) : defaultCharacter();
   persistAndRender();
+  showToast(`<span class="toast-label">${escapeHtml(name)} deleted</span>`);
+}
+
+// Opening a sheet only views it; nothing is saved (and no one else's sheet gets a new timestamp) until it changes.
+function switchToSheet(sheetId) {
+  const next = characterLibrary[sheetId];
+  if (!next) return;
+  character = normalizeCharacter(next);
+  try {
+    sessionStorage.setItem(ACTIVE_TAB_SHEET_KEY, sheetId);
+  } catch {
+    // Per-tab memory is optional.
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
+  renderAll();
+  showToast(`<span class="toast-label">Now viewing ${escapeHtml(character.name || "character")}</span>`);
 }
 
 function switchCharacter(event) {
-  const next = characterLibrary[event.target.value];
-  if (!next) return;
-  character = normalizeCharacter(next);
-  persistAndRender();
+  switchToSheet(event.target.value);
 }
 
 function resetCharacter() {
-  if (!confirm("Reset this character sheet?")) return;
-  character = defaultCharacter();
-  persistAndRender();
+  showToast(`<span class="toast-label">Start a blank sheet?</span><span>${escapeHtml(character.name || "The current character")} stays in the library.</span>`, {
+    actions: [{
+      label: "Blank sheet",
+      run: () => {
+        character = defaultCharacter();
+        persistAndRender();
+      }
+    }],
+    duration: 10000
+  });
 }
 
-function exportCharacterJson() {
-  const blob = new Blob([JSON.stringify({ character, characterLibrary }, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+// all: every character on this device (a backup); otherwise just the open character.
+function exportCharacterJson(all = false) {
+  const payload = all ? { character, characterLibrary } : { character };
+  downloadFile(`${slug(all ? "forgesheet-backup" : character.name || "character")}.json`, JSON.stringify(payload, null, 2), "application/json");
+}
+
+function downloadFile(name, content, type) {
+  const url = URL.createObjectURL(content instanceof Blob ? content : new Blob([content], { type }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${slug(character.name || "character")}-forgesheet.json`;
+  link.download = name;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function importCharacterJson(event) {
   const file = event.target.files?.[0];
-  if (!file) return;
-  const data = JSON.parse(await file.text());
-  if (data.characterLibrary) {
-    characterLibrary = Object.fromEntries(Object.entries(data.characterLibrary).map(([id, item]) => [id, normalizeCharacter(item)]));
-  }
-  if (data.character) character = normalizeCharacter(data.character);
-  else if (data.name || data.classId) character = normalizeCharacter(data);
-  persistAndRender();
   event.target.value = "";
+  if (!file) return;
+  try {
+    applyImportedData(JSON.parse(await file.text()));
+  } catch {
+    showToast(`<span class="toast-label">Couldn't import ${escapeHtml(file.name)}</span><span>It isn't valid ForgeSheet JSON.</span>`, { tone: "fumble" });
+  }
+}
+
+// Shared by JSON and ForgeSheet PDF imports. Imported characters join the library; nothing local is dropped.
+function applyImportedData(data) {
+  const imported = data.characterLibrary ? Object.values(data.characterLibrary) : [];
+  const main = data.character || (data.name || data.classId ? data : null);
+  if (!main && !imported.length) throw new Error("no character in file");
+  imported.forEach(item => {
+    const next = normalizeCharacter(item);
+    characterLibrary[next.sheetId] = next;
+  });
+  if (main) character = normalizeCharacter(main);
+  persistAndRender();
+  showToast(`<span class="toast-label">Imported ${escapeHtml(main?.name || `${imported.length} characters`)}</span>`);
 }
 
 function renderCharacterManager() {
   const select = document.querySelector("#characterLibrarySelect");
   const characters = Object.values(characterLibrary).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  select.innerHTML = characters.map(item => `<option value="${item.sheetId}">${escapeHtml(item.name || "Unnamed")} - ${escapeHtml(getClasses()[item.classId]?.name || "Class")} ${item.level || 1}</option>`).join("");
+  select.innerHTML = characters.map(item => `<option value="${item.sheetId}">${escapeHtml(item.name || "Unnamed")} - ${escapeHtml(classLabel(item))}</option>`).join("");
   select.value = character.sheetId;
   document.querySelector("#autosaveStatus").textContent = `Autosaved ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   document.querySelector("#themeSelect").value = document.body.dataset.theme;
@@ -233,7 +368,7 @@ function applyCustomBackground() {
   const data = localStorage.getItem(BACKGROUND_KEY);
   document.body.classList.toggle("custom-bg", Boolean(data));
   document.body.style.setProperty("--custom-bg", data ? `url(${data})` : "none");
-  document.querySelector("#backgroundUpload").textContent = data ? "Clear Backdrop" : "Backdrop";
+  document.querySelector("#backgroundUpload").textContent = data ? "Clear backdrop image" : "Set backdrop image…";
 }
 
 function handleBackgroundButton() {
@@ -272,12 +407,89 @@ function mod(ability) {
   return Math.floor(((character.abilities[ability] || 10) - 10) / 2);
 }
 
-function proficiencyBonus(level = character.level) {
+function proficiencyBonus(level = totalLevel()) {
   return Math.ceil(level / 4) + 1;
 }
 
+function hasFeat(name, source = character) {
+  return (source.planner?.feats || []).includes(name);
+}
+
+// Bards from 2nd level add half proficiency to any ability check they aren't proficient in.
+function jackOfAllTrades() {
+  return currentClass().id === "bard" && character.level >= 2 ? Math.floor(proficiencyBonus() / 2) : 0;
+}
+
+// Champion 7+: half proficiency, rounded up, to STR, DEX and CON checks you aren't proficient in.
+function remarkableAthlete(ability) {
+  return currentClass().id === "fighter" && character.level >= 7 && lookupBySubclass({ champion: true }) && ["str", "dex", "con"].includes(ability)
+    ? Math.ceil(proficiencyBonus() / 2)
+    : 0;
+}
+
+// The bonus an untrained ability check gets (the two features don't stack; the higher applies).
+function untrainedBonus(ability) {
+  return Math.max(jackOfAllTrades(), remarkableAthlete(ability));
+}
+
+function skillBonus(skill, ability) {
+  const proficient = character.proficientSkills.includes(skill);
+  const expert = (character.expertSkills || []).includes(skill);
+  return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : untrainedBonus(ability));
+}
+
+function initiativeBonus() {
+  return mod("dex") + untrainedBonus("dex") + (hasFeat("Alert") ? 5 : 0);
+}
+
+// "+1 Longsword", "Shield +2": a magic bonus written in the item name.
+function itemMagicBonus(item) {
+  return Number(String(item?.name || "").match(/(?:^|\s)\+(\d)(?:\s|$)/)?.[1] || 0);
+}
+
+// AC from equipped gear: body armor ("AC 14 + Dex modifier, max 2"), shields and magic "+N AC" bonuses.
+function calculatedArmorClass() {
+  const worn = (character.equipment || []).filter(item => item.equipped || item.container === "equipped");
+  const usable = item => !/attunement/i.test(item.notes || "") || item.attuned;
+  const armor = worn.find(item => /\bAC\s+\d+/i.test(item.notes || ""));
+  const dex = mod("dex");
+  let ac;
+  if (armor) {
+    const notes = armor.notes;
+    const base = Number(notes.match(/\bAC\s+(\d+)/i)[1]);
+    const addsDex = /\+\s*Dex/i.test(notes);
+    const cap = notes.match(/max\s+(\d+)/i);
+    ac = base + (addsDex ? (cap ? Math.min(dex, Number(cap[1])) : dex) : 0) + itemMagicBonus(armor);
+    if (typeof fightingStyle === "function" && fightingStyle() === "Defense") ac += 1;
+  } else {
+    const shield = worn.some(item => /shield/i.test(item.name || ""));
+    const id = currentClass().id;
+    // Unarmored options don't stack; take the best one the character qualifies for.
+    const options = [10 + dex];
+    if (id === "barbarian") options.push(10 + dex + mod("con"));
+    if (id === "monk" && !shield) options.push(10 + dex + mod("wis"));
+    if (id === "sorcerer" && lookupBySubclass({ draconic: true })) options.push(13 + dex);
+    if (character.mageArmor) options.push(13 + dex);
+    // Natural armor (VGtM, ERLW, Locathah Rising): a base that still allows a shield.
+    const natural = { Tortle: 17, Lizardfolk: 13 + dex, Loxodon: 12 + mod("con"), Locathah: 12 + dex }[character.species];
+    if (natural) options.push(natural);
+    ac = Math.max(...options);
+  }
+  worn.filter(usable).forEach(item => {
+    const bonus = String(item.notes || "").match(/\+(\d+)\s*AC/i);
+    if (bonus) ac += Number(bonus[1]);
+    if (item !== armor && /shield/i.test(item.name || "")) ac += itemMagicBonus(item);
+  });
+  return ac;
+}
+
+// Works for any stored character (Party and sync views), not only the open sheet.
 function passivePerception(source = character) {
   const wisdom = source.abilities?.wis ?? 10;
   const wisMod = Math.floor((wisdom - 10) / 2);
-  return 10 + wisMod + (source.proficientSkills?.includes("perception") ? proficiencyBonus(source.level) : 0);
+  const proficient = source.proficientSkills?.includes("perception");
+  const multiplier = source.expertSkills?.includes("perception") ? 2 : 1;
+  const prof = proficiencyBonus(totalLevel(source));
+  const jack = !proficient && source.classId === "bard" && source.level >= 2 ? Math.floor(prof / 2) : 0;
+  return 10 + wisMod + (proficient ? prof * multiplier : jack) + (hasFeat("Observant", source) ? 5 : 0);
 }

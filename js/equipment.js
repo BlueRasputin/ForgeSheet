@@ -22,6 +22,7 @@ function renderEquipment() {
         .slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
         .map(spell => `<option value="${spell.index}">${escapeHtml(spell.name)} (${spell.level === 0 ? "Cantrip" : ordinal(spell.level)})</option>`).join("");
       grantSelect.value = item.grantSpell || "";
+      node.querySelector(".equipment-spell").open = Boolean(item.grantSpell);
       node.querySelector(".equipment-grant-uses").value = item.grantUses || "";
       root.appendChild(node);
     });
@@ -82,11 +83,27 @@ function handleEquipmentInput(event) {
   if (event.target.classList.contains("equipment-qty")) item.quantity = clamp(Number(event.target.value), 0, 999);
   if (event.target.classList.contains("equipment-weight")) item.weight = Math.max(0, Number(event.target.value) || 0);
   if (event.target.classList.contains("equipment-container")) item.container = event.target.value;
-  if (event.target.classList.contains("equipment-equipped")) {
-    item.equipped = event.target.checked;
-    if (item.equipped) item.container = "equipped";
+  if (event.target.classList.contains("equipment-equipped") || event.target.classList.contains("equipment-container")) {
+    if (event.target.classList.contains("equipment-equipped")) {
+      item.equipped = event.target.checked;
+      if (item.equipped) item.container = "equipped";
+    }
+    persistAndRender();
+    return;
   }
-  if (event.target.classList.contains("equipment-attuned")) item.attuned = event.target.checked;
+  if (event.target.classList.contains("equipment-attuned")) {
+    const attuned = character.equipment.filter(entry => entry.attuned && entry !== item).length;
+    // DMG p.138: a creature can be attuned to no more than three magic items at a time.
+    if (event.target.checked && attuned >= 3 && !isRuleBroken("attunement-limit")) {
+      event.target.checked = false;
+      breakRule("attunement-limit", "You're already attuned to 3 magic items, the most a creature can be attuned to at once. End an attunement first, or allow more.", () => {
+        item.attuned = true;
+        persistAndRender();
+      });
+      return;
+    }
+    item.attuned = event.target.checked;
+  }
   if (event.target.classList.contains("equipment-notes")) item.notes = event.target.value;
   if (event.target.classList.contains("equipment-grant-spell")) {
     item.grantSpell = event.target.value;
@@ -117,7 +134,8 @@ function equipmentFromItemCard(item) {
     name: item.name,
     quantity: item.quantity || 1,
     weight: Number(item.weight || 0),
-    container: item.container || (item.index === "bag-of-holding" ? "bagOfHolding" : "carried"),
+    // The bag itself weighs 15 lb wherever it is; only what's inside it stops counting.
+    container: item.container || "carried",
     equipped: item.container === "equipped",
     attuned: /attunement/i.test(item.notes || ""),
     notes: [item.type, item.rarity, item.notes].filter(Boolean).join(" - ")

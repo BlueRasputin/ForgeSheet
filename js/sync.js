@@ -44,10 +44,13 @@ async function initAccount() {
   }
 }
 
-async function signInWithGoogle() {
+const AUTH_PROVIDERS = { google: ["GoogleAuthProvider", "Google"], github: ["GithubAuthProvider", "GitHub"] };
+
+async function signInWith(provider) {
   const status = document.querySelector("#accountStatus");
+  const [providerClass, label] = AUTH_PROVIDERS[provider];
   if (!syncSettings.firebaseConfigText) {
-    status.textContent = "Paste your Firebase web config below first, then sign in.";
+    status.textContent = "Cloud saves aren't set up yet: paste a Firebase web config under Game session first.";
     return;
   }
   try {
@@ -58,10 +61,16 @@ async function signInWithGoogle() {
       syncState.auth = authApi.getAuth(app);
       authApi.onAuthStateChanged(syncState.auth, handleAuthState);
     }
-    status.textContent = "Opening Google sign-in...";
-    await syncState.authApi.signInWithPopup(syncState.auth, new syncState.authApi.GoogleAuthProvider());
-  } catch {
-    status.textContent = "Sign-in failed. Enable the Google provider under Firebase Authentication and allow localhost.";
+    status.textContent = `Opening ${label} sign-in...`;
+    await syncState.authApi.signInWithPopup(syncState.auth, new syncState.authApi[providerClass]());
+  } catch (error) {
+    status.textContent = {
+      "auth/account-exists-with-different-credential": `That email already signs in with another provider. Use that one instead of ${label}.`,
+      "auth/popup-closed-by-user": "Sign-in was cancelled.",
+      "auth/popup-blocked": "The browser blocked the sign-in window. Allow pop-ups for this site and try again.",
+      "auth/operation-not-allowed": `${label} sign-in is off. Enable it under Firebase Authentication → Sign-in method.`,
+      "auth/unauthorized-domain": "This site isn't an authorized domain. Add it under Firebase Authentication → Settings."
+    }[error?.code] || `Sign-in failed (${error?.code || "unknown error"}).`;
   }
 }
 
@@ -69,6 +78,8 @@ async function signOutOfAccount() {
   if (syncState.auth && syncState.authApi) await syncState.authApi.signOut(syncState.auth);
 }
 
+// Merge cloud and device copies by updatedAt, then upload what this device has newer.
+// Characters signed to another account on this device are never uploaded to this one.
 async function handleAuthState(user) {
   syncState.user = user;
   renderAccountPanel();
@@ -76,20 +87,31 @@ async function handleAuthState(user) {
   try {
     const fs = await ensureFirestore();
     const snap = await fs.getDocs(fs.collection(syncState.db, `users/${user.uid}/characters`));
+    const cloud = new Map();
     snap.docs.forEach(docSnap => {
       const data = docSnap.data();
-      if (data?.character?.sheetId) characterLibrary[data.character.sheetId] = normalizeCharacter(data.character);
+      if (data?.character?.sheetId) cloud.set(data.character.sheetId, normalizeCharacter(data.character));
     });
+    cloud.forEach((remote, sheetId) => {
+      const local = characterLibrary[sheetId];
+      if (!local || (remote.updatedAt || 0) > (local.updatedAt || 0)) characterLibrary[sheetId] = remote;
+    });
+    saveCharacterLibrary();
+    const uploads = Object.values(characterLibrary).filter(item => (!item.ownerUid || item.ownerUid === user.uid) && (!cloud.has(item.sheetId) || (item.updatedAt || 0) > (cloud.get(item.sheetId).updatedAt || 0)));
+    await Promise.all(uploads.map(item => {
+      item.ownerUid = user.uid;
+      return fs.setDoc(fs.doc(syncState.db, `users/${user.uid}/characters/${item.sheetId}`), { character: item, updatedAt: fs.serverTimestamp() });
+    }));
     saveCharacterLibrary();
     const classSnap = await fs.getDocs(fs.collection(syncState.db, `users/${user.uid}/classes`));
     classSnap.docs.forEach(docSnap => {
       const data = docSnap.data();
       if (data?.class?.id && data.class.table) customClasses[data.class.id] = data.class;
     });
-    localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
+    saveCustomClasses();
     if (characterLibrary[character.sheetId]) character = normalizeCharacter(characterLibrary[character.sheetId]);
     renderAll();
-    queueCloudSave();
+    renderAccountPanel(`${cloud.size} in the cloud, ${uploads.length} uploaded from this device`);
   } catch {
     document.querySelector("#accountStatus").textContent = "Signed in, but loading cloud data failed. Check Firestore rules.";
   }
@@ -125,7 +147,7 @@ async function shareCustomClass() {
       sharedBy: syncState.user?.displayName || syncSettings.playerName || "Anonymous",
       createdAt: fs.serverTimestamp()
     });
-    status.textContent = `Share code for ${cls.name}: ${code} — anyone can import it from this box.`;
+    status.textContent = `Share code for ${cls.name}: ${code}. Anyone can import it from this box.`;
   } catch {
     status.textContent = "Sharing failed. Check the Firestore rules allow writes to sharedClasses.";
   }
@@ -151,7 +173,7 @@ async function importSharedClass() {
       return;
     }
     customClasses[data.class.id] = data.class;
-    localStorage.setItem(CUSTOM_CLASS_KEY, JSON.stringify(customClasses));
+    saveCustomClasses();
     saveClassToCloud(data.class);
     document.querySelector("#importClassCode").value = "";
     status.textContent = `Imported ${data.class.name} (shared by ${data.sharedBy || "another user"}). It is now in your class list.`;
@@ -171,11 +193,13 @@ async function saveCharacterToCloud() {
   if (!syncState.user) return;
   try {
     const fs = await ensureFirestore();
+    if (character.ownerUid && character.ownerUid !== syncState.user.uid) return;
+    character.ownerUid = syncState.user.uid;
     const ref = fs.doc(syncState.db, `users/${syncState.user.uid}/characters/${character.sheetId}`);
     await fs.setDoc(ref, { character, updatedAt: fs.serverTimestamp() });
     renderAccountPanel(`Cloud save ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
   } catch {
-    renderAccountPanel("Cloud save failed — data kept locally.");
+    renderAccountPanel("Cloud save failed. Your data is kept on this device.");
   }
 }
 
@@ -191,17 +215,17 @@ async function deleteCharacterFromCloud(sheetId) {
 
 function renderAccountPanel(note = "") {
   const status = document.querySelector("#accountStatus");
-  const signIn = document.querySelector("#googleSignIn");
+  const signIn = document.querySelector("#signInButtons");
   const signOut = document.querySelector("#googleSignOut");
   if (!status) return;
   if (syncState.user) {
-    status.textContent = `Signed in as ${syncState.user.displayName || syncState.user.email}. Characters sync to your Firebase database.${note ? ` ${note}.` : ""}`;
+    status.textContent = `Signed in as ${syncState.user.displayName || syncState.user.email || "your account"}. Every character on this device syncs to your account and comes back on any device you sign in from.${note ? ` ${note}.` : ""}`;
     signIn.hidden = true;
     signOut.hidden = false;
   } else {
     status.textContent = syncSettings.firebaseConfigText
-      ? "Not signed in. Sign in with Google to save characters to the cloud and restore them after closing the browser."
-      : "Paste a Firebase web config below, then sign in with Google to enable cloud saves.";
+      ? "Not signed in. Sign in with Google or GitHub to save your characters online and open them on any device."
+      : "Cloud saves need a Firebase project: paste its web config under Game session, then sign in.";
     signIn.hidden = false;
     signOut.hidden = true;
   }
@@ -221,7 +245,7 @@ function loadSyncSettings() {
     const stored = JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY)) || {};
     const params = new URLSearchParams(location.search);
     return {
-      firebaseConfigText: stored.firebaseConfigText || "",
+      firebaseConfigText: stored.firebaseConfigText || FIREBASE_DEFAULT_CONFIG,
       campaignId: params.get("campaign") || stored.campaignId || "",
       role: params.get("role") || stored.role || "player",
       playerName: stored.playerName || "",
@@ -265,22 +289,20 @@ function handleSyncSettingsInput(event) {
   syncSettings[map[event.target.id]] = event.target.value;
   if (event.target.id === "syncSheetId") character.sheetId = event.target.value || character.sheetId;
   saveSyncSettings();
-  persist();
+  if (event.target.id === "syncSheetId") persist();
+  if (event.target.id === "syncRole") renderSyncPanel();
 }
 
 async function connectCampaignSync() {
-  disconnectCampaignSync(false);
-  syncSettings.playerName = syncSettings.playerName || character.name;
-  syncSettings.sheetId = syncSettings.sheetId || character.sheetId || crypto.randomUUID();
-  character.sheetId = syncSettings.sheetId;
-  saveSyncSettings();
-  persist();
-
   const status = document.querySelector("#syncStatus");
   if (!syncSettings.campaignId || !syncSettings.firebaseConfigText) {
     status.textContent = "Add a campaign ID and Firebase web config first.";
     return;
   }
+  disconnectCampaignSync(false);
+  syncSettings.playerName = syncSettings.playerName || character.name;
+  syncSettings.sheetId = character.sheetId;
+  saveSyncSettings();
 
   try {
     status.textContent = "Connecting to campaign...";
@@ -410,7 +432,7 @@ function syncCharacterSummary() {
     className: cls.name,
     classId: character.classId,
     subclassName: character.subclassName,
-    level: character.level,
+    level: totalLevel(),
     hp: character.hp,
     maxHp: character.maxHp,
     ac: character.ac,
@@ -426,7 +448,48 @@ function syncCharacterSummary() {
       reset: option.reset
     })),
     preparedSpells: prepared,
-    preparedSignature: prepared.join("|")
+    preparedSignature: prepared.join("|"),
+    partyStatus: partyStatusPayload()
+  };
+}
+
+// Live table state other apps (Cartomancer) read from campaigns/{campaignId}/sheets/{sheetId}.partyStatus.
+// The shape is versioned; see INTEGRATION.md. Add fields freely, never rename or repurpose one without bumping the version.
+function partyStatusPayload() {
+  const hp = Number(character.hp || 0);
+  const failures = Number(character.deathSaveFailures || 0);
+  const successes = Number(character.deathSaveSuccesses || 0);
+  const maxHp = effectiveMaxHp();
+  return {
+    schema: "forgesheet.partyStatus",
+    version: 1,
+    name: character.name || "",
+    playerName: syncSettings.playerName || "",
+    ownerUid: syncState.user?.uid || null,
+    level: totalLevel(),
+    classLabel: character.multiclasses?.length ? classLabel() : [currentClass().name, character.subclassName].filter(Boolean).join(" · "),
+    species: character.species || "",
+    hp,
+    maxHp,
+    baseMaxHp: Number(character.maxHp || 0),
+    tempHp: Number(character.tempHp || 0),
+    ac: Number(character.ac || 10),
+    speed: effectiveSpeed(),
+    initiativeBonus: initiativeBonus(),
+    initiative: latestInitiative(character),
+    state: hp > 0 ? (hp <= maxHp / 2 ? "bloodied" : "healthy") : failures >= 3 ? "dead" : successes >= 3 ? "stable" : "down",
+    deathSaves: { successes, failures },
+    conditions: [...(character.conditions || [])],
+    exhaustion: Number(character.exhaustion || 0),
+    concentration: character.concentration || null,
+    raging: Boolean(character.raging),
+    inspiration: Number(character.inspiration || 0),
+    passives: { perception: passiveScore("perception"), investigation: passiveScore("investigation"), insight: passiveScore("insight") },
+    saves: Object.fromEntries(ABILITIES.map(([id]) => [id, saveBonus(id)])),
+    spellSave: currentClass().casterType !== "none" && ABILITIES.some(([id]) => id === currentClass().spellAbility) ? 8 + proficiencyBonus() + mod(currentClass().spellAbility) : null,
+    resources: (character.resources || []).map(item => ({ name: item.name, current: Number(item.current), max: Number(item.max), reset: item.reset })),
+    spellSlots: characterSpellSlots().map((count, index) => ({ level: index + 1, max: count, remaining: slotRemaining(index + 1, count) })).filter(slot => slot.max > 0),
+    updatedAtMs: Date.now()
   };
 }
 
@@ -441,7 +504,7 @@ function renderDmRoster(sheets) {
     <article class="dm-sheet">
       <div>
         <strong>${escapeHtml(sheet.characterName || "Unnamed")}</strong>
-        <span>${escapeHtml(sheet.playerName || "Player")} · ${escapeHtml(sheet.className || "Class")} ${sheet.level || "?"}${sheet.subclassName ? ` · ${escapeHtml(sheet.subclassName)}` : ""}</span>
+        <span>${escapeHtml(sheet.playerName || "Player")} · ${escapeHtml(sheet.className || "Class")} ${escapeHtml(String(sheet.level || "?"))}${sheet.subclassName ? ` · ${escapeHtml(sheet.subclassName)}` : ""}</span>
       </div>
       <div class="dm-sheet-stats">
         <span>AC ${escapeHtml(sheet.ac ?? "-")}</span>
@@ -465,7 +528,9 @@ function renderDmItemTools() {
     ? targets.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")
     : `<option value="">No players available</option>`;
   if (targets.some(item => item.id === currentTarget)) target.value = currentTarget;
+  const currentItem = catalog.value;
   catalog.innerHTML = ITEM_CATALOG.map(item => `<option value="${item.index}">${escapeHtml(item.name)} (${escapeHtml(item.type)})</option>`).join("");
+  if (currentItem) catalog.value = currentItem;
   renderDmItemPreview();
 }
 
@@ -547,10 +612,16 @@ function sendLocalItem(sheetId, equipmentItem) {
   const target = characterLibrary[sheetId];
   if (!target) return;
   target.equipment = [...(target.equipment || []), equipmentItem];
+  target.updatedAt = Date.now();
   characterLibrary[sheetId] = normalizeCharacter(target);
-  if (character.sheetId === sheetId) character = normalizeCharacter(characterLibrary[sheetId]);
   saveCharacterLibrary();
-  persistAndRender();
+  if (character.sheetId === sheetId) {
+    character = normalizeCharacter(characterLibrary[sheetId]);
+    persistAndRender();
+  } else {
+    renderAll();
+  }
+  showToast(`<span class="toast-label">${escapeHtml(equipmentItem.name)} sent</span><span>to ${escapeHtml(target.name || "player")}</span>`);
 }
 
 async function sendRemoteItem(sheet, equipmentItem) {
@@ -593,12 +664,20 @@ function renderActivity(items) {
 }
 
 async function copySyncLink(role) {
-  syncSettings.role = role;
-  saveSyncSettings();
+  const status = document.querySelector("#syncStatus");
+  if (!syncSettings.campaignId) {
+    status.textContent = "Enter or generate a session code before sharing a link.";
+    return;
+  }
   const url = new URL(location.href);
-  url.searchParams.set("campaign", syncSettings.campaignId || "");
+  url.searchParams.set("campaign", syncSettings.campaignId);
   url.searchParams.set("role", role);
   if (role === "player") url.searchParams.set("sheet", syncSettings.sheetId || character.sheetId);
-  await navigator.clipboard.writeText(url.toString());
-  document.querySelector("#syncStatus").textContent = `${role === "dm" ? "DM" : "Player"} link copied.`;
+  const label = role === "dm" ? "DM" : "Player";
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    status.textContent = `${label} link copied.`;
+  } catch {
+    status.textContent = `Couldn't copy automatically. ${label} link: ${url}`;
+  }
 }

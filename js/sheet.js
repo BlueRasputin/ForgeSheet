@@ -14,35 +14,105 @@ function renderHeader() {
   setValue("maxHpInput", character.maxHp);
   setValue("tempHpInput", character.tempHp);
   setValue("acInput", character.ac);
-  setValue("speedInput", character.speed);
+  const speed = effectiveSpeed();
+  setValue("speedInput", character.identityLocked ? speed : character.speed);
+  const { notes: speedNotes } = speedBreakdown();
+  document.querySelector("#speedInput").title = speedNotes.length ? `${character.speed} ft base, ${speedNotes.join(", ")}` : "";
+  document.querySelector("#fightingStyleField").hidden = !hasFightingStyle();
+  setValue("fightingStyleSelect", fightingStyle());
   document.querySelector("#profBonus").textContent = formatMod(proficiencyBonus());
-  document.querySelector("#initiativeValue").textContent = formatMod(mod("dex"));
+  document.querySelector("#initiativeValue").textContent = formatMod(initiativeBonus());
+  const armorClass = calculatedArmorClass();
+  if (character.acAuto && Number(character.ac) !== armorClass) {
+    character.ac = armorClass;
+    setValue("acInput", armorClass);
+  }
+  const acHint = document.querySelector("#acHint");
+  acHint.hidden = armorClass === Number(character.ac);
+  acHint.textContent = `Gear: ${armorClass}`;
+  acHint.title = `Your equipped armor, shield, and DEX give AC ${armorClass}. Click to use it.`;
   document.querySelector("#inspirationValue").textContent = character.inspiration;
   document.querySelector("#inspirationTile").classList.toggle("is-on", character.inspiration > 0);
-  ["speedInput", "acInput", "hpInput", "maxHpInput", "tempHpInput"].forEach(id => {
+  ["speedInput", "acInput", "maxHpInput"].forEach(id => {
     document.querySelector(`#${id}`).disabled = character.identityLocked;
   });
+  const maxNow = effectiveMaxHp();
+  const hpRatio = maxNow ? Number(character.hp) / maxNow : 1;
+  const reduction = Number(character.maxHpReduction || 0);
+  const note = document.querySelector("#maxHpNote");
+  note.hidden = !reduction;
+  note.innerHTML = reduction ? `<span>Max HP lowered by ${reduction} until a long rest (now ${maxNow}).</span><button type="button" class="ghost" data-clear-reduction>Restore</button>` : "";
+  renderWildShape();
+  document.querySelector(".hp-box").dataset.state = Number(character.hp) <= 0 ? "down" : hpRatio <= 0.25 ? "critical" : hpRatio <= 0.5 ? "bloodied" : "healthy";
+  document.querySelector("#subclassOptions").innerHTML = officialSubclasses
+    .filter(item => item.classIndex === character.classId)
+    .map(item => `<option value="${escapeHtml(item.name)}"></option>`).join("");
   renderIdentityDisplay();
   renderAsiBanner();
+}
+
+// Wild Shape: the beast's HP sit in front of yours and absorb damage first.
+function renderWildShape() {
+  const root = document.querySelector("#wildShapeBox");
+  const shape = character.wildShape;
+  root.hidden = !shape;
+  if (!shape) {
+    root.innerHTML = "";
+    return;
+  }
+  if (root.contains(document.activeElement)) return;
+  root.innerHTML = `
+    <input data-wild-shape="name" value="${escapeHtml(shape.name || "Beast form")}" aria-label="Beast form name">
+    <label>HP <input type="number" min="0" data-wild-shape="hp" value="${Number(shape.hp || 0)}" aria-label="Beast HP"></label>
+    <label>of <input type="number" min="0" data-wild-shape="max" value="${Number(shape.max || 0)}" aria-label="Beast max HP"></label>
+    <button type="button" class="ghost" data-wild-shape-revert>Revert</button>
+  `;
+}
+
+function handleWildShapeInput(event) {
+  const field = event.target.dataset.wildShape;
+  if (!field || !character.wildShape) return;
+  if (field === "name") character.wildShape.name = event.target.value;
+  if (field === "hp") character.wildShape.hp = clamp(Number(event.target.value), 0, 999);
+  if (field === "max") {
+    const max = clamp(Number(event.target.value), 0, 999);
+    if (!Number(character.wildShape.hp) || Number(character.wildShape.hp) === Number(character.wildShape.max)) character.wildShape.hp = max;
+    character.wildShape.max = max;
+  }
+  persist();
+}
+
+function revertWildShape() {
+  character.wildShape = null;
+  persistAndRender();
+  showToast(`<span class="toast-label">You revert to your normal form</span>`);
 }
 
 function renderIdentityDisplay() {
   const block = document.querySelector("#identityBlock");
   block.classList.toggle("is-locked", character.identityLocked);
-  document.querySelector("#identityLock").title = character.identityLocked ? "Edit character details, scores, and stats" : "Done editing";
+  // Play mode by default: build values read as text; Edit unlocks scores, proficiencies, actions and trackers.
+  document.body.classList.toggle("is-editing", !character.identityLocked);
+  const lock = document.querySelector("#identityLock");
+  lock.innerHTML = character.identityLocked ? `${icon("pencil-simple")}Edit` : `${icon("check")}Done`;
+  lock.classList.toggle("primary", !character.identityLocked);
+  lock.title = character.identityLocked ? "Edit details, scores, proficiencies, actions and trackers" : "Back to play mode";
   const classLine = [
-    `Level ${character.level}`,
+    `Level ${totalLevel()}`,
     character.species,
-    getClasses()[character.classId]?.name || ""
+    character.multiclasses?.length ? `(${classLabel()})` : getClasses()[character.classId]?.name || ""
   ].filter(Boolean).join(" ");
   const detailLine = [
+    speciesSize(character.species),
     character.subclassName,
     character.background,
     character.alignment
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(", ");
+  const editions = classEntries().map(entry => `<span class="edition-badge" data-edition="${entry.rules}" title="${escapeHtml(getClasses()[entry.classId]?.name || "")} uses the ${entry.rules} rules">${classEntries().length > 1 ? `${escapeHtml(getClasses()[entry.classId]?.name || "")} ` : ""}${entry.rules}</span>`).join("");
   document.querySelector("#identityDisplay").innerHTML = `
     <strong>${escapeHtml(character.name || "Unnamed Character")}</strong>
     <span>${escapeHtml(classLine)}</span>
+    <span class="edition-row">${editions}</span>
     ${detailLine ? `<em>${escapeHtml(detailLine)}</em>` : ""}
   `;
 }
@@ -54,12 +124,13 @@ function toggleIdentityLock() {
 }
 
 function renderAsiBanner() {
-  const banner = document.querySelector("#asiBanner");
-  const show = asiLevelsFor(currentClass()).has(character.level) && character.asiAcknowledgedLevel !== character.level;
-  banner.classList.toggle("visible", show);
-  banner.textContent = show
-    ? `Level ${character.level}: Ability Score Improvement or feat available — record it in the Builder tab.`
-    : "";
+  const due = asiLevelsFor(currentClass()).has(character.level) && character.asiAcknowledgedLevel !== character.level;
+  if (!due) return;
+  character.asiAcknowledgedLevel = character.level;
+  showToast(`<span class="toast-label">Level ${character.level}: Ability Score Improvement</span><span>Raise one score by 2 or two by 1, or take a feat.</span>`, {
+    actions: [{ label: "Open checklist", run: () => document.querySelector("#checklistDialog").showModal() }],
+    duration: 10000
+  });
 }
 
 function renderSheet() {
@@ -69,11 +140,18 @@ function renderSheet() {
     document.querySelector(`#${id}Mod`).textContent = formatMod(mod(id));
   });
   SKILLS.forEach(([id,, ability]) => {
-    document.querySelector(`[data-skill="${id}"]`).checked = character.proficientSkills.includes(id);
-    const bonus = mod(ability) + (character.proficientSkills.includes(id) ? proficiencyBonus() : 0);
-    document.querySelector(`#${id}Skill`).textContent = formatMod(bonus);
+    const box = document.querySelector(`[data-skill="${id}"]`);
+    box.checked = character.proficientSkills.includes(id);
+    // Locked in play mode: the row's label would otherwise toggle proficiency when you click the skill name.
+    box.disabled = character.identityLocked;
+    document.querySelector(`#${id}Skill`).textContent = formatMod(skillBonus(id, ability));
+    const expert = (character.expertSkills || []).includes(id);
+    const star = document.querySelector(`[data-expert-skill="${id}"]`);
+    star.classList.toggle("is-expert", expert);
+    star.title = expert ? "Expertise active: double proficiency" : "Toggle expertise (double proficiency)";
   });
-  document.querySelector("#skillSummary").textContent = `${character.proficientSkills.length} proficient`;
+  const expertCount = (character.expertSkills || []).length;
+  document.querySelector("#skillSummary").textContent = `${character.proficientSkills.length} proficient${expertCount ? ` · ${expertCount} expertise` : ""}`;
   renderSavingThrows();
   renderSenses();
   renderDeathSaves();
@@ -91,6 +169,7 @@ function renderSheet() {
 
 function handleInput(event) {
   const id = event.target.id;
+  if (id === "levelInput") return;
   const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
   if (id === "classSelect" && value === CUSTOM_CLASS_VALUE) {
     startCustomClassDraft();
@@ -103,17 +182,12 @@ function handleInput(event) {
     featuresInput: "features", inventoryInput: "inventory", notesInput: "notes"
   };
   if (map[id]) {
-    character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), 1, map[id] === "level" ? 20 : 999) : value;
-    if (id === "classSelect") {
-      classBuilderDraft = null;
-      const cls = currentClass();
-      character.hitDice = `${character.level}d${cls.hitDie}`;
-      const official = officialSubclasses.find(item => item.index === character.subclass.officialIndex);
-      if (character.subclass.mode === "official" && official && official.classIndex !== character.classId) {
-        character.subclass.officialIndex = "";
-        character.subclassName = "";
-      }
-    }
+    if (id === "acInput") character.acAuto = false;
+    const ceiling = map[id] === "level" ? 20 : map[id] === "hp" ? effectiveMaxHp() : 999;
+    character[map[id]] = ["level", "hp", "maxHp", "ac", "speed"].includes(map[id]) ? clamp(Number(value), map[id] === "hp" ? 0 : 1, ceiling) : value;
+    if (map[id] === "maxHp") character.hp = Math.min(Number(character.hp || 0), effectiveMaxHp());
+    if (id === "classSelect") switchClassTo(value);
+    if (id === "subclassName") linkTypedSubclass(value);
     persist();
   }
   if (id === "subclassType") {
@@ -166,18 +240,110 @@ function handleInput(event) {
   renderAll();
 }
 
-function handleAbilityInput(event) {
-  character.abilities[event.target.dataset.ability] = clamp(Number(event.target.value), 1, 30);
+// Committed on change (blur/Enter) so typing "1" then "5" doesn't apply two level jumps.
+// Changing class swaps everything the class provides: saves, armor and weapon training, HP by hit die, features.
+function switchClassTo(classId) {
+  classBuilderDraft = null;
+  const previousHitDie = Number(String(character.hitDice || "").split("d")[1]) || null;
+  character.classId = classId;
+  character.subclassName = "";
+  character.subclass = { ...character.subclass, mode: "custom", officialIndex: "", type: "Subclass" };
+  const cls = currentClass();
+  const grants = SPECIES_GRANTS[character.species] || {};
+  const [armor, weapons] = CLASS_PROFICIENCIES[cls.id] || [cls.armor || "", cls.weapons || ""];
+  const saves = CLASS_SAVES[cls.id] || cls.saves;
+  if (saves?.length) character.saveProficiencies = [...saves];
+  character.backgroundDetails.armor = mergeList(armor, grants.armor || []);
+  character.backgroundDetails.weapons = mergeList(weapons, grants.weapons || []);
+  character.hitDice = `${character.level}d${cls.hitDie}`;
+  if (previousHitDie !== cls.hitDie) {
+    const missing = Number(character.maxHp || 0) - Number(character.hp || 0);
+    character.maxHp = averageHpFor(cls, character.level, mod("con")) + sheetExtraHp() * character.level;
+    character.hp = clamp(character.maxHp - missing, 0, character.maxHp);
+  }
+  rebuildClassFeatureLines(cls, character.level);
+  showToast(`<span class="toast-label">Now a ${escapeHtml(cls.name)}</span><span>Saves, training, hit dice, HP and features updated. Pick a ${escapeHtml(cls.name)} subclass when you reach it.</span>`, { duration: 9000 });
+}
+
+// Typing a subclass name links it to the official entry, so its grants and extras apply.
+function linkTypedSubclass(name) {
+  const key = normalizedSubclassKey(name);
+  const official = key && officialSubclasses.find(item => item.classIndex === character.classId && normalizedSubclassKey(item.name) === key);
+  if (!official) return;
+  character.subclass.mode = "official";
+  character.subclass.officialIndex = official.index;
+  character.subclass.type = official.flavor || character.subclass.type;
+  applySubclassExtras();
+}
+
+function applyLevelChange(value) {
+  const typed = Number(value);
+  if (!Number.isInteger(typed) || typed < 1 || typed > 20) {
+    showToast(`<span class="toast-label">Level must be a whole number from 1 to 20</span><span>Kept level ${character.level}.</span>`, { tone: "fumble" });
+    document.querySelector("#levelInput").value = character.level;
+    return;
+  }
+  const next = typed;
+  const delta = next - character.level;
+  if (!delta) {
+    renderAll();
+    return;
+  }
+  const cls = currentClass();
+  const perLevel = Math.max(1, Math.ceil(cls.hitDie / 2) + 1 + mod("con")) + sheetExtraHp();
+  character.level = next;
+  rebuildClassFeatureLines(cls, next);
+  character.maxHp = Math.max(next, Number(character.maxHp || 0) + delta * perLevel);
+  character.hp = clamp(Number(character.hp || 0) + delta * perLevel, 0, character.maxHp);
+  character.hitDice = `${next}d${cls.hitDie}`;
+  character.hitDiceUsed = Math.min(Number(character.hitDiceUsed || 0), next);
   persistAndRender();
+  showToast(`<strong>Level ${next}</strong> Max HP ${delta > 0 ? "+" : ""}${delta * perLevel} using the average (${perLevel}/level), hit dice ${next}d${cls.hitDie}. Edit Max HP if you rolled.`, { duration: 9000 });
+}
+
+function handleAbilityInput(event) {
+  const ability = event.target.dataset.ability;
+  const before = mod(ability);
+  character.abilities[ability] = clamp(Number(event.target.value), 1, 30);
+  // CON changes HP at every level you have, not just the next one (PHB p.177).
+  const levels = totalLevel();
+  const change = ability === "con" ? (mod("con") - before) * levels : 0;
+  if (change) {
+    character.maxHp = Math.max(levels, Number(character.maxHp || 0) + change);
+    character.hp = clamp(Number(character.hp || 0) + change, 0, character.maxHp);
+  }
+  persistAndRender();
+  if (change) showToast(`<span class="toast-label">Constitution ${formatMod(mod("con"))}</span><span>Max HP ${formatMod(change)} (${formatMod(change / levels)} for each of your ${levels} levels).</span>`);
 }
 
 function saveBonus(ability) {
-  return mod(ability) + (character.saveProficiencies.includes(ability) ? proficiencyBonus() : 0);
+  return mod(ability) + (saveProficient(ability) ? proficiencyBonus() : 0) + itemSaveBonus() + auraOfProtection();
+}
+
+// Diamond Soul (monk 14): every save. Slippery Mind (rogue 15): Wisdom saves.
+function saveProficient(ability) {
+  const id = currentClass().id;
+  return character.saveProficiencies.includes(ability)
+    || (id === "monk" && character.level >= 14)
+    || (id === "rogue" && character.level >= 15 && ability === "wis");
+}
+
+// "+1 AC and saving throws" (Cloak/Ring of Protection) on equipped, attuned items.
+function itemSaveBonus() {
+  return (character.equipment || [])
+    .filter(item => (item.equipped || item.container === "equipped") && (!/attunement/i.test(item.notes || "") || item.attuned))
+    .reduce((sum, item) => sum + Number(String(item.notes || "").match(/\+(\d+)[^.]*saving throws/i)?.[1] || 0), 0);
+}
+
+// Paladin 6+: add your CHA modifier (minimum +1) to your saving throws while conscious.
+function auraOfProtection() {
+  return currentClass().id === "paladin" && character.level >= 6 && Number(character.hp) > 0 ? Math.max(1, mod("cha")) : 0;
 }
 
 function renderSavingThrows() {
   document.querySelectorAll("[data-save]").forEach(input => {
     input.checked = character.saveProficiencies.includes(input.dataset.save);
+    input.disabled = character.identityLocked;
   });
   ABILITIES.forEach(([id]) => {
     document.querySelector(`#${id}Save`).textContent = formatMod(saveBonus(id));
@@ -195,17 +361,36 @@ function handleSaveInput(event) {
 function renderSenses() {
   const senses = [["perception", "Passive Perception"], ["investigation", "Passive Investigation"], ["insight", "Passive Insight"]];
   document.querySelector("#senses").innerHTML = senses.map(([skill, label]) => {
-    const ability = SKILLS.find(([id]) => id === skill)[2];
-    const bonus = mod(ability) + (character.proficientSkills.includes(skill) ? proficiencyBonus() : 0);
-    return `<div class="sense-row"><strong>${10 + bonus}</strong><span>${label}</span></div>`;
-  }).join("");
+    return `<div class="sense-row"><strong>${passiveScore(skill)}</strong><span>${label}</span></div>`;
+  }).join("") + specialSensesHtml();
+}
+
+// 10 + the skill bonus; Observant adds 5 to passive Perception and Investigation.
+function passiveScore(skill) {
+  const ability = SKILLS.find(([id]) => id === skill)[2];
+  return 10 + skillBonus(skill, ability) + (hasFeat("Observant") && ["perception", "investigation"].includes(skill) ? 5 : 0);
+}
+
+// Darkvision from the species preset (60 ft) or any "Darkvision N ft" written in features.
+function specialSensesHtml() {
+  const written = String(character.features || "").match(/darkvision\D{0,12}(\d+)/i);
+  const preset = SPECIES_PRESETS.find(([name]) => name === character.species);
+  const presetRange = preset?.[2].match(/darkvision\D{0,4}(\d+)/i);
+  const range = written ? Number(written[1]) : presetRange ? Number(presetRange[1]) : preset && /darkvision/i.test(preset[2]) ? 60 : 0;
+  return range ? `<p class="special-senses">${icon("eye")}Darkvision ${range} ft</p>` : "";
+}
+
+function speciesSize(species) {
+  const preset = SPECIES_PRESETS.find(([name]) => name === species);
+  if (!preset) return "";
+  return preset[5] || (/gnome|halfling/i.test(species) ? "Small" : "Medium");
 }
 
 function renderDeathSaves() {
   const root = document.querySelector("#deathSaveTracker");
   const successes = character.deathSaveSuccesses;
   const failures = character.deathSaveFailures;
-  const status = failures >= 3 ? "Three failures — dead" : successes >= 3 ? "Stable" : "";
+  const status = failures >= 3 ? "Three failures: dead" : successes >= 3 ? "Stable" : "";
   const pips = kind => Array.from({ length: 3 }, (_, index) => {
     const count = kind === "success" ? successes : failures;
     return `<button type="button" class="death-pip ${kind} ${index < count ? "filled" : ""}" data-death-kind="${kind}" data-death-index="${index}" aria-label="${kind} ${index + 1}"></button>`;
@@ -214,7 +399,7 @@ function renderDeathSaves() {
     <div class="death-save-row"><span>Successes</span>${pips("success")}</div>
     <div class="death-save-row"><span>Failures</span>${pips("failure")}</div>
     <div class="death-save-actions">
-      <button type="button" class="ghost" data-death-action="roll">Roll Death Save</button>
+      <button type="button" class="ghost" data-death-action="roll" ${isDying() ? "" : "disabled title=\"Only while dying at 0 HP\""}>Roll death save</button>
       <button type="button" class="ghost" data-death-action="reset">Reset</button>
       ${status ? `<em>${status}</em>` : ""}
     </div>
@@ -224,7 +409,21 @@ function renderDeathSaves() {
 function handleSkillInput(event) {
   const skill = event.target.dataset.skill;
   character.proficientSkills = character.proficientSkills.filter(item => item !== skill);
-  if (event.target.checked) character.proficientSkills.push(skill);
+  if (event.target.checked) {
+    character.proficientSkills.push(skill);
+  } else {
+    character.expertSkills = (character.expertSkills || []).filter(item => item !== skill);
+  }
+  persistAndRender();
+}
+
+function toggleExpertise(skill) {
+  const expert = (character.expertSkills || []).includes(skill);
+  character.expertSkills = (character.expertSkills || []).filter(item => item !== skill);
+  if (!expert) {
+    character.expertSkills.push(skill);
+    if (!character.proficientSkills.includes(skill)) character.proficientSkills.push(skill);
+  }
   persistAndRender();
 }
 
@@ -292,7 +491,8 @@ function renderSearchResults() {
     ["Subclass", character.subclass.sections.map(section => `${section.title}: ${section.body}`).join("\n")],
     ["Class Options", character.classOptions.map(option => `${option.name}: ${option.notes}`).join("\n")],
     ["Actions", character.actions.map(action => `${action.name}: ${action.notes}`).join("\n")],
-    ["Spells", character.spells.map(spellDisplayName).join(", ")]
+    ["Spells", character.spells.map(spellDisplayName).join(", ")],
+    ["Note Sections", (character.noteSections || []).map(section => `${section.title}: ${section.body}`).join("\n")]
   ];
   const matches = haystacks.filter(([, text]) => String(text || "").toLowerCase().includes(query));
   root.classList.add("active");

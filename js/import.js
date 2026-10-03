@@ -23,7 +23,14 @@ async function handlePdfImport(event) {
   status.textContent = `Reading ${file.name}...`;
   document.querySelector("#applySheetImport").disabled = true;
   try {
-    const text = await extractTextFromPdf(file);
+    const pdf = await openPdf(file);
+    const embedded = await embeddedForgeSheetData(pdf);
+    if (embedded) {
+      document.querySelector("#importDialog").close();
+      applyImportedData(embedded);
+      return;
+    }
+    const text = await extractTextFromPdf(pdf);
     if (!text.trim()) {
       status.textContent = "No selectable text found. This may be a scanned/image-only PDF.";
       return;
@@ -38,11 +45,14 @@ async function handlePdfImport(event) {
   }
 }
 
-async function extractTextFromPdf(file) {
+async function openPdf(file) {
   const pdfjs = await import(PDFJS_URL);
   pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
   const data = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data }).promise;
+  return pdfjs.getDocument({ data }).promise;
+}
+
+async function extractTextFromPdf(pdf) {
   const pages = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
@@ -116,7 +126,7 @@ function parseCharacterSheetText(text) {
     /background\s*[:\-]\s*([^\n|]+)/i
   ]));
   assignIf(fields, "alignment", firstMatch(compact, [
-    /alignment\s*[:\-]\s*([A-Z]{1,2}|lawful good|neutral good|chaotic good|lawful neutral|true neutral|neutral|chaotic neutral|lawful evil|neutral evil|chaotic evil)/i
+    /alignment\s*[:\-]\s*(lawful good|neutral good|chaotic good|lawful neutral|true neutral|chaotic neutral|lawful evil|neutral evil|chaotic evil|neutral|\b[LNC][GNE]\b)/i
   ]));
   assignIf(fields, "hp", firstNumber(compact, [
     /(?:hit points|hp|max hp|maximum hp)\s*[:\-]?\s*(\d{1,3})/i
@@ -137,8 +147,13 @@ function parseCharacterSheetText(text) {
   const skillMatches = importSkills ? detectProficientSkills(compact) : [];
   if (skillMatches.length) fields.proficientSkills = skillMatches;
 
-  const detectedSpells = detectKnownSpells(compact);
+  const detectedSpells = detectKnownSpells(normalized);
   if (detectedSpells.length) fields.spells = detectedSpells;
+
+  const saves = detectSaves(compact);
+  if (saves.length) fields.saveProficiencies = saves;
+  const attacks = detectAttackLines(normalized);
+  if (attacks.length) fields.actions = attacks;
 
   assignIf(fields, "features", extractSection(normalized, ["features", "traits", "class features", "features & traits"]));
   assignIf(fields, "attacks", extractSection(normalized, ["attacks", "actions", "attacks & spellcasting"]));
@@ -154,7 +169,7 @@ function parseCharacterSheetText(text) {
 function renderImportPreview(result) {
   const root = document.querySelector("#importPreview");
   if (!result || !Object.keys(result.fields).length) {
-    root.innerHTML = `<p class="muted">${result?.notes?.[0] || "No fields detected yet."}</p>`;
+    root.innerHTML = `<p class="muted">${escapeHtml(result?.notes?.[0] || "No fields detected yet.")}</p>`;
     return;
   }
   const rows = Object.entries(result.fields).map(([key, value]) => `
@@ -183,13 +198,23 @@ function applyPendingImport() {
     } else if (key === "subclassName") {
       character.subclassName = value;
       character.subclass.mode = "custom";
+      linkTypedSubclass(value);
+    } else if (key === "hp") {
+      character.hp = value;
+      character.maxHp = value;
+    } else if (key === "actions") {
+      const names = new Set(character.actions.map(action => action.name.toLowerCase()));
+      value.filter(action => !names.has(action.name.toLowerCase())).forEach(action => {
+        character.actions.push({ id: crypto.randomUUID(), type: "Action", notes: "Imported", ...action });
+      });
     } else {
       character[key] = value;
     }
   });
-  if (fields.classId) {
+  if (fields.classId || fields.level) {
     const cls = currentClass();
-    character.hitDice = character.hitDice || `${character.level}d${cls.hitDie}`;
+    if (!fields.hitDice) character.hitDice = `${character.level}d${cls.hitDie}`;
+    rebuildClassFeatureLines(cls, character.level);
   }
   persistAndRender();
   document.querySelector("#importDialog").close();
@@ -220,6 +245,7 @@ function detectClassAndLevel(text) {
   const found = classes.find(cls => new RegExp(`\\b${escapeRegExp(cls.name)}\\b`, "i").test(haystack));
   if (found) result.classId = found.id;
   const level = firstNumber(haystack, [
+    ...(found ? [new RegExp(`\\b${escapeRegExp(found.name)}\\s+(\\d{1,2})\\b`, "i")] : []),
     /(?:level|lvl)\s*(\d{1,2})/i,
     /\b(\d{1,2})(?:st|nd|rd|th)?\s*level\b/i,
     /\b(?:artificer|barbarian|bard|cleric|druid|fighter|monk|paladin|ranger|rogue|sorcerer|warlock|wizard)\s+(\d{1,2})\b/i
@@ -243,7 +269,7 @@ function detectAbilities(text) {
 
 function detectProficientSkills(text) {
   const explicitBlock = firstMatch(text, [
-    /(?:skill proficiencies|proficient skills|skills proficient|proficient in)\s*[:\-]\s*([^\n]+)/i
+    /(?:skill proficiencies|proficient skills|skills proficient|proficient in|skills)\s*[:\-]\s*([^\n]+)/i
   ]);
   const explicitSkills = explicitBlock.length <= 220 ? skillsMentionedIn(explicitBlock) : [];
   if (explicitSkills.length && explicitSkills.length <= 8) return explicitSkills;
@@ -275,11 +301,31 @@ function skillsMentionedIn(text) {
     .map(([id]) => id);
 }
 
+// Only look for spell names in a spells section (or lines that mention spells), as whole words,
+// so "Sleight of Hand" doesn't import Light and "Darkvision 60 ft." doesn't import Darkvision.
 function detectKnownSpells(text) {
-  const lower = text.toLowerCase();
+  const section = extractSection(text, ["spells", "spellcasting", "cantrips", "spells known", "prepared spells"]);
+  const source = section || text.split("\n").filter(line => /spell|cantrip/i.test(line)).join("\n");
+  if (!source) return [];
   return allSpells
-    .filter(item => lower.includes(item.name.toLowerCase()) || lower.includes(`spell: ${item.name.toLowerCase()}`))
+    .filter(item => new RegExp(`\\b${escapeRegExp(item.name)}\\b`, "i").test(source))
     .map(item => item.index);
+}
+
+function detectSaves(text) {
+  const line = firstMatch(text, [/(?:saving throws?|saves)\s*[:\-]\s*([^\n]+)/i]);
+  if (!line) return [];
+  return ABILITIES.filter(([id, name]) => new RegExp(`\\b(${id}|${name})\\b`, "i").test(line)).map(([id]) => id);
+}
+
+// "Rapier +7 to hit, 1d8+4 piercing" style lines become actions with Attack and Damage rolls.
+function detectAttackLines(text) {
+  const attacks = [];
+  text.split("\n").forEach(line => {
+    const match = line.match(/^\s*([A-Za-z][\w' ()-]{1,30}?)\s*[:\-]?\s+([+-]\d{1,2})\s*(?:to hit)?\s*[,;]?\s*(\d+d\d+(?:\s*[+-]\s*\d+)?)\s*([a-z]+)?/i);
+    if (match) attacks.push({ name: match[1].trim(), attack: match[2], damage: `${match[3].replace(/\s+/g, "")}${match[4] ? ` ${match[4]}` : ""}` });
+  });
+  return attacks;
 }
 
 function extractSection(text, headings) {

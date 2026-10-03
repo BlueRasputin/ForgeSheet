@@ -8,7 +8,11 @@
       "tools/**",
       "docs/**",
       "data/**",
-      "README.md"
+      "*.md",
+      "firestore.rules"
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

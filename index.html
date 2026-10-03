@@ -4,209 +4,233 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ForgeSheet</title>
-    <link rel="stylesheet" href="./styles.css?v=21">
+    <meta name="description" content="ForgeSheet is a 5e character sheet and builder: create characters at any level, track spells, resources and combat, and run a party from one page.">
+    <meta name="theme-color" content="#efeff1" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='8'%20fill='%23c2412d'/%3E%3Ctext%20x='16'%20y='22.5'%20font-family='Arial,sans-serif'%20font-size='18'%20font-weight='700'%20fill='white'%20text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+    <link rel="stylesheet" href="./styles.css?v=33">
   </head>
   <body>
+    <a class="skip-link" href="#main">Skip to the sheet</a>
     <div class="app-shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">5e character builder</p>
-          <h1>ForgeSheet</h1>
+        <div class="brand">
+          <span class="brand-mark"><i class="ph-light ph-sword" aria-hidden="true"></i></span>
+          <div>
+            <h1>ForgeSheet</h1>
+            <span id="autosaveStatus" class="autosave">Autosaved</span>
+          </div>
         </div>
+        <label class="character-switch">
+          <span class="visually-hidden">Character</span>
+          <select id="characterLibrarySelect" aria-label="Character"></select>
+        </label>
+        <label class="top-search">
+          <i class="ph-light ph-magnifying-glass" aria-hidden="true"></i>
+          <input id="sheetSearch" autocomplete="off" placeholder="Search the sheet" aria-label="Search the sheet">
+        </label>
+        <nav class="top-nav" aria-label="Tools">
+          <button class="ghost" type="button" data-tab="builder" aria-label="Builder" title="Builder"><i class="ph-light ph-hammer" aria-hidden="true"></i><span class="btn-label">Builder</span></button>
+          <button class="ghost" type="button" data-tab="party" aria-label="Party" title="Party"><i class="ph-light ph-users-three" aria-hidden="true"></i><span class="btn-label">Party</span></button>
+          <button class="ghost" type="button" data-tab="campaign" aria-label="Campaign" title="Campaign"><i class="ph-light ph-globe" aria-hidden="true"></i><span class="btn-label">Campaign</span></button>
+        </nav>
         <div class="top-actions">
-          <label class="theme-picker">
-            Theme
-            <select id="themeSelect">
-              <option value="beyond">Beyond</option>
-              <option value="light">Fantasy</option>
-              <option value="dark">Dark</option>
-              <option value="retro">Retro Basement</option>
-            </select>
-          </label>
-          <button id="rulesButton" class="ghost" type="button">Rules</button>
-          <button id="backgroundUpload" class="ghost" type="button">Backdrop</button>
+          <button id="rulesButton" class="ghost" type="button"><i class="ph-light ph-book-open" aria-hidden="true"></i><span class="btn-label">Rules</span></button>
+          <details class="file-menu">
+            <summary class="ghost"><i class="ph-light ph-moon-stars" aria-hidden="true"></i><span class="btn-label">Rest</span><i class="ph-light ph-caret-down" aria-hidden="true"></i></summary>
+            <div class="file-menu-items">
+              <button id="shortRestButton" class="ghost" type="button"><i class="ph-light ph-hourglass-medium" aria-hidden="true"></i>Short rest</button>
+              <button id="longRestButton" class="ghost" type="button"><i class="ph-light ph-bed" aria-hidden="true"></i>Long rest</button>
+            </div>
+          </details>
+          <button id="checklistButton" class="ghost" type="button">Checklist</button>
+          <button id="levelUpButton" class="primary has-orb" type="button"><span class="btn-label">Level up</span><span class="btn-orb"><i class="ph-light ph-arrow-up-right" aria-hidden="true"></i></span></button>
+          <details class="file-menu">
+            <summary class="ghost menu-toggle" aria-label="Menu" title="Menu"><span class="burger" aria-hidden="true"><span></span><span></span></span></summary>
+            <div class="file-menu-items">
+              <p class="menu-label">Character</p>
+              <button id="newCharacterButton" class="ghost" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>New character</button>
+              <button id="duplicateCharacterButton" class="ghost" type="button"><i class="ph-light ph-copy" aria-hidden="true"></i>Duplicate</button>
+              <button id="deleteCharacterButton" class="danger" type="button"><i class="ph-light ph-trash" aria-hidden="true"></i>Delete character</button>
+              <hr>
+              <p class="menu-label">File</p>
+              <button id="importSheetButton" class="ghost" type="button"><i class="ph-light ph-file-arrow-up" aria-hidden="true"></i>Import a PDF or text sheet…</button>
+              <button id="importJsonButton" class="ghost" type="button"><i class="ph-light ph-file-arrow-up" aria-hidden="true"></i>Import ForgeSheet JSON…</button>
+              <button id="exportPdfButton" class="ghost" type="button"><i class="ph-light ph-file-pdf" aria-hidden="true"></i>Download this character (PDF)</button>
+              <button id="exportCharacterJsonButton" class="ghost" type="button"><i class="ph-light ph-file-arrow-down" aria-hidden="true"></i>Download this character (JSON)</button>
+              <button id="exportJsonButton" class="ghost" type="button"><i class="ph-light ph-file-arrow-down" aria-hidden="true"></i>Back up all characters (JSON)</button>
+              <button id="aiPromptButton" class="ghost" type="button"><i class="ph-light ph-robot" aria-hidden="true"></i>Copy sheet as an AI prompt…</button>
+              <button id="printSheetButton" class="ghost" type="button"><i class="ph-light ph-printer" aria-hidden="true"></i>Print sheet</button>
+              <button id="saveCharacter" class="ghost" type="button"><i class="ph-light ph-floppy-disk" aria-hidden="true"></i>Save now</button>
+              <hr>
+              <p class="menu-label">View</p>
+              <button id="settingsButton" class="ghost" type="button"><i class="ph-light ph-gear-six" aria-hidden="true"></i>Settings and appearance…</button>
+              <section class="split-toolbar advanced" aria-label="Side-by-side view controls">
+                <label class="inline-check split-toggle">
+                  <input type="checkbox" id="splitViewToggle">
+                  Side-by-side panels
+                </label>
+                <label>
+                  Left
+                  <select id="splitLeftSelect"></select>
+                </label>
+                <label>
+                  Right
+                  <select id="splitRightSelect"></select>
+                </label>
+                <button id="swapSplitPanels" class="ghost" type="button"><i class="ph-light ph-arrows-left-right" aria-hidden="true"></i>Swap</button>
+              </section>
+              <hr>
+              <button id="resetCharacter" class="danger" type="button">Reset this sheet…</button>
+            </div>
+          </details>
           <input id="backgroundFile" type="file" accept="image/*" hidden>
-          <button id="importSheetButton" class="ghost">Import Sheet</button>
-          <button id="exportJsonButton" class="ghost">Export</button>
-          <button id="printSheetButton" class="ghost">Print</button>
-          <button id="importJsonButton" class="ghost">Import JSON</button>
-          <button id="saveCharacter" class="ghost">Save</button>
-          <button id="resetCharacter" class="danger">Reset</button>
-          <button id="shortRestButton" class="secondary" type="button">Short Rest</button>
-          <button id="longRestButton" class="secondary" type="button">Long Rest</button>
-          <button id="checklistButton" class="secondary" type="button">Checklist</button>
-          <button id="levelUpButton" class="primary">Level Up</button>
         </div>
       </header>
 
       <div id="asiBanner" class="asi-banner" aria-live="polite"></div>
+      <section id="searchResults" class="search-results"></section>
 
-      <main>
-        <section class="manager-band">
-          <label>
-            Character Library
-            <select id="characterLibrarySelect"></select>
-          </label>
-          <button id="newCharacterButton" class="secondary" type="button">New</button>
-          <button id="duplicateCharacterButton" class="ghost" type="button">Duplicate</button>
-          <button id="deleteCharacterButton" class="danger" type="button">Delete</button>
-          <label>
-            Search Sheet
-            <input id="sheetSearch" autocomplete="off" placeholder="Search spells, notes, features...">
-          </label>
-          <section class="split-toolbar" aria-label="Side-by-side view controls">
-            <label class="inline-check split-toggle">
-              <input type="checkbox" id="splitViewToggle">
-              Side-by-side
-            </label>
-            <label>
-              Left
-              <select id="splitLeftSelect"></select>
-            </label>
-            <label>
-              Right
-              <select id="splitRightSelect"></select>
-            </label>
-            <button id="swapSplitPanels" class="ghost" type="button">Swap</button>
-          </section>
-          <span id="autosaveStatus" class="muted">Autosaved</span>
-        </section>
-
-        <section id="searchResults" class="search-results"></section>
-
-        <section class="summary-band">
-          <div id="identityBlock" class="identity-block">
-            <button type="button" id="identityLock" class="ability-lock identity-lock" title="Edit character details">
-              <svg class="icon-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.9 3.5a2 2 0 0 1 2.8 0l.8.8a2 2 0 0 1 0 2.8l-1.2 1.2-3.6-3.6zM14.3 6.1l3.6 3.6-8.8 8.8-4.1 1.1a0.5 0.5 0 0 1-.6-.6l1.1-4.1z"/></svg>
-              <svg class="icon-done" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.55 17.6 4.4 12.45l1.7-1.7 3.45 3.44 8.35-8.34 1.7 1.7z"/></svg>
-            </button>
-            <div id="identityDisplay" class="identity-display"></div>
-            <div class="identity-grid">
-            <label>
-              Character
-              <input id="characterName" autocomplete="off" placeholder="Name">
-            </label>
-            <label>
-              Class
-              <select id="classSelect"></select>
-            </label>
-            <label>
-              Subclass
-              <input id="subclassName" autocomplete="off" placeholder="Armorer">
-            </label>
-            <label>
-              Level
-              <input id="levelInput" type="number" min="1" max="20">
-            </label>
-            <label>
-              Species
-              <input id="speciesInput" autocomplete="off" placeholder="Human">
-            </label>
-            <label>
-              Background
-              <input id="backgroundInput" autocomplete="off" placeholder="Sage">
-            </label>
-            <label>
-              Alignment
-              <input id="alignmentInput" autocomplete="off" placeholder="NG">
-            </label>
+      <main id="main">
+        <div class="sheet-layout">
+          <aside class="sheet-sidebar" aria-label="Character summary">
+            <div id="identityBlock" class="identity-block">
+              <button type="button" id="identityLock" class="ghost edit-toggle">Edit</button>
+              <div id="identityDisplay" class="identity-display"></div>
+              <div class="identity-grid">
+              <label>
+                Character
+                <input id="characterName" autocomplete="off" placeholder="Name">
+              </label>
+              <label>
+                Class
+                <select id="classSelect"></select>
+              </label>
+              <label>
+                Subclass
+                <input id="subclassName" autocomplete="off" placeholder="Armorer" list="subclassOptions">
+                <datalist id="subclassOptions"></datalist>
+              </label>
+              <label>
+                Level
+                <input id="levelInput" type="number" min="1" max="20">
+              </label>
+              <label>
+                Species
+                <input id="speciesInput" autocomplete="off" placeholder="Human">
+              </label>
+              <label>
+                Background
+                <input id="backgroundInput" autocomplete="off" placeholder="Sage">
+              </label>
+              <label>
+                Alignment
+                <input id="alignmentInput" autocomplete="off" placeholder="NG">
+              </label>
+              </div>
             </div>
-          </div>
-          <div class="vitals">
-            <div id="abilities" class="ability-grid"></div>
+            <div class="hp-box">
+              <span class="hp-caption">Hit points</span>
+              <p class="easy-hint">How much damage you can take. Type a number and press Damage or Heal. At 0 you fall unconscious and roll death saves.</p>
+              <div class="hp-fields">
+                <label>Current<input id="hpInput" type="number" min="1"></label>
+                <label>Max<input id="maxHpInput" type="number" min="1"></label>
+                <label>Temp<input id="tempHpInput" type="number" min="0"></label>
+              </div>
+              <div class="hp-actions">
+                <button id="applyDamageButton" class="damage" type="button">Damage</button>
+                <input id="damageAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Heal or damage amount">
+                <button id="applyHealButton" class="heal" type="button">Heal</button>
+              </div>
+              <div id="wildShapeBox" class="wild-shape" hidden></div>
+              <p id="maxHpNote" class="hp-note" hidden></p>
+              <div class="death-saves-block">
+                <span class="field-title">Death saves</span>
+                <div id="deathSaveTracker" class="death-saves"></div>
+              </div>
+              <div class="hp-hitdice">
+                <span id="hitDiceSummary">Hit dice</span>
+                <button id="spendHitDieButton" class="ghost" type="button" title="Spend a hit die (short rest)"><i class="ph-light ph-dice-five" aria-hidden="true"></i>Spend</button>
+              </div>
+            </div>
+            <div class="sheet-alerts">
+              <div id="concentrationPrompt" class="concentration-prompt"></div>
+              <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
+            </div>
             <div class="stat-tile-group">
-              <div class="stat-tile">
-                <span>Proficiency</span>
-                <strong id="profBonus">+2</strong>
-              </div>
-              <div class="stat-tile">
-                <span>Speed</span>
-                <strong><input id="speedInput" type="number" min="0"></strong>
-              </div>
-              <div class="stat-tile" id="inspirationTile">
-                <span>Inspiration</span>
-                <strong id="inspirationValue">0</strong>
-                <div class="tile-buttons">
-                  <button id="inspirationSpend" type="button" title="Spend inspiration">−</button>
-                  <button id="inspirationAdd" type="button" title="Gain inspiration">+</button>
-                </div>
+              <div class="stat-tile ac-tile">
+                <i class="ph-light ph-shield" aria-hidden="true"></i>
+                <span>AC</span>
+                <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
+                <button type="button" id="acHint" class="ac-hint" hidden></button>
               </div>
               <button type="button" id="rollInitiative" class="stat-tile" title="Roll initiative">
                 <span>Initiative</span>
                 <strong id="initiativeValue">+0</strong>
               </button>
               <div class="stat-tile">
-                <span>Armor Class</span>
-                <strong><input id="acInput" type="number" min="1" aria-label="Armor class"></strong>
+                <span>Speed</span>
+                <strong class="with-unit"><input id="speedInput" type="number" min="0" aria-label="Speed in feet"><small>ft</small></strong>
               </div>
-              <div class="stat-tile conditions-tile">
+              <button type="button" class="stat-tile conditions-tile" id="conditionsTile" title="Open conditions">
                 <span>Conditions</span>
-                <p id="conditionsMini">None</p>
+                <span id="conditionsMini" class="conditions-mini">None</span>
+              </button>
+              <div class="stat-tile" id="inspirationTile">
+                <span>Inspiration</span>
+                <div class="tile-buttons">
+                  <button id="inspirationSpend" type="button" title="Spend inspiration" aria-label="Spend inspiration"><i class="ph-light ph-minus" aria-hidden="true"></i></button>
+                  <strong id="inspirationValue">0</strong>
+                  <button id="inspirationAdd" type="button" title="Gain inspiration" aria-label="Gain inspiration"><i class="ph-light ph-plus" aria-hidden="true"></i></button>
+                </div>
+              </div>
+              <div class="stat-tile">
+                <span>Prof. bonus</span>
+                <strong id="profBonus">+2</strong>
               </div>
             </div>
-            <div class="hp-box">
-              <span class="hp-caption">Hit Points</span>
-              <div class="hp-actions">
-                <button id="applyHealButton" class="heal" type="button">Heal</button>
-                <input id="damageAmount" type="number" min="0" placeholder="0" aria-label="Heal or damage amount">
-                <button id="applyDamageButton" class="damage" type="button">Damage</button>
-              </div>
-              <div class="hp-fields">
-                <label>Current<input id="hpInput" type="number" min="1"></label>
-                <label>Max<input id="maxHpInput" type="number" min="1"></label>
-                <label>Temp<input id="tempHpInput" type="number" min="0"></label>
-              </div>
-            </div>
-          </div>
-          <div id="concentrationPrompt" class="concentration-prompt"></div>
-        </section>
-
-        <div class="sheet-layout">
-          <aside class="sheet-rail">
-            <section class="block rail-block">
-              <div class="block-head">
-                <h2>Saving Throws</h2>
-              </div>
-              <div id="savingThrows" class="skill-grid saves"></div>
-            </section>
-            <section class="block rail-block">
-              <div class="block-head">
-                <h2>Senses</h2>
-              </div>
+            <details id="sideResourcesSection" class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Class resources</h2>
+                <span id="sideResourcesSummary"></span>
+              </summary>
+              <p class="easy-hint">Limited uses of your class features. Tap a pip to spend one; a rest refills them (SR = short rest, LR = long rest).</p>
+              <div id="sideResources" class="side-resources"></div>
+            </details>
+            <details class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Abilities and saves</h2>
+              </summary>
+              <p class="easy-hint">The big number is your modifier: what you add to a d20. Tap it to roll a check; tap Save to roll a saving throw.</p>
+              <div id="abilities" class="ability-grid"></div>
+            </details>
+            <details class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Passive senses</h2>
+              </summary>
               <div id="senses" class="senses-list"></div>
-            </section>
-            <section class="block rail-block">
-              <div class="block-head">
-                <h2>Proficiencies &amp; Training</h2>
-              </div>
-              <div class="training-fields">
-                <label>Armor <input id="armorTrainingInput" autocomplete="off" placeholder="Light armor, shields..."></label>
-                <label>Weapons <input id="weaponTrainingInput" autocomplete="off" placeholder="Simple weapons..."></label>
-                <label>Tools <input id="toolsInput" autocomplete="off" placeholder="Thieves' tools..."></label>
-                <label>Languages <input id="languagesInput" autocomplete="off" placeholder="Common, Dwarvish..."></label>
-              </div>
-            </section>
+            </details>
+            <details id="skillsSection" class="side-section" open>
+              <summary class="side-head">
+                <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Skills</h2>
+                <span id="skillSummary"></span>
+              </summary>
+              <p class="easy-hint">Tap a skill when the DM asks for a check, like "make a Perception check".</p>
+              <div id="skills" class="skill-grid single"></div>
+            </details>
           </aside>
-
-          <section class="block skills-col">
-            <div class="block-head">
-              <h2>Skills</h2>
-              <span id="skillSummary"></span>
-            </div>
-            <div id="skills" class="skill-grid single"></div>
-          </section>
 
           <div class="sheet-main">
             <nav class="tabs" aria-label="Character sections">
-              <button class="tab active" data-tab="actions">Actions</button>
-              <button class="tab" data-tab="spells">Spells</button>
-              <button class="tab" data-tab="inventory">Inventory</button>
-              <button class="tab" data-tab="features">Features &amp; Traits</button>
-              <button class="tab" data-tab="background">Background</button>
-              <button class="tab" data-tab="notes">Notes</button>
-              <button class="tab" data-tab="builder">Builder</button>
-              <button class="tab" data-tab="party">Party</button>
-              <button class="tab" data-tab="campaign">Campaign</button>
+              <button class="tab active" type="button" data-tab="actions"><i class="ph-light ph-sword" aria-hidden="true"></i>Combat</button>
+              <button class="tab" type="button" data-tab="spells"><i class="ph-light ph-sparkle" aria-hidden="true"></i>Spells</button>
+              <button class="tab" type="button" data-tab="inventory"><i class="ph-light ph-backpack" aria-hidden="true"></i>Inventory</button>
+              <button class="tab" type="button" data-tab="rp"><i class="ph-light ph-chats-circle" aria-hidden="true"></i>Roleplay</button>
+              <button class="tab" type="button" data-tab="features"><i class="ph-light ph-scroll" aria-hidden="true"></i>Features</button>
             </nav>
 
             <div class="deck-shell">
@@ -214,14 +238,14 @@
         <section id="builder" class="panel">
           <section class="block">
             <div class="block-head">
-              <h2>Guided Character Builder</h2>
+              <h2>Guided character builder</h2>
               <span id="builderProgress" class="muted">0 / 7 complete</span>
             </div>
             <div id="builderWizard" class="builder-wizard"></div>
           </section>
           <section class="block">
             <div class="block-head">
-              <h2>Advancement Timeline</h2>
+              <h2>Advancement timeline</h2>
               <span id="advancementSummary" class="muted">Upcoming levels</span>
             </div>
             <div id="advancementTimeline" class="timeline-list"></div>
@@ -229,26 +253,33 @@
           <div class="two-col">
             <section class="block">
               <div class="block-head">
-                <h2>Feature Automation</h2>
-                <button id="applyFeatureAutomation" class="secondary" type="button">Apply Suggestions</button>
+                <h2>Feature automation</h2>
+                <button id="applyFeatureAutomation" class="secondary" type="button">Apply suggestions</button>
               </div>
               <div id="featureAutomation" class="feature-automation"></div>
             </section>
             <section class="block">
               <div class="block-head">
-                <h2>Multiclass & Feat Planner</h2>
+                <h2>Class table</h2>
+                <button id="editCurrentClass" class="secondary" type="button" hidden>Edit custom class</button>
+              </div>
+              <div id="builderTabClassTable" class="class-table"></div>
+            </section>
+            <section class="block" id="featPlanner">
+              <div class="block-head">
+                <h2>Multiclass and feat planner</h2>
               </div>
               <div class="planner-tools">
                 <label>
-                  Next Class
+                  Next class
                   <select id="multiclassSelect"></select>
                 </label>
-                <button id="addMulticlassPlan" class="ghost" type="button">Add Class</button>
+                <button id="addMulticlassPlan" class="ghost" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add class</button>
                 <label>
-                  Feat / ASI
+                  Feat or ASI
                   <select id="featSelect"></select>
                 </label>
-                <button id="addFeatPlan" class="ghost" type="button">Add Feat</button>
+                <button id="addFeatPlan" class="ghost" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add feat</button>
               </div>
               <div id="plannerSummary" class="planner-summary"></div>
             </section>
@@ -258,36 +289,36 @@
         <section id="features" class="panel">
           <section class="block">
             <div class="block-head">
-              <h2>Features &amp; Traits</h2>
+              <h2>Features and traits</h2>
             </div>
-            <textarea id="featuresInput" rows="10" placeholder="Class features, feats, traits, infusions, invocations..."></textarea>
+            <textarea id="featuresInput" rows="10" placeholder="Class features, feats, traits, infusions, invocations…"></textarea>
           </section>
 
           <section class="block">
             <div class="block-head">
               <h2>Subclass</h2>
-              <button id="addSubclassSection" class="secondary" type="button">+ Section</button>
+              <button id="addSubclassSection" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Section</button>
             </div>
             <div class="subclass-tools">
               <label>
                 Source
                 <select id="subclassMode">
-                  <option value="custom">Custom / non-SRD</option>
-                  <option value="official">Official SRD API</option>
+                  <option value="custom">Custom (type any subclass)</option>
+                  <option value="official">Official list</option>
                 </select>
               </label>
               <label>
-                Official SRD Subclass
+                Official subclass
                 <select id="officialSubclassSelect"></select>
               </label>
               <label>
-                Subclass Type
-                <input id="subclassType" autocomplete="off" placeholder="Specialist, domain, patron, oath...">
+                Subclass type
+                <input id="subclassType" autocomplete="off" placeholder="Specialist, domain, patron, oath…">
               </label>
               <label>
-                Add Template
+                Add a template
                 <select id="subclassTemplate">
-                  <option value="">Choose template...</option>
+                  <option value="">Choose a template…</option>
                   <option value="armorer">Armorer armor forms</option>
                   <option value="choice">Choice-based subclass</option>
                   <option value="resource">Subclass resource tracker</option>
@@ -298,11 +329,11 @@
             <div id="subclassSections" class="note-sections"></div>
           </section>
 
-          <section class="block">
+          <section class="block advanced">
             <div class="block-head">
-              <h2>Class Option Modules</h2>
-              <select id="classOptionPreset" class="small-select">
-                <option value="">Add preset...</option>
+              <h2>Class option modules</h2>
+              <select id="classOptionPreset" class="small-select" aria-label="Add a class option preset">
+                <option value="">Add a preset…</option>
                 <option value="infusion">Artificer infusion</option>
                 <option value="invocation">Warlock invocation</option>
                 <option value="metamagic">Sorcerer metamagic</option>
@@ -314,10 +345,10 @@
           </section>
         </section>
 
-        <section id="background" class="panel">
+        <section id="rp" class="panel">
           <section class="block">
             <div class="block-head">
-              <h2>Background & Personality</h2>
+              <h2>Background and personality</h2>
               <button id="generatePersonalityButton" class="secondary" type="button">Generate</button>
             </div>
             <div class="background-tools">
@@ -325,7 +356,7 @@
                 Preset
                 <select id="backgroundPreset"></select>
               </label>
-              <button id="applyBackgroundPreset" class="ghost" type="button">Apply</button>
+              <button id="applyBackgroundPreset" class="secondary" type="button">Apply</button>
             </div>
             <div class="field-grid">
               <label>Trait <textarea id="personalityTraitInput" rows="3"></textarea></label>
@@ -334,115 +365,155 @@
               <label>Flaw <textarea id="flawInput" rows="3"></textarea></label>
             </div>
           </section>
+          <section class="block">
+            <div class="block-head">
+              <h2>Languages and proficiencies</h2>
+            </div>
+            <div class="training-fields">
+              <label>Languages <input id="languagesInput" autocomplete="off" placeholder="e.g. Common, Dwarvish"></label>
+              <label>Tools <input id="toolsInput" autocomplete="off" placeholder="e.g. Thieves' tools"></label>
+              <label>Armor <input id="armorTrainingInput" autocomplete="off" placeholder="e.g. Light armor, shields"></label>
+              <label>Weapons <input id="weaponTrainingInput" autocomplete="off" placeholder="e.g. Simple weapons"></label>
+            </div>
+          </section>
+          <section class="block">
+            <div class="block-head">
+              <h2>Notes</h2>
+              <button id="addGeneralNoteSection" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Section</button>
+            </div>
+            <textarea id="notesInput" rows="12" aria-label="Notes"></textarea>
+            <div id="generalNoteSections" class="note-sections"></div>
+          </section>
         </section>
 
         <section id="actions" class="panel active">
-          <div class="play-actions">
-            <button id="addResourceButton" class="ghost" type="button">+ Resource</button>
-            <button id="addActionButton" class="ghost" type="button">+ Action</button>
-            <button id="addClassOptionButton" class="ghost" type="button">+ Class Option</button>
-            <button id="generateActionsButton" class="ghost" type="button">Generate Actions</button>
-          </div>
-          <section class="block">
+          <section id="turnGuide" class="block turn-guide easy-only" aria-label="What you can do on your turn"></section>
+          <section class="block caster-only" id="castingBlock">
             <div class="block-head">
-              <h2>Combat Dashboard</h2>
-              <span id="combatSummary" class="muted">Ready</span>
+              <h2>Spellcasting</h2>
+              <div class="cast-stats">
+                <span>Save DC <strong id="spellDc">-</strong></span>
+                <span>Attack <strong id="spellAttack">-</strong></span>
+              </div>
             </div>
-            <div id="combatDashboard" class="combat-dashboard"></div>
+            <div class="slots" id="slotGrid"></div>
+            <div class="concentration-box">
+              <label>Concentration <input id="concentrationInput" autocomplete="off" placeholder="Not concentrating"></label>
+              <button id="clearConcentrationButton" class="ghost" type="button">Drop</button>
+            </div>
+            <div id="combatSpells" class="combat-spells"></div>
           </section>
-          <div class="two-col">
-            <section class="block">
-              <div class="block-head">
-                <h2>Combat</h2>
-              </div>
-              <div class="field-grid compact">
-                <label>Hit Dice <input id="hitDiceInput" autocomplete="off"></label>
-              </div>
-              <div class="death-saves-block">
-                <span class="field-title">Death Saves</span>
-                <div id="deathSaveTracker" class="death-saves"></div>
-              </div>
-            </section>
-            <section class="block">
-              <div class="block-head">
-                <h2>Attacks</h2>
-              </div>
-              <textarea id="attacksInput" rows="6" placeholder="Weapon attacks, to-hit bonuses, damage..."></textarea>
-            </section>
-          </div>
-          <section class="block">
-            <div class="block-head">
-              <h2>Dice Roller</h2>
-              <span id="rollSummary" class="muted">No rolls yet</span>
-            </div>
-            <div class="roll-controls">
-              <label>Formula <input id="rollFormula" autocomplete="off" placeholder="1d20+5, 2d8+3"></label>
-              <label>
-                Mode
-                <select id="rollMode">
-                  <option value="normal">Normal</option>
-                  <option value="advantage">Advantage</option>
-                  <option value="disadvantage">Disadvantage</option>
-                </select>
-              </label>
-              <button id="rollDiceButton" class="primary" type="button">Roll</button>
-            </div>
-            <div id="rollHistory" class="roll-history"></div>
-          </section>
-          <section class="block">
-            <div class="block-head">
-              <h2>Rest Automation</h2>
-              <span id="restSummary" class="muted">Ready</span>
-            </div>
-            <div class="hit-dice-controls">
-              <span id="hitDiceSummary" class="muted">Hit dice ready</span>
-              <button id="spendHitDieButton" class="secondary" type="button">Spend Hit Die</button>
-            </div>
-            <div id="restPreview" class="rest-preview"></div>
-          </section>
-          <div class="two-col">
-            <section class="block">
-              <div class="block-head">
-                <h2>Resources</h2>
-              </div>
-              <div id="resourceRows" class="tracker-list"></div>
-            </section>
-            <section class="block">
-              <div class="block-head">
-                <h2>Conditions</h2>
-              </div>
-              <div id="conditionGrid" class="condition-grid"></div>
-              <label>Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
-            </section>
-          </div>
+
           <section class="block">
             <div class="block-head">
               <h2>Actions</h2>
-              <div id="actionFilter" class="action-filter">
-                <button type="button" data-action-filter="all" class="active">All</button>
-                <button type="button" data-action-filter="Action">Actions</button>
-                <button type="button" data-action-filter="Bonus Action">Bonus</button>
-                <button type="button" data-action-filter="Reaction">Reactions</button>
-                <button type="button" data-action-filter="Free">Other</button>
+              <div class="block-tools">
+                <button id="addActionButton" class="ghost" type="button" title="Add an action"><i class="ph-light ph-plus" aria-hidden="true"></i>Add</button>
+                <button id="generateActionsButton" class="ghost" type="button" title="Generate actions from your gear and class"><i class="ph-light ph-sparkle" aria-hidden="true"></i>Generate</button>
+              </div>
+            </div>
+            <div id="actionFilter" class="action-filters">
+              <div class="action-filter" role="group" aria-label="Filter by action cost">
+                <button type="button" data-action-filter="all" class="active" aria-pressed="true">All</button>
+                <button type="button" data-action-filter="Action" aria-pressed="false"><span class="cost-dot cost-action" aria-hidden="true"></span>Action</button>
+                <button type="button" data-action-filter="Bonus Action" aria-pressed="false"><span class="cost-dot cost-bonus" aria-hidden="true"></span>Bonus action</button>
+                <button type="button" data-action-filter="Reaction" aria-pressed="false"><span class="cost-dot cost-reaction" aria-hidden="true"></span>Reaction</button>
+                <button type="button" data-action-filter="Free" aria-pressed="false">Free</button>
+              </div>
+              <div class="action-filter" role="group" aria-label="Filter by kind">
+                <button type="button" data-kind-filter="all" class="active" aria-pressed="true">Everything</button>
+                <button type="button" data-kind-filter="attack" aria-pressed="false">Attacks</button>
+                <button type="button" data-kind-filter="spell" aria-pressed="false">Spells</button>
+                <button type="button" data-kind-filter="feature" aria-pressed="false">Class features</button>
+                <button type="button" data-kind-filter="item" aria-pressed="false">Items</button>
+                <button type="button" data-kind-filter="common" aria-pressed="false">Common actions</button>
               </div>
             </div>
             <div id="actionRows" class="action-list"></div>
+            <label id="fightingStyleField" class="fighting-style" hidden>Fighting style
+              <select id="fightingStyleSelect">
+                <option value="">None chosen</option>
+                <option>Archery</option><option>Defense</option><option>Dueling</option>
+                <option>Great Weapon Fighting</option><option>Protection</option><option>Two-Weapon Fighting</option>
+              </select>
+            </label>
           </section>
+
+          <section class="block resources-row">
+              <div class="block-head">
+                <h2>Resources</h2>
+                <div class="block-tools">
+                  <button id="addResourceButton" class="ghost" type="button" title="Add a resource tracker"><i class="ph-light ph-plus" aria-hidden="true"></i>Resource</button>
+                  <button id="addClassOptionButton" class="ghost" type="button" title="Add a class option module"><i class="ph-light ph-plus" aria-hidden="true"></i>Class option</button>
+                </div>
+              </div>
+              <div id="resourceRows" class="tracker-list"></div>
+          </section>
+
+          <section class="block">
+            <div class="block-head">
+              <h2>Conditions</h2>
+              <label class="exhaustion-field">Exhaustion <input id="exhaustionInput" type="number" min="0" max="6"></label>
+            </div>
+            <div id="conditionGrid" class="condition-grid"></div>
+          </section>
+
+          <section class="block">
+            <div class="block-head">
+              <h2>Dice roller</h2>
+              <span id="rollSummary" class="muted">No rolls yet</span>
+            </div>
+            <div class="dice-picker" role="group" aria-label="Add a die to the formula">
+              <button type="button" class="ghost" data-add-die="4">d4</button>
+              <button type="button" class="ghost" data-add-die="6">d6</button>
+              <button type="button" class="ghost" data-add-die="8">d8</button>
+              <button type="button" class="ghost" data-add-die="10">d10</button>
+              <button type="button" class="ghost" data-add-die="12">d12</button>
+              <button type="button" class="ghost" data-add-die="20">d20</button>
+              <button type="button" class="ghost" data-add-die="100">d100</button>
+              <button type="button" class="ghost" data-add-die="clear">Clear</button>
+            </div>
+            <div class="roll-controls">
+              <label>Formula <input id="rollFormula" autocomplete="off" placeholder="1d20+5, 2d8+3"></label>
+              <button id="rollDiceButton" class="primary has-orb" type="button">Roll<span class="btn-orb"><i class="ph-light ph-dice-five" aria-hidden="true"></i></span></button>
+            </div>
+            <div id="rollHistory" class="roll-history"></div>
+          </section>
+
+          <details id="recoveryDetails" class="block fold">
+            <summary class="block-head">
+              <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Rest and hit dice</h2>
+              <span id="restSummary" class="muted">Ready</span>
+            </summary>
+            <div class="field-grid compact hit-dice-field">
+              <label>Hit dice <input id="hitDiceInput" autocomplete="off"></label>
+            </div>
+            <div id="restPreview" class="rest-preview"></div>
+          </details>
+
+          <details class="block fold turn-reference advanced">
+            <summary class="block-head">
+              <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Turn reference and attack notes</h2>
+              <span id="combatSummary" class="muted">Ready</span>
+            </summary>
+            <div id="combatDashboard" class="combat-dashboard"></div>
+            <label class="attack-notes">Attack notes <textarea id="attacksInput" rows="4" placeholder="Weapon properties, ammo counts, riders…"></textarea></label>
+          </details>
         </section>
 
         <section id="inventory" class="panel">
           <section class="block">
             <div class="block-head">
-              <h2>Equipment & Encumbrance</h2>
+              <h2>Equipment and encumbrance</h2>
               <span id="encumbranceSummary" class="muted">0 lb</span>
             </div>
             <div class="equipment-catalog-tools">
               <label>
-                Add Catalog Item
+                Add a catalog item
                 <select id="equipmentCatalogSelect"></select>
               </label>
-              <button id="addCatalogEquipment" class="secondary" type="button">+ Add</button>
-              <button id="addEquipmentButton" class="ghost" type="button">+ Custom Item</button>
+              <button id="addCatalogEquipment" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add</button>
+              <button id="addEquipmentButton" class="ghost" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Custom item</button>
             </div>
             <div class="money-grid">
               <label>CP <input id="coinCp" type="number" min="0"></label>
@@ -457,73 +528,63 @@
           </section>
           <section class="block">
             <div class="block-head">
-              <h2>Other Inventory</h2>
+              <h2>Other inventory</h2>
             </div>
-            <textarea id="inventoryInput" rows="10" placeholder="Loose items, quest objects, stored gear..."></textarea>
+            <textarea id="inventoryInput" rows="10" placeholder="Loose items, quest objects, stored gear…"></textarea>
           </section>
         </section>
 
         <section id="spells" class="panel">
           <div class="spell-layout">
-            <aside class="block spell-control">
+            <aside class="block spell-control" aria-label="Spellbook summary">
               <div class="block-head">
-                <h2>Spellcasting</h2>
+                <h2>Spellbook</h2>
               </div>
               <div class="calc-grid">
                 <div><span>Ability</span><strong id="spellAbility">-</strong></div>
-                <div><span>Save DC</span><strong id="spellDc">-</strong></div>
-                <div><span>Attack</span><strong id="spellAttack">-</strong></div>
-                <div><span>Prepared</span><strong id="preparedCount">0 / 0</strong></div>
+                <div><span id="preparedLabel">Prepared</span><strong id="preparedCount">0 / 0</strong></div>
               </div>
-              <div class="concentration-box">
-                <label>Concentration <input id="concentrationInput" autocomplete="off" placeholder="No active concentration"></label>
-                <button id="clearConcentrationButton" class="ghost" type="button">Clear</button>
-              </div>
+              <p id="preparedWarning" class="prepared-warning" hidden></p>
+              <p class="muted">Cast spells, track slots and concentration from the Combat tab.</p>
+              <p class="easy-hint">Prepared spells are the ones you can cast today. Cantrips are free; other spells use a spell slot of their level or higher. You get your slots back after a long rest.</p>
               <div class="prep-tools">
                 <label>
-                  Prepared Suggestions
+                  Spell suggestions
                   <select id="prepMode">
                     <option value="combat">Combat</option>
                     <option value="exploration">Exploration</option>
                     <option value="social">Social</option>
                     <option value="dungeon">Dungeon</option>
-                    <option value="boss">Boss Fight</option>
+                    <option value="boss">Boss fight</option>
                   </select>
                 </label>
                 <div id="prepSuggestions" class="prep-suggestions"></div>
               </div>
-              <div class="slots" id="slotGrid"></div>
               <label class="inline-check">
                 <input type="checkbox" id="showAllSpells">
                 Include off-list API spells
               </label>
-              <p id="apiStatus" class="muted">Loading SRD spells from the 5e API...</p>
+              <p id="apiStatus" class="muted">Loading SRD spells from the 5e API…</p>
             </aside>
 
             <section class="block">
               <div class="block-head">
-                <h2>Spell List</h2>
+                <h2>Spell list</h2>
               </div>
               <div id="spellRows" class="spell-rows"></div>
             </section>
           </div>
         </section>
 
-        <section id="notes" class="panel">
-          <section class="block">
-            <div class="block-head">
-              <h2>Notes</h2>
-              <button id="addGeneralNoteSection" class="secondary" type="button">+ Section</button>
-            </div>
-            <textarea id="notesInput" rows="12"></textarea>
-            <div id="generalNoteSections" class="note-sections"></div>
-          </section>
-        </section>
-
         <section id="party" class="panel">
           <section class="block">
             <div class="block-head">
-              <h2>Party Dashboard</h2>
+              <h2>Party</h2>
+              <div id="partySort" class="action-filter">
+                <button type="button" data-party-sort="hp" class="active">Most hurt</button>
+                <button type="button" data-party-sort="init">Initiative</button>
+                <button type="button" data-party-sort="name">Name</button>
+              </div>
               <span id="partyCount" class="muted">0 characters</span>
             </div>
             <div id="partySummary" class="party-summary"></div>
@@ -534,12 +595,15 @@
         <section id="campaign" class="panel">
           <section class="block">
             <div class="block-head">
-              <h2>Account &amp; Cloud Saves</h2>
+              <h2>Account and cloud saves</h2>
             </div>
-            <p class="muted">Sign in with Google to store character sheets in your Firebase database. Your sign-in and characters survive closing the browser and work from any device.</p>
+            <p class="muted">Sign in to keep your character sheets online. They stay on this device too, and come back on any device you sign in from.</p>
             <div class="sync-actions">
-              <button id="googleSignIn" class="primary" type="button">Sign in with Google</button>
-              <button id="googleSignOut" class="ghost" type="button" hidden>Sign Out</button>
+              <span id="signInButtons" class="sign-in-buttons">
+                <button id="googleSignIn" class="primary" type="button"><i class="ph-light ph-google-logo" aria-hidden="true"></i>Sign in with Google</button>
+                <button id="githubSignIn" class="secondary" type="button"><i class="ph-light ph-github-logo" aria-hidden="true"></i>Sign in with GitHub</button>
+              </span>
+              <button id="googleSignOut" class="ghost" type="button" hidden>Sign out</button>
             </div>
             <p id="accountStatus" class="muted">Not signed in.</p>
           </section>
@@ -547,26 +611,26 @@
           <div class="sync-layout">
             <section class="block">
               <div class="block-head">
-                <h2>Game Session</h2>
+                <h2>Game session</h2>
                 <button id="disconnectSync" class="ghost" type="button">Disconnect</button>
               </div>
               <div class="field-grid">
                 <label>
-                  I am the...
+                  I am the…
                   <select id="syncRole">
                     <option value="player">Player</option>
                     <option value="dm">DM (Dungeon Master)</option>
                   </select>
                 </label>
-                <label>
-                  Session Code
+                <div class="field-label">
+                  <label for="syncCampaignId">Session code</label>
                   <span class="code-row">
                     <input id="syncCampaignId" autocomplete="off" placeholder="Enter or generate a code">
-                    <button id="generateCode" class="ghost dm-only" type="button">New Code</button>
+                    <button id="generateCode" class="ghost dm-only" type="button">New code</button>
                   </span>
-                </label>
+                </div>
                 <label>
-                  Display Name
+                  Display name
                   <input id="syncPlayerName" autocomplete="off" placeholder="Player or DM name">
                 </label>
                 <label>
@@ -575,20 +639,20 @@
                 </label>
               </div>
               <label>
-                Firebase Web Config
+                Firebase web config
                 <textarea id="syncFirebaseConfig" rows="7" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
               </label>
               <div class="sync-actions">
-                <button id="connectSync" class="primary" type="button">Connect Sync</button>
-                <button id="copyPlayerLink" class="secondary" type="button">Copy Player Link</button>
-                <button id="copyDmLink" class="secondary" type="button">Copy DM Link</button>
+                <button id="connectSync" class="primary" type="button">Connect</button>
+                <button id="copyPlayerLink" class="secondary" type="button"><i class="ph-light ph-copy" aria-hidden="true"></i>Player link</button>
+                <button id="copyDmLink" class="secondary" type="button"><i class="ph-light ph-copy" aria-hidden="true"></i>DM link</button>
               </div>
               <p id="syncStatus" class="muted">Not connected.</p>
             </section>
 
             <section class="block dm-only">
               <div class="block-head">
-                <h2>DM View</h2>
+                <h2>DM view</h2>
                 <span id="syncRosterCount" class="muted">0 sheets</span>
               </div>
               <div id="dmRoster" class="dm-roster"></div>
@@ -597,14 +661,14 @@
 
           <section class="block">
             <div class="block-head">
-              <h2>Campaign Activity</h2>
+              <h2>Campaign activity</h2>
             </div>
             <div id="syncActivity" class="activity-feed"></div>
           </section>
 
           <section class="block dm-only">
             <div class="block-head">
-              <h2>DM Item Cards</h2>
+              <h2>DM item cards</h2>
               <span id="dmItemStatus" class="muted">Choose a player and item.</span>
             </div>
             <div class="dm-item-tools">
@@ -613,14 +677,14 @@
                 <select id="dmItemTarget"></select>
               </label>
               <label>
-                Handbook Item
+                Handbook item
                 <select id="dmItemCatalog"></select>
               </label>
-              <button id="sendCatalogItem" class="secondary" type="button">+ Add</button>
+              <button id="sendCatalogItem" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add</button>
             </div>
             <div class="dm-item-editor">
               <label>Name <input id="customItemName" autocomplete="off" placeholder="Moon-Touched Dagger"></label>
-              <label>Type <input id="customItemType" autocomplete="off" placeholder="Weapon, wondrous item..."></label>
+              <label>Type <input id="customItemType" autocomplete="off" placeholder="Weapon, wondrous item…"></label>
               <label>Weight <input id="customItemWeight" type="number" min="0" step="0.01"></label>
               <label>Quantity <input id="customItemQuantity" type="number" min="1" step="1"></label>
               <label>Rarity <input id="customItemRarity" autocomplete="off" placeholder="Common"></label>
@@ -629,13 +693,13 @@
                   <option value="carried">Carried</option>
                   <option value="equipped">Equipped</option>
                   <option value="backpack">Backpack</option>
-                  <option value="bagOfHolding">Bag of Holding</option>
-                  <option value="mount">Mount / Cart</option>
-                  <option value="home">Home Base</option>
+                  <option value="bagOfHolding">Bag of holding</option>
+                  <option value="mount">Mount or cart</option>
+                  <option value="home">Home base</option>
                 </select>
               </label>
-              <label class="custom-item-notes">Notes <textarea id="customItemNotes" rows="4" placeholder="Properties, charges, lore, curse, attunement..."></textarea></label>
-              <button id="sendCustomItem" class="primary" type="button">Send Custom Item</button>
+              <label class="custom-item-notes">Notes <textarea id="customItemNotes" rows="4" placeholder="Properties, charges, lore, curse, attunement…"></textarea></label>
+              <button id="sendCustomItem" class="primary" type="button">Send custom item</button>
             </div>
             <div id="dmItemPreview" class="item-card-grid"></div>
           </section>
@@ -651,48 +715,52 @@
     <dialog id="levelDialog">
       <form method="dialog" class="modal">
         <div class="block-head">
-          <h2 id="levelDialogTitle">Level Up</h2>
-          <button value="cancel" class="icon-button" aria-label="Close">x</button>
+          <h2 id="levelDialogTitle">Level up</h2>
+          <button value="cancel" class="icon-button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
         </div>
+        <p class="muted">Review each choice; nothing changes until you confirm.</p>
+        <fieldset id="levelClassChoice" class="level-section"></fieldset>
+        <div id="levelHp" class="level-section"></div>
         <div id="levelSummary" class="level-summary"></div>
+        <div id="levelSubclass" class="level-summary"></div>
         <div id="levelAsiPrompt" class="level-summary"></div>
         <div id="levelSpellChoices" class="spell-rows"></div>
-        <menu>
+        <div class="dialog-actions">
           <button value="cancel" class="ghost">Cancel</button>
-          <button id="confirmLevelUp" value="default" class="primary">Apply Level</button>
-        </menu>
+          <button id="confirmLevelUp" value="default" class="primary">Level up</button>
+        </div>
       </form>
     </dialog>
 
     <dialog id="checklistDialog">
       <form method="dialog" class="modal">
         <div class="block-head">
-          <h2>Level-Up Checklist</h2>
-          <button value="cancel" class="icon-button" aria-label="Close">x</button>
+          <h2>Level-up checklist</h2>
+          <button value="cancel" class="icon-button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
         </div>
         <p id="checklistSummary" class="muted"></p>
         <div id="checklistBody" class="checklist-body"></div>
-        <menu>
+        <div class="dialog-actions">
           <button value="cancel" class="primary">Close</button>
-        </menu>
+        </div>
       </form>
     </dialog>
 
     <dialog id="importDialog">
       <form method="dialog" class="modal import-modal">
         <div class="block-head">
-          <h2>Import Character Sheet</h2>
-          <button value="cancel" class="icon-button" aria-label="Close">x</button>
+          <h2>Import a character sheet</h2>
+          <button value="cancel" class="icon-button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
         </div>
         <div class="pdf-import-row">
           <label>
-            PDF Character Sheet
+            PDF character sheet
             <input id="sheetImportPdf" type="file" accept="application/pdf,.pdf">
           </label>
           <p id="pdfImportStatus" class="muted">PDF text extraction works best with fillable or text-based PDFs.</p>
         </div>
         <label>
-          Pasted Sheet Text
+          Pasted sheet text
           <textarea id="sheetImportText" rows="12" placeholder="Paste a character sheet, export text, or copied summary here."></textarea>
         </label>
         <label class="inline-check">
@@ -700,8 +768,8 @@
           Import detected skill proficiencies
         </label>
         <div class="import-actions">
-          <button id="parseSheetImport" class="secondary" type="button">Parse Sheet</button>
-          <button id="applySheetImport" class="primary" type="button" disabled>Apply Detected Fields</button>
+          <button id="parseSheetImport" class="secondary" type="button">Parse sheet</button>
+          <button id="applySheetImport" class="primary" type="button" disabled>Apply detected fields</button>
         </div>
         <div id="importPreview" class="import-preview">
           <p class="muted">Detected fields will appear here before anything is applied.</p>
@@ -711,44 +779,45 @@
 
     <dialog id="createDialog" class="create-dialog">
       <form method="dialog" class="create-shell">
-        <aside class="create-rail">
-          <h2>Create a<br>Character</h2>
+        <aside class="create-rail" aria-label="Creation steps">
+          <h2>Create a<br>character</h2>
           <div id="createSteps" class="create-rail-steps"></div>
         </aside>
         <div class="create-main">
-          <button value="cancel" class="icon-button create-close" aria-label="Close">x</button>
+          <button value="cancel" class="icon-button create-close" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
           <div id="createStepBody" class="create-step-body"></div>
         </div>
-        <menu class="create-footer">
+        <div class="dialog-actions create-footer">
           <button id="createBack" class="ghost" type="button">Back</button>
           <button id="createNext" class="primary" type="button">Next</button>
-        </menu>
+        </div>
       </form>
     </dialog>
 
     <dialog id="rulesDialog" class="rules-dialog">
       <div class="modal rules-modal">
         <div class="block-head">
-          <h2>Rules Reference</h2>
+          <h2>Rules reference</h2>
           <span id="rulesCount" class="muted">0 entries</span>
-          <button id="closeRulesDialog" class="icon-button" type="button" aria-label="Close">x</button>
+          <button id="closeRulesDialog" class="icon-button" type="button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
         </div>
         <div class="rules-tools">
           <label>
             Search
-            <input id="rulesSearch" autocomplete="off" placeholder="condition, rest, action, spell, equipment...">
+            <input id="rulesSearch" autocomplete="off" placeholder="Condition, rest, action, spell, equipment…">
           </label>
           <label>
             Category
             <select id="rulesCategory">
               <option value="all">All</option>
-              <option value="core">Core Rules</option>
+              <option value="core">Core rules</option>
               <option value="condition">Conditions</option>
               <option value="action">Actions</option>
+              <option value="combat">Combat</option>
               <option value="rest">Rests</option>
               <option value="equipment">Equipment</option>
-              <option value="class">Class Options</option>
-              <option value="spell">Known Spells</option>
+              <option value="class">Class options</option>
+              <option value="spell">Known spells</option>
             </select>
           </label>
         </div>
@@ -759,33 +828,39 @@
     <dialog id="classBuilderDialog" class="class-dialog">
       <div class="modal class-modal">
         <div class="block-head">
-          <h2>Class Builder</h2>
-          <button id="closeClassBuilder" class="icon-button" type="button" aria-label="Close">x</button>
+          <h2>Class builder</h2>
+          <button id="closeClassBuilder" class="icon-button" type="button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
         </div>
         <div class="class-builder">
           <section class="block">
             <div class="block-head">
-              <h2>Create Class</h2>
+              <h2>Create a class</h2>
               <div class="button-row">
-                <button id="newCustomClass" class="ghost" type="button">New Custom</button>
-                <button id="saveClass" class="secondary" type="button">Save Class</button>
+                <select id="editCustomClassSelect" aria-label="Edit an existing custom class"></select>
+                <button id="newCustomClass" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>New</button>
+                <button id="saveClass" class="secondary" type="button"><i class="ph-light ph-floppy-disk" aria-hidden="true"></i>Save</button>
               </div>
             </div>
             <div class="field-grid">
               <label>Name <input id="builderName" placeholder="Inventor"></label>
-              <label>Hit Die <select id="builderHitDie"><option>6</option><option>8</option><option>10</option><option>12</option></select></label>
-              <label>Caster Type <select id="builderCasterType"></select></label>
-              <label>Spell Ability <select id="builderSpellAbility"></select></label>
-              <label>Prepared Formula <select id="builderPreparedFormula"></select></label>
-              <label>Spell Source Classes <input id="builderSpellSources" placeholder="wizard, cleric"></label>
+              <label>Hit die <select id="builderHitDie"><option>6</option><option>8</option><option>10</option><option>12</option></select></label>
+              <label>Caster type <select id="builderCasterType"></select></label>
+              <label>Spell ability <select id="builderSpellAbility"></select></label>
+              <label>Prepared formula <select id="builderPreparedFormula"></select></label>
+              <label>Spell source classes <input id="builderSpellSources" placeholder="wizard, cleric"></label>
+              <div class="field-label">Saving throws
+                <span class="builder-saves"><select id="builderSaveOne" aria-label="First saving throw"></select><select id="builderSaveTwo" aria-label="Second saving throw"></select></span>
+              </div>
+              <label>Armor training <input id="builderArmor" placeholder="Light armor, shields"></label>
+              <label>Weapon training <input id="builderWeapons" placeholder="Simple weapons, martial weapons"></label>
             </div>
             <label>
-              Level Table
+              Level table
               <textarea id="builderTable" rows="10"></textarea>
             </label>
             <p class="muted">Rows use: level, feature text, new spells, cantrips. Example: <code>5, Extra Attack, 1, 0</code></p>
             <div class="class-share">
-              <button id="shareClassButton" class="ghost" type="button">Share Current Class</button>
+              <button id="shareClassButton" class="secondary" type="button"><i class="ph-light ph-copy" aria-hidden="true"></i>Share this class</button>
               <input id="importClassCode" autocomplete="off" placeholder="Enter share code">
               <button id="importClassButton" class="secondary" type="button">Import</button>
             </div>
@@ -793,7 +868,7 @@
           </section>
           <section class="block">
             <div class="block-head">
-              <h2>Class Table</h2>
+              <h2>Class table</h2>
             </div>
             <div id="classTable" class="class-table"></div>
           </section>
@@ -801,18 +876,108 @@
       </div>
     </dialog>
 
+    <dialog id="settingsDialog" aria-labelledby="settingsTitle">
+      <form method="dialog" class="modal settings-modal">
+        <div class="block-head">
+          <h2 id="settingsTitle">Settings and appearance</h2>
+          <button value="cancel" class="icon-button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
+        </div>
+        <fieldset class="settings-group">
+          <legend>Dice</legend>
+          <label class="inline-check"><input type="radio" name="diceMode" value="physical"> I roll my own dice and type the result</label>
+          <label class="inline-check"><input type="radio" name="diceMode" value="digital"> Let the app roll for me</label>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>Help</legend>
+          <label class="inline-check"><input type="checkbox" id="easyModeToggle"> Easy mode</label>
+          <p class="muted">For new players: explains what each number means, shows what you can do on your turn, and hides advanced tools.</p>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>Appearance</legend>
+          <div class="settings-row">
+            <label>Theme
+              <select id="themeSelect">
+                <option value="beyond">Beyond</option>
+                <option value="light">Fantasy</option>
+                <option value="dark">Dark</option>
+                <option value="retro">Retro basement</option>
+              </select>
+            </label>
+            <label>Button color <input id="accentColorInput" type="color"></label>
+            <label>Background color <input id="bgColorInput" type="color"></label>
+          </div>
+          <div class="settings-row">
+            <button id="backgroundUpload" class="ghost" type="button">Set backdrop image…</button>
+            <button id="resetAppearance" class="ghost" type="button">Reset colors</button>
+          </div>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>This character</legend>
+          <div id="rulesEditions" class="settings-row"></div>
+          <div id="homebrewList" class="homebrew-list"></div>
+        </fieldset>
+        <div class="dialog-actions">
+          <button value="cancel" class="primary">Done</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="homebrewDialog" aria-labelledby="homebrewTitle">
+      <form method="dialog" class="modal homebrew-modal">
+        <div class="block-head">
+          <h2 id="homebrewTitle">This breaks a rule</h2>
+        </div>
+        <p id="homebrewRule" class="homebrew-rule"></p>
+        <p class="muted">Many tables use house rules. Turn this on only if your DM agrees. You won't be asked again about this rule for <strong id="homebrewCharacter">this character</strong>; you can turn it off in Settings.</p>
+        <label class="inline-check"><input type="checkbox" id="homebrewAccept"> Allow this homebrew rule for this character</label>
+        <div class="dialog-actions">
+          <button value="cancel" class="ghost">Keep the rule</button>
+          <button id="homebrewConfirm" value="confirm" class="primary" disabled>Break the rule</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="rollDialog" class="roll-dialog" aria-labelledby="rollTitle">
+      <form method="dialog" class="modal roll-modal">
+        <div class="block-head">
+          <h2 id="rollTitle">Roll</h2>
+          <button value="cancel" class="icon-button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
+        </div>
+        <div id="rollBody" class="roll-body" aria-live="polite"></div>
+      </form>
+    </dialog>
+
+    <dialog id="aiPromptDialog" aria-labelledby="aiPromptTitle">
+      <form method="dialog" class="modal">
+        <div class="block-head">
+          <h2 id="aiPromptTitle">Ask an AI about this character</h2>
+          <button value="cancel" class="icon-button" aria-label="Close"><i class="ph-light ph-x" aria-hidden="true"></i></button>
+        </div>
+        <p class="muted">Paste this into any AI chat, then ask about level-up options, builds, or tactics. It includes the full sheet and asks the AI to follow the rules edition you use.</p>
+        <label>Your question (optional)
+          <input id="aiPromptQuestion" autocomplete="off" placeholder="What should I take at my next level?">
+        </label>
+        <textarea id="aiPromptText" rows="14" readonly aria-label="AI prompt"></textarea>
+        <div class="dialog-actions">
+          <button id="downloadAiPrompt" class="ghost" type="button">Download .txt</button>
+          <button id="copyAiPrompt" class="primary" type="button">Copy prompt</button>
+        </div>
+      </form>
+    </dialog>
+
     <input id="jsonImportInput" type="file" accept="application/json,.json" hidden>
 
     <template id="spellRowTemplate">
       <div class="spell-row">
-        <button class="spell-expand" type="button" aria-label="Toggle spell details">▸</button>
-        <select class="spell-select"></select>
+        <button class="spell-expand" type="button" aria-label="Toggle spell details"><i class="ph-light ph-caret-right" aria-hidden="true"></i></button>
+        <select class="spell-select" aria-label="Spell"></select>
         <span class="spell-summary"></span>
+        <button class="secondary cast-spell quick-cast" type="button">Cast</button>
         <label class="prepare-toggle"><input type="checkbox" class="prepared-toggle"> Prepared</label>
         <button class="ghost remove-spell" type="button">Remove</button>
         <div class="custom-spell-fields">
           <label>Name <input class="custom-spell-name" autocomplete="off" placeholder="Spell name"></label>
-          <label>Casting Time <input class="custom-spell-casting" autocomplete="off" placeholder="1 action"></label>
+          <label>Casting time <input class="custom-spell-casting" autocomplete="off" placeholder="1 action"></label>
           <label>Range <input class="custom-spell-range" autocomplete="off" placeholder="60 feet"></label>
           <label>Duration <input class="custom-spell-duration" autocomplete="off" placeholder="Instantaneous"></label>
           <label>Components <input class="custom-spell-components" autocomplete="off" placeholder="V, S, M"></label>
@@ -834,11 +999,13 @@
 
     <template id="resourceRowTemplate">
       <article class="tracker-row">
-        <input class="resource-name" placeholder="Resource name">
+        <input class="resource-name" placeholder="Resource name" aria-label="Resource name">
+        <button class="ghost resource-step" type="button" data-step="-1" aria-label="Use one"><i class="ph-light ph-minus" aria-hidden="true"></i></button>
         <input class="resource-current" type="number" min="0" aria-label="Current uses">
         <span>/</span>
         <input class="resource-max" type="number" min="0" aria-label="Maximum uses">
-        <select class="resource-reset">
+        <button class="ghost resource-step" type="button" data-step="1" aria-label="Regain one"><i class="ph-light ph-plus" aria-hidden="true"></i></button>
+        <select class="resource-reset" aria-label="Refills on">
           <option value="manual">Manual</option>
           <option value="short">Short rest</option>
           <option value="long">Long rest</option>
@@ -850,51 +1017,52 @@
     <template id="equipmentRowTemplate">
       <article class="equipment-row">
         <input class="equipment-name" placeholder="Item name">
-        <input class="equipment-qty" type="number" min="0" step="1" aria-label="Quantity">
-        <input class="equipment-weight" type="number" min="0" step="0.01" aria-label="Weight each">
+        <label class="equipment-number">Qty <input class="equipment-qty" type="number" min="0" step="1"></label>
+        <label class="equipment-number">Lb each <input class="equipment-weight" type="number" min="0" step="0.01"></label>
         <select class="equipment-container" aria-label="Container">
           <option value="carried">Carried</option>
           <option value="equipped">Equipped</option>
           <option value="backpack">Backpack</option>
-          <option value="bagOfHolding">Bag of Holding</option>
-          <option value="mount">Mount / Cart</option>
-          <option value="home">Home Base</option>
+          <option value="bagOfHolding">Bag of holding</option>
+          <option value="mount">Mount or cart</option>
+          <option value="home">Home base</option>
         </select>
         <label class="inline-check"><input type="checkbox" class="equipment-equipped"> Equipped</label>
         <label class="inline-check"><input type="checkbox" class="equipment-attuned"> Attuned</label>
-        <textarea class="equipment-notes" rows="2" placeholder="Notes, charges, container, magic item details..."></textarea>
+        <textarea class="equipment-notes" rows="2" placeholder="Notes, charges, container, magic item details…"></textarea>
         <button class="ghost remove-equipment" type="button">Remove</button>
-        <div class="equipment-spell">
+        <details class="equipment-spell">
+          <summary>Magic item: grants a spell</summary>
           <label>Grants spell
             <select class="equipment-grant-spell"></select>
           </label>
           <label>Uses per long rest
             <input class="equipment-grant-uses" type="number" min="0" step="1" placeholder="At will">
           </label>
-        </div>
+        </details>
       </article>
     </template>
 
     <template id="classOptionTemplate">
       <article class="class-option-row">
-        <input class="class-option-name" placeholder="Feature name">
-        <select class="class-option-kind">
+        <input class="class-option-name" placeholder="Feature name" aria-label="Feature name">
+        <select class="class-option-kind" aria-label="Kind">
           <option value="infusion">Infusion</option>
           <option value="invocation">Invocation</option>
           <option value="metamagic">Metamagic</option>
-          <option value="wildShape">Wild Shape</option>
+          <option value="wildShape">Wild shape</option>
           <option value="maneuver">Maneuver</option>
           <option value="custom">Custom</option>
         </select>
         <input class="class-option-current" type="number" min="0" aria-label="Current uses">
         <span>/</span>
         <input class="class-option-max" type="number" min="0" aria-label="Maximum uses">
-        <select class="class-option-reset">
+        <select class="class-option-reset" aria-label="Refills on">
           <option value="manual">Manual</option>
           <option value="short">Short rest</option>
           <option value="long">Long rest</option>
         </select>
-        <textarea class="class-option-notes" rows="3" placeholder="Rules, trigger, action economy, selected form, prerequisites..."></textarea>
+        <textarea class="class-option-notes" rows="3" placeholder="Rules, trigger, action economy, selected form, prerequisites…"></textarea>
         <button class="ghost remove-class-option" type="button">Remove</button>
       </article>
     </template>
@@ -908,28 +1076,36 @@
           <option>Reaction</option>
           <option>Free</option>
         </select>
-        <input class="action-attack" placeholder="+7 to hit / DC 15">
-        <input class="action-damage" placeholder="1d8+3 lightning">
-        <textarea class="action-notes" rows="3" placeholder="Range, save, riders, ammo, charges..."></textarea>
-        <button class="secondary roll-action" type="button">Roll</button>
-        <button class="ghost remove-action" type="button">Remove</button>
+        <input class="action-attack" placeholder="e.g. +7 or DC 15" aria-label="Attack bonus or save DC">
+        <input class="action-damage" placeholder="e.g. 1d8+3 fire" aria-label="Damage">
+        <textarea class="action-notes" rows="1" placeholder="Range, save, riders, ammo…"></textarea>
+        <div class="action-buttons">
+          <button class="primary use-action" type="button" hidden>Use</button>
+          <button class="secondary roll-attack" type="button">Attack</button>
+          <button class="secondary roll-damage" type="button">Damage</button>
+          <button class="ghost remove-action" type="button">Remove</button>
+        </div>
       </article>
     </template>
 
-    <script src="./js/utils.js?v=20"></script>
-    <script src="./js/data.js?v=20"></script>
-    <script src="./js/classes.js?v=20"></script>
-    <script src="./js/character.js?v=20"></script>
-    <script src="./js/layout.js?v=20"></script>
-    <script src="./js/spells.js?v=20"></script>
-    <script src="./js/sheet.js?v=20"></script>
-    <script src="./js/builder.js?v=20"></script>
-    <script src="./js/play.js?v=20"></script>
-    <script src="./js/equipment.js?v=20"></script>
-    <script src="./js/party.js?v=20"></script>
-    <script src="./js/rules.js?v=20"></script>
-    <script src="./js/import.js?v=20"></script>
-    <script src="./js/sync.js?v=20"></script>
-    <script src="./js/main.js?v=20"></script>
+    <script src="./js/utils.js?v=29"></script>
+    <script src="./js/data.js?v=29"></script>
+    <script src="./js/expansions.js?v=29"></script>
+    <script src="./js/classes.js?v=29"></script>
+    <script src="./js/character.js?v=29"></script>
+    <script src="./js/layout.js?v=29"></script>
+    <script src="./js/spells.js?v=29"></script>
+    <script src="./js/sheet.js?v=29"></script>
+    <script src="./js/builder.js?v=29"></script>
+    <script src="./js/play.js?v=29"></script>
+    <script src="./js/equipment.js?v=29"></script>
+    <script src="./js/party.js?v=29"></script>
+    <script src="./js/rules.js?v=29"></script>
+    <script src="./js/import.js?v=29"></script>
+    <script src="./js/sync.js?v=29"></script>
+    <script src="./js/settings.js?v=29"></script>
+    <script src="./js/dice.js?v=29"></script>
+    <script src="./js/export.js?v=29"></script>
+    <script src="./js/main.js?v=29"></script>
   </body>
 </html>
