@@ -77,7 +77,8 @@ function icon(name) {
   return `<i class="ph-light ph-${name}" aria-hidden="true"></i>`;
 }
 
-function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
+// persist: a toast that asks the player to decide stays until they pick or close it (no timer).
+function showToast(html, { actions = [], duration = 6000, tone = "", persist = false } = {}) {
   let stack = document.querySelector("#toastStack");
   if (!stack) {
     stack = document.createElement("div");
@@ -90,9 +91,10 @@ function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
   const toast = document.createElement("div");
   toast.className = "app-toast";
   toast.dataset.tone = tone;
+  if (persist) toast.dataset.persist = "true";
   toast.innerHTML = `
     <div class="app-toast-body">${html}</div>
-    ${actions.map((action, index) => `<button type="button" class="secondary" data-toast-action="${index}">${escapeHtml(action.label)}</button>`).join("")}
+    ${actions.map((action, index) => `<button type="button" class="secondary" data-toast-action="${index}"${action.disabled ? " disabled" : ""}>${escapeHtml(action.label)}</button>`).join("")}
     <button type="button" class="ghost app-toast-close" aria-label="Dismiss">${icon("x")}</button>
   `;
   let timer = null;
@@ -103,20 +105,24 @@ function showToast(html, { actions = [], duration = 6000, tone = "" } = {}) {
   };
   const arm = ms => {
     clearTimeout(timer);
-    timer = setTimeout(close, ms);
+    if (!persist) timer = setTimeout(close, ms);
   };
   toast.addEventListener("mouseenter", () => clearTimeout(timer));
   toast.addEventListener("mouseleave", () => arm(2500));
+  // One button press per toast: a double click on Undo must not refund twice while the toast fades out.
+  let done = false;
   toast.addEventListener("click", event => {
     const button = event.target.closest("[data-toast-action]");
-    if (button || event.target.closest(".app-toast-close")) close();
+    if (done || !(button || event.target.closest(".app-toast-close"))) return;
+    done = true;
+    close();
     if (button) actions[Number(button.dataset.toastAction)].run();
   });
   stack.appendChild(toast);
   // Keep at most 4; drop finished messages before any toast that still offers a button.
   while (stack.children.length > 4) {
     const older = [...stack.children].filter(item => item !== toast);
-    const victim = older.find(item => !item.querySelector("[data-toast-action]")) || older[0];
+    const victim = older.find(item => !item.querySelector("[data-toast-action]")) || older.find(item => !item.dataset.persist) || older[0];
     victim.remove();
   }
   requestAnimationFrame(() => toast.classList.add("is-visible"));
@@ -133,9 +139,14 @@ function normalizedSubclassKey(text) {
     .replace(/-/g, "");
 }
 
-function lookupBySubclass(table, name = character.subclassName) {
+// Pass a subclass slug (exact key) or a typed name. The default is the primary class's subclass.
+function lookupBySubclass(table, name = primarySubclassKey()) {
+  if (name && Object.hasOwn(table, name)) return table[name];
+  // An official slug only matches its own key: the druid's "moon" never reaches the cleric's "moon-domain".
+  // Typed names go through subclassIndexFor (class-aware) first, so only unknown names reach the fuzzy match.
+  if (officialSubclasses.some(item => item.index === name)) return undefined;
   const key = normalizedSubclassKey(name);
   if (!key) return undefined;
-  const match = Object.keys(table).find(candidate => candidate.replace(/-/g, "") === key);
+  const match = Object.keys(table).find(candidate => normalizedSubclassKey(candidate) === key);
   return match ? table[match] : undefined;
 }

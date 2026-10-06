@@ -59,6 +59,8 @@ function renderSettings() {
         <option value="2024" ${entry.rules === "2024" ? "selected" : ""}>2024 Player's Handbook</option>
       </select>
     </label>`).join("");
+  document.querySelector("#optionalRules").innerHTML = OPTIONAL_RULES.map(([id, label]) => `
+    <label class="inline-check"><input type="checkbox" data-optional-rule="${id}" ${optionalRule(id) ? "checked" : ""}> ${escapeHtml(label)}</label>`).join("");
   const rules = Object.entries(character.homebrewRules || {});
   document.querySelector("#homebrewList").innerHTML = rules.length
     ? `<strong>Homebrew rules on ${escapeHtml(character.name || "this character")}</strong>${rules.map(([id, rule]) => `
@@ -84,6 +86,11 @@ function handleSettingsInput(event) {
     handleThemeSelect(event);
     // A new theme brings its own palette; keep only colors the player picked explicitly.
     renderSettings();
+  }
+  if (target.dataset.optionalRule) {
+    character.optionalRules = { ...character.optionalRules, [target.dataset.optionalRule]: target.checked };
+    persistAndRender();
+    return;
   }
   if (target.dataset.rulesEntry) {
     setRulesEdition(target.dataset.rulesEntry, target.value);
@@ -164,6 +171,9 @@ const HOMEBREW_RULES = {
   "ability-cap": "Raise an ability score above 20",
   "multiclass-prereq": "Multiclass without the ability score prerequisites",
   "feat-prereq": "Take a feat without its prerequisite",
-  "attunement-limit": "Attune to more than 3 magic items",
-  "level-cap": "Go past character level 20"
+  "attunement-limit": "Attune to more magic items than your limit (3, or more for an artificer)",
+  "attunement-requirement": "Attune to an item without meeting its \"requires attunement by\" condition",
+  "level-cap": "Go past character level 20",
+  "expertise-limit": "Take more expertise skills than class levels and feats give",
+  "spellbook-cost": "Copy spells into the spellbook without paying for them"
 };

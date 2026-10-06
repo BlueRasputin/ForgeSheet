@@ -1723,7 +1723,8 @@ details.fold > summary::-webkit-details-marker {
   display: none;
 }
 
-details.fold > summary h2 {
+details.fold > summary h2,
+details.fold > summary h3 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2455,7 +2456,7 @@ body:not(.is-caster) #actions .resources-row {
 
 /* Play mode (the default): what defines the build reads as text. Edit sheet unlocks it.
    Live state (HP, resource counts, slots, inventory, notes) stays editable in both modes. */
-body:not(.is-editing) :is(#addActionButton, #generateActionsButton, #addResourceButton, #addClassOptionButton, .remove-action, .remove-resource) {
+body:not(.is-editing) :is(#addActionButton, #addResourceButton, #addClassOptionButton, .remove-action, .remove-resource) {
   display: none;
 }
 
@@ -2702,6 +2703,40 @@ details.equipment-spell > summary {
   font-size: 1.375rem;
   font-weight: 650;
   letter-spacing: -0.02em;
+}
+
+.spell-class-stats {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.8125rem;
+}
+
+.spell-class-stats:empty {
+  display: none;
+}
+
+.spell-class-stats p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.spell-class-stats strong {
+  color: var(--ink);
+}
+
+.spell-class-stats .over-cap,
+.spell-source .over-cap {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.spell-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-top: 10px;
 }
 
 .prepared-warning {
@@ -2982,8 +3017,31 @@ details.equipment-spell > summary {
   display: grid;
 }
 
-.custom-spell-fields label:last-child {
+.custom-spell-fields .wide {
   grid-column: 1 / -1;
+}
+
+.builder-extras {
+  margin-top: 12px;
+}
+
+.builder-extras > summary h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.builder-extras > label {
+  margin-top: 8px;
+}
+
+.custom-spell-import {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.custom-spell-import p {
+  margin: 0;
 }
 
 .spell-print-name {
@@ -3106,6 +3164,31 @@ details.equipment-spell > summary {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+.party-card .party-open {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.party-card .party-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.party-card.is-out {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
 .party-card .party-badges {
   display: flex;
   flex-wrap: wrap;
@@ -3129,6 +3212,106 @@ details.equipment-spell > summary {
   color: var(--muted);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
+}
+
+.party-passives {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.party-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.party-menu {
+  flex: 1 1 auto;
+  text-align: right;
+}
+
+/* Open: the menu takes its own full-width line under the "In party" box. */
+.party-menu[open] {
+  flex-basis: 100%;
+}
+
+.party-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--r-chip);
+  padding: 2px 8px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+.party-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.party-menu[open] > summary {
+  background: var(--surface);
+}
+
+.party-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  text-align: left;
+  cursor: default;
+}
+
+.party-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.party-action-row input {
+  width: 5.5em;
+}
+
+.party-action-row select {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+.side-section[hidden] {
+  display: none;
+}
+
+.sheet-activity {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+
+.sheet-activity li {
+  display: grid;
+  gap: 1px;
+}
+
+.sheet-activity time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.rule-card .rule-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-style: normal;
 }
 
 /* ===== Campaign, sync and DM tools ===== */
@@ -3904,6 +4087,58 @@ body:not(.is-editing) :is(.skill-row, .ability-save) input[type="checkbox"]:disa
   font-size: 0.75rem;
 }
 
+/* "Save ends" tag on a condition: source, save, DC, when it repeats */
+.condition-tag {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+}
+
+.condition-tag input,
+.condition-tag select {
+  min-height: 28px;
+  padding-block: 2px;
+  font-size: 0.8125rem;
+}
+
+.condition-tag-text {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+/* Turn bar: Action / Bonus / Reaction markers (filled = used) and the raging card */
+.turn-economy,
+.rage-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.turn-pip {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.turn-pip[data-used="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.rage-card {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+  color: var(--ink-soft);
+}
+
 .wild-shape {
   display: flex;
   flex-wrap: wrap;
@@ -3939,6 +4174,153 @@ body:not(.is-editing) :is(.skill-row, .ability-save) input[type="checkbox"]:disa
   min-height: 30px;
   padding: 0 10px;
   font-size: 0.75rem;
+}
+
+.wild-shape > .wild-shape-attacks {
+  flex-basis: 100%;
+  font-weight: 400;
+}
+
+.wild-shape-time,
+.wild-shape-ward {
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+}
+
+/* Wild Shape beast picker */
+.beast-picker {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.beast-picker summary {
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.beast-picker input[type="search"] {
+  width: 100%;
+  min-height: 30px;
+  margin: 6px 0;
+}
+
+.beast-list {
+  display: grid;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.wild-shape .beast-option {
+  display: grid;
+  gap: 1px;
+  min-height: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+}
+
+.beast-option span,
+.beast-picker small {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+/* Familiar card */
+.familiar-card {
+  display: grid;
+  gap: 6px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--line);
+  padding: 8px;
+  background: var(--surface);
+  font-size: 0.75rem;
+}
+
+.familiar-head,
+.familiar-stats,
+.familiar-actions,
+.familiar-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.familiar-head select {
+  flex: 1 1 120px;
+  min-height: 30px;
+}
+
+.familiar-card small {
+  color: var(--muted);
+}
+
+.familiar-card label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.familiar-card label input {
+  width: 64px;
+  min-height: 28px;
+}
+
+.familiar-card > label input {
+  flex: 1;
+  width: auto;
+}
+
+.familiar-actions input {
+  width: 52px;
+  min-height: 30px;
+  text-align: center;
+}
+
+.familiar-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+}
+
+.familiar-status {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Portent dice next to the sidebar tracker */
+.res-portent {
+  display: flex;
+  gap: 4px;
+}
+
+.res-portent button {
+  min-height: 24px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* Inventory row extras: goodberries, scroll copying */
+.equipment-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+
+.item-flag {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.item-flag.is-bad {
+  color: var(--bad);
 }
 
 .hp-note {
@@ -4898,6 +5280,40 @@ dialog.roll-dialog {
   font-weight: 600;
 }
 
+.roll-extras {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.roll-extras label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roll-extras input {
+  width: 5em;
+}
+
+.group-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-check input {
+  width: 4.5em;
+}
+
+#levelUpButton.is-ready {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .roll-mode {
   display: grid;
   margin: 0;
@@ -5219,6 +5635,194 @@ body.print-compact textarea {
   font-size: 9px;
 }
 
-/* Fighting style picker under the action list */
-.fighting-style { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.75rem; font-size: 0.82rem; color: var(--muted); }
-.fighting-style select { width: auto; min-width: 12rem; }
+.rules-credit {
+  margin: 12px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* ===== Class features (Features tab) ===== */
+
+.feature-list {
+  display: grid;
+  gap: 14px;
+}
+
+.feature-group {
+  display: grid;
+  gap: 4px;
+}
+
+.feature-group h3 {
+  margin: 0 0 2px;
+  font-size: 0.875rem;
+}
+
+.feature-group h3 span,
+.feature-next {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.feature-next {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+}
+
+.feature-row {
+  border-radius: var(--r-chip);
+  background: var(--inset);
+}
+
+.feature-row > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.feature-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.feature-row-name {
+  font-weight: 600;
+}
+
+.feature-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.feature-chip {
+  border-radius: 999px;
+  padding: 0 7px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-style: normal;
+}
+
+.feature-chip.is-optional {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.feature-row p {
+  max-width: 72ch;
+  margin: 0;
+  padding: 0 10px 9px;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+/* Damage type under the Damage / Heal buttons: resistances apply on their own */
+.hp-actions select { grid-column: 1 / -1; min-height: 30px; font-size: 0.8125rem; }
+
+/* Roll modal: bonus chips (Bless, cover, -5/+10) and situational reminders */
+.roll-chips { flex-wrap: wrap; justify-content: center; }
+.roll-hint { margin: 0; font-size: 0.8125rem; color: var(--muted); text-align: center; }
+/* Feat details and choices (planner, level-up, creation), custom feat editor, class choices. */
+.feat-detail {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: var(--r-control);
+  background: var(--inset);
+}
+
+.feat-detail p {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.feat-picks,
+.feat-planner-picks,
+.create-feat,
+.create-improvement {
+  display: grid;
+  gap: 8px;
+}
+
+.feat-planner-picks:not(:empty) {
+  margin-top: 8px;
+}
+
+.custom-feats .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.custom-feat-editor {
+  margin-top: 12px;
+}
+
+.class-choice {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.class-choice p {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+/* ===== p9build: level-up preview, skill picks, journal ===== */
+.level-features {
+  display: grid;
+  gap: 4px;
+}
+
+.level-asi-result {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.level-asi-result:empty {
+  display: none;
+}
+
+.level-skill-group {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+}
+
+.level-skill-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.level-skill-picks select {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.level-swap p {
+  margin: 0;
+}
+
+.journal-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.journal-meta input {
+  width: 100%;
+  min-width: 0;
+}
+
+.create-ability-card .ability-mod {
+  padding: 0;
+  text-align: center;
+}

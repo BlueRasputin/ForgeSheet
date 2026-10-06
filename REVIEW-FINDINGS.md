@@ -566,7 +566,7 @@ Four player agents audited the rules (martial, core, creation, spellcasting). A 
 - Rituals:
   - Bards, clerics, druids, wizards and artificers can cast a ritual without a slot. So can warlocks with Book of Ancient Secrets.
   - Wizards can ritual-cast unprepared spellbook spells.
-- Prepared counts: artificers round up; paladins round down and prepare nothing at 1st level.
+- Prepared counts: artificers and paladins round half their level down (minimum 1); paladins prepare nothing at 1st level.
 - Spell parsing:
   - Two-dice spells (Flame Strike, Ice Storm) roll both groups and upcast the right one.
   - Spiritual Weapon scales every two slot levels.
@@ -590,11 +590,163 @@ Four player agents audited the rules (martial, core, creation, spellcasting). A 
 - The contract and a reader snippet are in `INTEGRATION.md`.
 - The Cartomancer repository isn't reachable from this machine's GitHub account, so nothing has been wired on the Cartomancer side.
 
-## Still to do
+## Round 7: full 2014 rules audit, complete content, custom feats (2026-10-03)
 
-- Re-run Sam (chaos/input abuse), Brennan (onboarding + formatting critique + mobile), Ashley
-  (cleric domains at 9, healing flow, away-player test) after usage-limit reset.
-- Consolidate + prioritize with user; implement fixes (quick wins first: skill grid, roll toast,
-  cast-on-row, library merge, death-save reset, generated damage rolls).
-- Test characters from reviews still in app localStorage (Grog, Vex, Caleb, Mollymauk, etc.) —
-  clean up via library Delete when done.
+Seven critical reviewers audited the app against the 2014 PHB (local PDF text), DMG, Xanathar's, Tasha's and the other 2014-era books. Each persona owned a slice:
+- **Matt:** DMG, items, rests, death and Blood Hunter.
+- **Brennan:** creation, species, backgrounds, equipment and feats.
+- **Liam:** the spellcasting engine and spell data.
+- **Sam:** combat, dice and bard.
+- **Travis:** martial classes.
+- **Marisha:** cleric, druid and artificer.
+- **Taliesin:** pact magic, metamagic, multiclass and custom content.
+
+Eight data authors wrote the missing content in original wording. Five implementers fixed round 1. Round 2 re-checks: 333 of 376 first-round findings verified fixed. Four fixers then closed all 74 open or new items.
+
+**Content (all offline; no API calls)**
+- **Spells:** 526 in total.
+  - The SRD 5.1 spells are bundled in `js/srd-spells.js` (CC-BY-4.0, attributed in the Rules dialog and README); the rest are in `js/rules-spells.js`.
+  - Display names drop WotC character names ("Caustic Brew"), while the slugs stay unchanged.
+  - Tasha's expanded spell lists are an optional rule; spells first printed in Tasha's are on their base lists.
+- **Subclasses:** all 130, with features by level (`js/rules-subclasses.js`): PHB, SCAG, XGE, TCE, EGtW, GGR, MOoT, VRGtR, FTD, BGG, Dragonlance, Blood Hunter and Tal'Dorei Reborn. This covers subclass spells, Land terrains, proficiencies and limited-use trackers.
+- **Base classes:** every class feature for 14 classes, plus option lists with counts and prerequisites (`js/rules-classes.js`): fighting styles, invocations, metamagic, maneuvers, infusions, rites, curses, disciplines, runes and others.
+- **Feats:** 105, with prerequisites, half-feat abilities and summaries (`js/rules-feats.js`).
+- **Compliance:** a 12-word overlap scan against the PHB text found nothing beyond stock rules phrases.
+
+**Engine**
+- Every class feature reads its own class level (`classLevel`, `subclassLevel`, `subclassIndexFor`), so multiclass characters keep all their features.
+- Spell rows belong to a class, giving per-class DC, attack, prepared and known limits.
+- Pact slots are a separate pool.
+- Feat and species spells use their own ability.
+- Optional rules are set per character in Settings.
+
+**Feature areas**
+- **Combat:** martial features 1–20 and their subclasses, fighting styles, rerolls, a typed-damage resistance/immunity pipeline, a reaction tracker, Lucky, Portent, Elven Accuracy and Halfling Lucky.
+- **Rests:** per-class Hit Dice, attunement, item charges, encumbrance (standard and variant), and death and stabilizing.
+- **Character build:** creation with starting equipment and gold, feat prerequisite chains, and level-up class choices.
+- **Custom content:** custom feats, custom classes (pact half/third, arcanum, resources, subclasses, spell lists, multiclass rules) and a custom spell library. Feats, classes and spells all sync to the cloud and share by code.
+- **Features tab:** lists every class and subclass feature up to each class's level.
+
+**User requests this round**
+- The damage/heal box defaults to 1.
+- The roll window states the modifier it adds ("Adds +2 (CON) for you").
+- Two house rules, on by default and switchable in Settings: inspiration as a counter, and overhealing into temp HP.
+
+**Known limits**
+- There is no in-game clock, so a second long rest within 24 hours is warned about, not blocked.
+- Sheets have no creature type, so Preserve Life states its undead/construct exclusion.
+- Spores' "crits count as normal hits" needs the player to undo the crit, because the sheet can't tell an incoming crit.
+- Tal'Dorei Reborn numbers marked `VERIFY` come from secondary sources.
+
+Run `node tools/check_data.js` for the regression checks; it has a block per implementer.
+
+## Round 8: browser play session, 4 players + DM (2026-10-04)
+
+**Testers:** each played in their own browser tab, through the real UI:
+- Liam: High Elf Divination wizard
+- Sam: Rock Gnome Lore bard
+- Travis: Half-Orc Berserker 3 / Champion 3
+- Marisha: Wood Elf Moon druid
+- Matt: DM, running the party and DM tools
+
+**Scenario:** "Ambush at Ashen Ford"
+1. Build at level 1 and level up to 5.
+2. A three-round ambush with damage, Hold Person, a crit, death saves and concentration.
+3. Short rest and loot.
+4. A town scene: Persuasion, Insight, Deception, shopping, a group Stealth check and Inspiration.
+5. A long rest and level 6.
+
+**Result:** the testers checked HP, AC, saves, spell DCs and slots against the 2014 rules at every level, and they were right. After de-duplication there were 45 bugs, and all are fixed:
+- **Combat and spells (17):**
+  - Always-on riders (Rage, Improved Divine Smite) now apply to the plain Damage button.
+  - Frenzy exhaustion now applies.
+  - Equipping a weapon adds its attack row automatically.
+  - Generated rows refresh their text and track prepared spells.
+  - Thrown weapons use up the item.
+  - Next turn resets the bonus-action spell rule.
+  - No "reaction back" message while incapacitated.
+  - Shield gives +5 AC and uses the reaction; Shield of Faith, Haste and Barkskin also apply.
+  - Web, Heat Metal and Sleep dice are labelled correctly.
+  - Pass without Trace adds +10 to Stealth.
+  - Flat physical rolls apply directly.
+  - "Let the app roll" now affects one roll only.
+  - Undo can't run twice.
+  - Bardic Inspiration is spent only once you pick a target.
+  - Arcane Recovery stays available after the rest.
+  - Toast grammar fixed.
+- **Build and inventory (21):**
+  - Starting gear is equipped.
+  - Potions are only used up when they heal.
+  - Catalog items stack.
+  - The Healer's Kit has 10 uses.
+  - Coin boxes accept "+45" and "15+45".
+  - DM item cards have base weapon and magic bonus fields.
+  - Level-up HP is clamped.
+  - Lore and Magical Secrets picks work.
+  - Expertise rules enforced.
+  - Instrument picks fixed.
+  - Required gear picks enforced.
+  - The wizard's review and tool picks fixed.
+  - The "Next" feature hint fixed.
+  - Placeholder subclass rows hidden.
+  - High Elf cantrips are wizard-only.
+  - Background personality tables used.
+  - Labels added.
+  - School Savant halves spellbook copy costs.
+  - Copy cost checks your purse.
+  - Scroll spells can be copied.
+  - The inventory page is faster.
+- **Party and DM tools (7):**
+  - An "In party" flag keeps NPCs and spare sheets out of group checks and heal lists.
+  - Group Stealth applies armor disadvantage.
+  - Initiative is stored on the sheet.
+  - Stabilize asks who helps.
+  - The DM role is per tab.
+  - No more empty "Concentrating on".
+  - Party cards are keyboard accessible.
+- **Lead fixes:**
+  - Party cards show effective AC.
+  - Expert Divination regains a lower slot (it was a missing rule).
+  - The Dwarven Fortitude hit die heals at least 1.
+
+The players' and DM's change requests were collected for the owner's approval and not implemented. The test characters were moved out of the library into the `forgesheet.backup.playtest8` localStorage key.
+
+## Round 9: approved player requests (2026-10-05)
+
+The owner approved 31 of the round 8 requests. Product direction: ForgeSheet is a player character-sheet app, and the DM view is party info.
+- **Combat:**
+  - Action/bonus/reaction markers.
+  - Save-ends conditions with repeat-save prompts.
+  - Death-save nudge.
+  - Decision toasts that persist.
+  - The concentration save opens on damage.
+  - Crit range on attack rows.
+  - GWF reroll display and named crit dice, with per-die physical entry.
+  - The Berserker Rage/Frenzy choice and rage card.
+  - Situational advantage chips.
+  - Named roll breakdowns.
+  - Spell save/rider reminders.
+- **Building:**
+  - Level-up remembers the last class.
+  - Expertise and Lore picks in the level-up dialog.
+  - A richer level-up preview with opt-in auto-prepare.
+  - Final scores on ability cards.
+  - Species trait cards.
+  - Focus type choice.
+  - Prepared casters are prompted after a long rest; known casters get a swap step at level-up.
+  - One Equipped control.
+  - A dated journal.
+- **Spells and features:**
+  - A Wild Shape beast picker built on the bundled SRD beasts (`js/srd-beasts.js`).
+  - Goodberry berries.
+  - A familiar card.
+  - Copying into the spellbook from a scroll.
+  - Portent numbers in the sidebar.
+  - Song of Rest for allies.
+  - Heal lists with downed allies first.
+- **Party view:**
+  - Card actions: damage, heal, conditions, inspiration, send item.
+  - Notices and an activity log for changes made by others.
+  - Passive Insight and Investigation, concentration-owed cues and condition tags on cards.
+  - A full spell lookup and new rules entries.
+  - Item cards in the Party tab.

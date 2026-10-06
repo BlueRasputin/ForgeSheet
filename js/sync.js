@@ -109,6 +109,18 @@ async function handleAuthState(user) {
       if (data?.class?.id && data.class.table) customClasses[data.class.id] = data.class;
     });
     saveCustomClasses();
+    const featSnap = await fs.getDocs(fs.collection(syncState.db, `users/${user.uid}/feats`));
+    featSnap.docs.forEach(docSnap => {
+      const feat = sanitizeCustomFeat(docSnap.data()?.feat);
+      if (feat) customFeats[feat.id] = feat;
+    });
+    saveCustomFeats();
+    const spellSnap = await fs.getDocs(fs.collection(syncState.db, `users/${user.uid}/spells`));
+    spellSnap.docs.forEach(docSnap => {
+      const spell = sanitizeCustomSpell(docSnap.data()?.spell);
+      if (spell) customSpells[spell.id] = spell;
+    });
+    saveCustomSpells();
     if (characterLibrary[character.sheetId]) character = normalizeCharacter(characterLibrary[character.sheetId]);
     renderAll();
     renderAccountPanel(`${cloud.size} in the cloud, ${uploads.length} uploaded from this device`);
@@ -127,60 +139,133 @@ async function saveClassToCloud(cls) {
   }
 }
 
-async function shareCustomClass() {
-  const status = document.querySelector("#classShareStatus");
-  const cls = classBuilderDraft?.name ? null : currentClass();
-  if (!cls || BUILT_IN_CLASSES[cls.id]) {
-    status.textContent = "Select one of your custom classes on the sheet first (built-in classes cannot be shared).";
-    return;
-  }
-  if (!syncSettings.firebaseConfigText) {
-    status.textContent = "Sharing needs the Firebase config from the Campaign tab.";
-    return;
-  }
+async function saveFeatToCloud(feat) {
+  if (!syncState.user || !feat?.id) return;
   try {
-    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-    const code = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
     const fs = await ensureFirestore();
-    await fs.setDoc(fs.doc(syncState.db, `sharedClasses/${code}`), {
-      class: cls,
-      sharedBy: syncState.user?.displayName || syncSettings.playerName || "Anonymous",
-      createdAt: fs.serverTimestamp()
-    });
-    status.textContent = `Share code for ${cls.name}: ${code}. Anyone can import it from this box.`;
+    await fs.setDoc(fs.doc(syncState.db, `users/${syncState.user.uid}/feats/${feat.id}`), { feat, updatedAt: fs.serverTimestamp() });
   } catch {
-    status.textContent = "Sharing failed. Check the Firestore rules allow writes to sharedClasses.";
+    // Feat stays in localStorage; it syncs on the next successful save.
+  }
+}
+
+async function saveSpellToCloud(spell) {
+  if (!syncState.user || !spell?.id) return;
+  try {
+    const fs = await ensureFirestore();
+    await fs.setDoc(fs.doc(syncState.db, `users/${syncState.user.uid}/spells/${spell.id}`), { spell, updatedAt: fs.serverTimestamp() });
+  } catch {
+    // Spell stays in localStorage; it syncs on the next successful save.
+  }
+}
+
+function shareStatus(kind, text) {
+  if (kind === "feat") setCustomFeatStatus(text);
+  else if (kind === "spell") document.querySelector("#spellShareStatus").textContent = text;
+  else document.querySelector("#classShareStatus").textContent = text;
+}
+
+// Share codes for custom classes, feats and spells: sharedContent/{code} = { kind, payload, sharedBy, createdAt, schema }.
+// A taken code fails the create rule, so try a fresh one (up to 3 times).
+async function shareContent(kind, record) {
+  if (!record) return;
+  if (!syncSettings.firebaseConfigText) {
+    shareStatus(kind, "Sharing needs the Firebase config from the Campaign tab.");
+    return;
+  }
+  const payload = { ...record, id: /^custom-[a-z0-9-]{1,60}$/.test(record.id) ? record.id : `custom-${slug(record.id || record.name).slice(0, 50)}` };
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  try {
+    const fs = await ensureFirestore();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const code = Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+      try {
+        await fs.setDoc(fs.doc(syncState.db, `sharedContent/${code}`), { kind, payload, sharedBy: syncState.user?.displayName || syncSettings.playerName || "Anonymous", createdAt: fs.serverTimestamp(), schema: 1 });
+        shareStatus(kind, `Share code for ${record.name || "this spell"}: ${code}. Anyone can import it with that code.`);
+        return;
+      } catch (error) {
+        if (error?.code !== "permission-denied" || attempt === 2) throw error;
+      }
+    }
+  } catch {
+    shareStatus(kind, "Sharing failed. Sign in, and check the Firestore rules allow writes to sharedContent.");
+  }
+}
+
+async function shareCustomClass() {
+  const cls = classBuilderDraft?.name ? null : currentClass();
+  if (!cls || BUILT_IN_CLASSES[cls.id] || !customClasses[cls.id]) {
+    shareStatus("class", "Select one of your custom classes on the sheet first (built-in classes cannot be shared).");
+    return;
+  }
+  shareContent("class", cls);
+}
+
+// An imported class or feat never replaces a built-in, or a different homebrew with the same id: it is re-keyed.
+function importClassRecord(record) {
+  if (!record?.id || !Array.isArray(record.table) || !record.name) return null;
+  const cls = { ...record, name: String(record.name).slice(0, 80), table: record.table.slice(0, 20) };
+  const same = customClasses[cls.id] && JSON.stringify(customClasses[cls.id]) === JSON.stringify(cls);
+  if (BUILT_IN_CLASSES[cls.id] || (customClasses[cls.id] && !same)) cls.id = uniqueCustomId(cls.name, { ...BUILT_IN_CLASSES, ...customClasses });
+  // Subclass ids follow the class id (as saveCustomClass makes them), so a re-keyed import can't clash with another class's.
+  if (Array.isArray(cls.subclasses)) cls.subclasses = cls.subclasses.filter(sub => sub?.name).map(sub => ({ ...sub, id: `${cls.id}-${slug(sub.name)}`.slice(0, 64) }));
+  customClasses[cls.id] = cls;
+  saveCustomClasses();
+  saveClassToCloud(cls);
+  return cls;
+}
+
+function importFeatRecord(record) {
+  const feat = sanitizeCustomFeat(record);
+  if (!feat) return null;
+  const clash = customFeats[feat.id] && JSON.stringify(customFeats[feat.id]) !== JSON.stringify(feat);
+  if (clash) feat.id = uniqueCustomId(feat.name, customFeats);
+  if (FEAT_PRESETS.includes(feat.name) || Object.values(customFeats).some(item => item.name === feat.name && item.id !== feat.id)) feat.name = `${feat.name} (imported)`.slice(0, 80);
+  customFeats[feat.id] = feat;
+  saveCustomFeats();
+  saveFeatToCloud(feat);
+  return feat;
+}
+
+// A shared spell with an id this device already uses for a different spell gets a fresh id.
+function importSpellRecord(record) {
+  const spell = sanitizeCustomSpell(record);
+  if (!spell) return null;
+  if (customSpells[spell.id] && JSON.stringify(customSpells[spell.id]) !== JSON.stringify(spell)) spell.id = uniqueCustomId(spell.name || "spell", { ...customSpells, ...spellDetails });
+  customSpells[spell.id] = spell;
+  saveCustomSpells();
+  registerCustomSpells();
+  saveSpellToCloud(spell);
+  return spell;
+}
+
+// Reads sharedContent/{code}; old class codes in sharedClasses/{code} still work.
+async function importSharedContent(rawCode, kindHint = "class") {
+  const code = String(rawCode || "").trim().toUpperCase();
+  if (!code) return shareStatus(kindHint, "Enter a share code first.");
+  if (!syncSettings.firebaseConfigText) return shareStatus(kindHint, "Importing needs the Firebase config from the Campaign tab.");
+  try {
+    const fs = await ensureFirestore();
+    const snap = await fs.getDoc(fs.doc(syncState.db, `sharedContent/${code}`));
+    let data = snap.exists() ? snap.data() : null;
+    if (!data) {
+      const legacy = await fs.getDoc(fs.doc(syncState.db, `sharedClasses/${code}`));
+      data = legacy.exists() ? { kind: "class", payload: legacy.data().class, sharedBy: legacy.data().sharedBy } : null;
+    }
+    const importers = { feat: importFeatRecord, class: importClassRecord, spell: importSpellRecord };
+    const imported = importers[data?.kind]?.(data.payload) || null;
+    if (!imported) return shareStatus(kindHint, `Nothing to import for code ${code}.`);
+    const field = document.querySelector({ feat: "#importFeatCode", class: "#importClassCode", spell: "#importSpellCode" }[data.kind]);
+    if (field) field.value = "";
+    shareStatus(data.kind, `Imported ${data.kind} ${imported.name || "Custom spell"} (shared by ${data.sharedBy || "another user"}).`);
+    renderAll();
+  } catch {
+    shareStatus(kindHint, "Import failed. Check the code and your connection.");
   }
 }
 
 async function importSharedClass() {
-  const status = document.querySelector("#classShareStatus");
-  const code = document.querySelector("#importClassCode").value.trim().toUpperCase();
-  if (!code) {
-    status.textContent = "Enter a share code first.";
-    return;
-  }
-  if (!syncSettings.firebaseConfigText) {
-    status.textContent = "Importing needs the Firebase config from the Campaign tab.";
-    return;
-  }
-  try {
-    const fs = await ensureFirestore();
-    const snap = await fs.getDoc(fs.doc(syncState.db, `sharedClasses/${code}`));
-    const data = snap.exists() ? snap.data() : null;
-    if (!data?.class?.id || !data.class.table) {
-      status.textContent = `No shared class found for code ${code}.`;
-      return;
-    }
-    customClasses[data.class.id] = data.class;
-    saveCustomClasses();
-    saveClassToCloud(data.class);
-    document.querySelector("#importClassCode").value = "";
-    status.textContent = `Imported ${data.class.name} (shared by ${data.sharedBy || "another user"}). It is now in your class list.`;
-    renderAll();
-  } catch {
-    status.textContent = "Import failed. Check the code and your connection.";
-  }
+  importSharedContent(document.querySelector("#importClassCode").value, "class");
 }
 
 function queueCloudSave() {
@@ -247,7 +332,8 @@ function loadSyncSettings() {
     return {
       firebaseConfigText: stored.firebaseConfigText || FIREBASE_DEFAULT_CONFIG,
       campaignId: params.get("campaign") || stored.campaignId || "",
-      role: params.get("role") || stored.role || "player",
+      // The role is per tab (sessionStorage), so picking DM in one tab doesn't flip every player tab on the device.
+      role: params.get("role") || tabSyncRole() || "player",
       playerName: stored.playerName || "",
       sheetId: params.get("sheet") || stored.sheetId || crypto.randomUUID()
     };
@@ -256,8 +342,22 @@ function loadSyncSettings() {
   }
 }
 
+function tabSyncRole() {
+  try {
+    return sessionStorage.getItem(SYNC_ROLE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function saveSyncSettings() {
-  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(syncSettings));
+  const { role, ...shared } = syncSettings;
+  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(shared));
+  try {
+    sessionStorage.setItem(SYNC_ROLE_KEY, role);
+  } catch {
+    // Without sessionStorage the role lasts until the tab reloads.
+  }
 }
 
 function renderSyncPanel() {
@@ -430,13 +530,15 @@ function syncCharacterSummary() {
   return {
     characterName: character.name,
     className: cls.name,
+    classLabel: classLabel(),
     classId: character.classId,
     subclassName: character.subclassName,
     level: totalLevel(),
     hp: character.hp,
-    maxHp: character.maxHp,
-    ac: character.ac,
+    maxHp: effectiveMaxHp(),
+    ac: effectiveArmorClass(),
     passivePerception: passivePerception(character),
+    exhaustion: Number(character.exhaustion || 0),
     conditions: character.conditions || [],
     equipmentWeight: equipmentWeight(character),
     carryingCapacity: carryingCapacity(character),
@@ -473,20 +575,30 @@ function partyStatusPayload() {
     maxHp,
     baseMaxHp: Number(character.maxHp || 0),
     tempHp: Number(character.tempHp || 0),
-    ac: Number(character.ac || 10),
+    ac: effectiveArmorClass(),
     speed: effectiveSpeed(),
     initiativeBonus: initiativeBonus(),
     initiative: latestInitiative(character),
-    state: hp > 0 ? (hp <= maxHp / 2 ? "bloodied" : "healthy") : failures >= 3 ? "dead" : successes >= 3 ? "stable" : "down",
+    inParty: inParty(character),
+    state: isDead() ? "dead" : hp > 0 ? (hp <= maxHp / 2 ? "bloodied" : "healthy") : character.stable ? "stable" : "down",
     deathSaves: { successes, failures },
     conditions: [...(character.conditions || [])],
     exhaustion: Number(character.exhaustion || 0),
-    concentration: character.concentration || null,
+    concentration: concentrationName(character) || null,
+    // Constitution saves still owed for concentration, one DC per hit taken (PHB p.203).
+    concentrationSaves: concentrationSavesOwed(character),
     raging: Boolean(character.raging),
+    // Wild Shape (PHB p.67): the beast form's HP take damage first, so the DM needs both.
+    wildShape: character.wildShape ? { name: character.wildShape.name || "Beast form", hp: Number(character.wildShape.hp || 0), max: Number(character.wildShape.max || 0) } : null,
     inspiration: Number(character.inspiration || 0),
     passives: { perception: passiveScore("perception"), investigation: passiveScore("investigation"), insight: passiveScore("insight") },
     saves: Object.fromEntries(ABILITIES.map(([id]) => [id, saveBonus(id)])),
-    spellSave: currentClass().casterType !== "none" && ABILITIES.some(([id]) => id === currentClass().spellAbility) ? 8 + proficiencyBonus() + mod(currentClass().spellAbility) : null,
+    // Aura of Protection for allies within range while the paladin is conscious (PHB p.85).
+    aura: auraOfProtection() ? { bonus: auraOfProtection(), range: classLevel("paladin") >= 18 ? 30 : 10 } : null,
+    spellSave: casterEntries().length ? spellStats(entryClass(casterEntries()[0]).spellAbility, entryClass(casterEntries()[0]).id).dc : null,
+    // Each casting class uses its own ability (PHB p.164); a blood hunter's curses use the hemocraft DC.
+    spellSaves: casterEntries().map(entry => ({ class: entryClass(entry).id, ability: entryClass(entry).spellAbility, dc: spellStats(entryClass(entry).spellAbility, entryClass(entry).id).dc })),
+    hemocraftDc: classLevel("bloodhunter") ? hemocraftDc() : null,
     resources: (character.resources || []).map(item => ({ name: item.name, current: Number(item.current), max: Number(item.max), reset: item.reset })),
     spellSlots: characterSpellSlots().map((count, index) => ({ level: index + 1, max: count, remaining: slotRemaining(index + 1, count) })).filter(slot => slot.max > 0),
     updatedAtMs: Date.now()
@@ -504,14 +616,14 @@ function renderDmRoster(sheets) {
     <article class="dm-sheet">
       <div>
         <strong>${escapeHtml(sheet.characterName || "Unnamed")}</strong>
-        <span>${escapeHtml(sheet.playerName || "Player")} · ${escapeHtml(sheet.className || "Class")} ${escapeHtml(String(sheet.level || "?"))}${sheet.subclassName ? ` · ${escapeHtml(sheet.subclassName)}` : ""}</span>
+        <span>${escapeHtml(sheet.playerName || "Player")} · ${escapeHtml(sheet.classLabel || `${sheet.className || "Class"} ${sheet.level || "?"}`)}${sheet.subclassName ? ` · ${escapeHtml(sheet.subclassName)}` : ""}</span>
       </div>
       <div class="dm-sheet-stats">
         <span>AC ${escapeHtml(sheet.ac ?? "-")}</span>
         <span>HP ${escapeHtml(sheet.hp ?? "-")} / ${escapeHtml(sheet.maxHp ?? "-")}</span>
         <span>PP ${escapeHtml(sheet.passivePerception ?? "-")}</span>
       </div>
-      <p>${escapeHtml((sheet.conditions || []).join(", ") || "No conditions")}</p>
+      <p>${escapeHtml([...(sheet.conditions || []), ...(Number(sheet.exhaustion) ? [`Exhaustion ${sheet.exhaustion}`] : [])].join(", ") || "No conditions")}</p>
       <p>${escapeHtml(`Load ${formatWeight(sheet.equipmentWeight || 0)} / ${sheet.carryingCapacity || "-"} lb · ${(sheet.classOptions || []).map(item => `${item.name} ${item.max ? `${item.current}/${item.max}` : ""}`.trim()).join(", ") || "No class modules"}`)}</p>
       <p>${escapeHtml((sheet.preparedSpells || []).join(", ") || "No prepared spells listed.")}</p>
     </article>
@@ -527,11 +639,42 @@ function renderDmItemTools() {
   target.innerHTML = targets.length
     ? targets.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`).join("")
     : `<option value="">No players available</option>`;
-  if (targets.some(item => item.id === currentTarget)) target.value = currentTarget;
+  const preferred = preferredItemTarget(targets);
+  if (preferred) target.value = preferred.id;
   const currentItem = catalog.value;
   catalog.innerHTML = ITEM_CATALOG.map(item => `<option value="${item.index}">${escapeHtml(item.name)} (${escapeHtml(item.type)})</option>`).join("");
   if (currentItem) catalog.value = currentItem;
+  const base = document.querySelector("#customItemBase");
+  if (base && base.options.length < 2) base.innerHTML = `<option value="">None</option>` + ITEM_CATALOG.filter(item => item.type === "Weapon" && item.cost).map(item => `<option value="${item.index}">${escapeHtml(item.name)}</option>`).join("");
   renderDmItemPreview();
+}
+
+// Recipient: the one picked (here or with a party card's "Send item"), else the sheet being viewed if it's in the
+// party, else the first party member.
+let itemCardRecipient = "";
+
+function preferredItemTarget(targets) {
+  const member = item => inParty(item.sheet);
+  return targets.find(item => item.sheet.sheetId === itemCardRecipient)
+    || targets.find(item => item.sheet.sheetId === character.sheetId && member(item))
+    || targets.find(member) || targets[0];
+}
+
+// Party card "Send item": open the item cards with that member chosen.
+function openItemCards(sheetId) {
+  itemCardRecipient = sheetId;
+  renderDmItemTools();
+  const section = document.querySelector("#itemCardsSection");
+  section.open = true;
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelector("#dmItemCatalog").focus({ preventScroll: true });
+}
+
+function clearCustomItemForm() {
+  ["customItemName", "customItemType", "customItemWeight", "customItemQuantity", "customItemRarity", "customItemBase", "customItemBonus", "customItemNotes"]
+    .forEach(id => { document.querySelector(`#${id}`).value = ""; });
+  document.querySelector("#customItemContainer").value = "carried";
+  document.querySelector("#customItemCursed").checked = false;
 }
 
 function dmItemTargets() {
@@ -571,15 +714,23 @@ function itemCardHtml(item) {
 function customItemFromFields() {
   const name = document.querySelector("#customItemName")?.value.trim();
   if (!name) return null;
+  // A base weapon gives the item that weapon's damage and properties, so it attacks like the catalog weapon;
+  // the magic bonus adds to attack and damage rolls (DMG p.213 "Weapon, +1, +2, or +3").
+  const base = ITEM_CATALOG.find(item => item.index === document.querySelector("#customItemBase")?.value);
+  const magicBonus = clamp(Math.round(Number(document.querySelector("#customItemBonus")?.value || 0)), 0, 3);
+  const notes = document.querySelector("#customItemNotes").value.trim();
   return {
     index: `custom-${slug(name)}`,
     name,
-    type: document.querySelector("#customItemType").value.trim() || "Custom Item",
-    weight: Number(document.querySelector("#customItemWeight").value || 0),
+    type: document.querySelector("#customItemType").value.trim() || (base ? "Weapon" : "Custom Item"),
+    weight: Number(document.querySelector("#customItemWeight").value || base?.weight || 0),
+    ...(magicBonus ? { magicBonus } : {}),
+    ...(base ? { notes: [`${base.rarity}: ${base.notes}`, magicBonus ? `+${magicBonus} to attack and damage rolls.` : "", notes].filter(Boolean).join(" ") } : {}),
     quantity: clamp(Number(document.querySelector("#customItemQuantity").value || 1), 1, 999),
     rarity: document.querySelector("#customItemRarity").value.trim() || "Custom",
     container: document.querySelector("#customItemContainer").value || "carried",
-    notes: document.querySelector("#customItemNotes").value.trim()
+    cursed: Boolean(document.querySelector("#customItemCursed")?.checked),
+    ...(base ? {} : { notes })
   };
 }
 
@@ -605,6 +756,8 @@ async function sendDmItem(kind) {
     sendLocalItem(target.sheet.sheetId, equipmentItem);
   }
   status.textContent = `${item.name} sent to ${target.label}.`;
+  // Cleared so the same item isn't sent twice by accident.
+  if (kind === "custom") clearCustomItemForm();
   renderDmItemPreview();
 }
 
@@ -612,6 +765,7 @@ function sendLocalItem(sheetId, equipmentItem) {
   const target = characterLibrary[sheetId];
   if (!target) return;
   target.equipment = [...(target.equipment || []), equipmentItem];
+  logSheetChange(target, null, `${actorName()} sent you ${equipmentItem.name}`);
   target.updatedAt = Date.now();
   characterLibrary[sheetId] = normalizeCharacter(target);
   saveCharacterLibrary();
@@ -630,10 +784,10 @@ async function sendRemoteItem(sheet, equipmentItem) {
     return;
   }
   const fs = syncState.firestore;
-  const nextCharacter = normalizeCharacter({
+  const nextCharacter = addActivity(normalizeCharacter({
     ...(sheet.character || {}),
     equipment: [...(sheet.character?.equipment || []), equipmentItem]
-  });
+  }), `${actorName()} sent you ${equipmentItem.name}`);
   const sheetRef = fs.doc(syncState.db, `campaigns/${syncSettings.campaignId}/sheets/${sheet.sheetId}`);
   await fs.setDoc(sheetRef, {
     character: nextCharacter,

@@ -50,7 +50,7 @@
     ["Air Genasi", 30, "Unending Breath and Mingle with the Wind: levitate once per long rest (CON).", "wind", { con: 2, dex: 1 }],
     ["Earth Genasi", 30, "Earth Walk (ignore difficult terrain of earth or stone) and Merge with Stone: pass without trace once per long rest (CON).", "mountains", { con: 2, str: 1 }],
     ["Fire Genasi", 30, "Darkvision, fire resistance, and Reach to the Blaze: produce flame cantrip, burning hands once per long rest from 3rd level (CON).", "flame", { con: 2, int: 1 }],
-    ["Water Genasi", 30, "Swim 30 ft, amphibious, acid resistance, and Call to the Wave: shape water cantrip, create or destroy water once per long rest from 3rd level (CON).", "drop", { con: 2, wis: 1 }],
+    ["Water Genasi", 30, "Swim 30 ft, amphibious, acid resistance, and Call to the Wave: shape water cantrip, and from 3rd level create or destroy water as a 2nd-level spell once per long rest (CON).", "drop", { con: 2, wis: 1 }],
     // Sword Coast Adventurer's Guide
     ["Half-Elf (Aquatic)", 30, "Darkvision and Fey Ancestry; a 30 ft swim speed replaces Skill Versatility (SCAG variant). +1 to two other abilities of your choice.", "waves", { cha: 2 }],
     ["Half-Elf (Drow)", 30, "Darkvision and Fey Ancestry; Drow Magic (dancing lights, faerie fire at 3rd, darkness at 5th) replaces Skill Versatility (SCAG variant). +1 to two other abilities of your choice.", "moon", { cha: 2 }],
@@ -69,7 +69,7 @@
     ["Tiefling (Fierna)", 30, `${TIEFLING_BASE} Legacy of Phlegethos: friends, charm person at 3rd, suggestion at 5th (CHA).`, "flame", { cha: 2, wis: 1 }],
     ["Tiefling (Glasya)", 30, `${TIEFLING_BASE} Legacy of Malbolge: minor illusion, disguise self at 3rd, invisibility at 5th (CHA).`, "flame", { cha: 2, dex: 1 }],
     ["Tiefling (Levistus)", 30, `${TIEFLING_BASE} Legacy of Stygia: ray of frost, armor of Agathys at 3rd, darkness at 5th (CHA).`, "snowflake", { cha: 2, con: 1 }],
-    ["Tiefling (Mammon)", 30, `${TIEFLING_BASE} Legacy of Minauros: mage hand, Tenser's floating disk at 3rd, arcane lock at 5th (CHA).`, "coins", { cha: 2, int: 1 }],
+    ["Tiefling (Mammon)", 30, `${TIEFLING_BASE} Legacy of Minauros: mage hand, floating disk at 3rd, arcane lock at 5th (CHA).`, "coins", { cha: 2, int: 1 }],
     ["Tiefling (Mephistopheles)", 30, `${TIEFLING_BASE} Legacy of Cania: mage hand, burning hands at 3rd, flame blade at 5th (CHA).`, "flame", { cha: 2, int: 1 }],
     ["Tiefling (Zariel)", 30, `${TIEFLING_BASE} Legacy of Avernus: thaumaturgy, searing smite at 3rd, branding smite at 5th (CHA).`, "sword", { cha: 2, str: 1 }],
     ["Eladrin", 30, "Darkvision, Keen Senses, Fey Ancestry, Trance, and Fey Step (misty step once per short rest), with a seasonal rider from 3rd level.", "leaf", { dex: 2, cha: 1 }],
@@ -106,9 +106,9 @@
     ["Tortle", 30, "Natural armor 17 (no Dex, no worn armor), Claws (1d4 slashing), hold breath 1 hour, Shell Defense, and Survival proficiency. (Tortle Package)", "shield", { str: 2, wis: 1 }],
     ["Owlin", 30, `Small or Medium. Darkvision 120 ft, flying speed equal to your walking speed (not in medium or heavy armor), and Silent Feathers (Stealth). ${FLEX} (Strixhaven)`, "bird", {}, "Small or Medium"],
     ["Harengon", 30, `Small or Medium. Hare-Trigger (add proficiency to initiative), Leporine Senses (Perception), Lucky Footwork, and Rabbit Hop. ${FLEX} (Witchlight)`, "rabbit", {}, "Small or Medium"],
-    ["Fairy", 30, `Small. Fey type, flying speed equal to your walking speed, and Fairy Magic: druidcraft, faerie fire and enlarge/reduce from 3rd level. ${FLEX} (Witchlight)`, "butterfly", {}, "Small"],
+    ["Fairy", 30, `Small. Fey type, flying speed equal to your walking speed, and Fairy Magic: druidcraft; faerie fire from 3rd level and enlarge/reduce from 5th level, each once per long rest (INT, WIS, or CHA). ${FLEX} (Witchlight)`, "butterfly", {}, "Small"],
     ["Custom Lineage", 30, "Small or Medium. +2 to one ability score, one feat, and either a skill proficiency or 60 ft of sight in darkness. (Tasha's)", "user", {}, "Small or Medium"],
-    ["Dhampir", 35, `Darkvision, Deathless Nature, Spider Climb (walls and ceilings from 3rd level), and Vampiric Bite (heal yourself or empower a roll). Small or Medium. ${FLEX} (Van Richten's)`, "drop", {}, "Small or Medium"],
+    ["Dhampir", 35, `Darkvision, Deathless Nature, Spider Climb (climbing speed equal to your walking speed; from 3rd level you can move up, down, and across walls and ceilings with your hands free), and Vampiric Bite (heal yourself or empower a roll). Small or Medium. ${FLEX} (Van Richten's)`, "drop", {}, "Small or Medium"],
     ["Hexblood", 30, `Darkvision, Fey type, Eerie Token, and Hex Magic: disguise self and hex once per long rest each. Small or Medium. ${FLEX} (Van Richten's)`, "eye", {}, "Small or Medium"],
     ["Reborn", 30, `Deathless Nature (resist poison, advantage against disease and on death saves, no need to eat, breathe, or sleep) and Knowledge from a Past Life (add a d6 to skill checks). Small or Medium. ${FLEX} (Van Richten's)`, "skull", {}, "Small or Medium"],
     ["Astral Elf", 30, `Darkvision, Fey Ancestry, Keen Senses (one skill), Astral Fire (dancing lights, light, or sacred flame), Starlight Step, and Astral Trance. ${FLEX} (Spelljammer)`, "planet", {}],
@@ -120,7 +120,20 @@
     ["Kender", 30, `Small. Fearless, Kender Aptitude (one of Insight, Investigation, Sleight of Hand, Stealth, or Survival), and Taunt. ${FLEX} (Dragonlance)`, "key", {}, "Small"],
     ["Chromatic Dragonborn", 30, `Chromatic Ancestry: a breath weapon that replaces one attack and resistance to its damage type; from 5th level, Chromatic Warding grants immunity to it for 1 minute. ${FLEX} (Fizban's)`, "fire", {}],
     ["Metallic Dragonborn", 30, `Metallic Ancestry: a breath weapon that replaces one attack and resistance to its damage type; from 5th level, a second enervating or repulsion breath. ${FLEX} (Fizban's)`, "fire", {}],
-    ["Gem Dragonborn", 30, `Gem Ancestry: a breath weapon that replaces one attack, resistance to its damage type, and Psionic Mind telepathy; from 5th level, Gem Flight. ${FLEX} (Fizban's)`, "diamond", {}]
+    ["Gem Dragonborn", 30, `Gem Ancestry: a breath weapon that replaces one attack, resistance to its damage type, and Psionic Mind telepathy; from 5th level, Gem Flight. ${FLEX} (Fizban's)`, "diamond", {}],
+    // Eberron: Rising from the Last War dragonmarks. Each also adds its Spells of the Mark to a caster's class list.
+    ["Mark of Detection", 30, "Half-elf. Darkvision, Fey Ancestry, Deductive Intuition (+1d4 to Investigation and Insight checks), and Magical Detection: detect magic and detect poison and disease, plus see invisibility from 3rd level, each once per long rest (INT). +1 to one other ability of your choice.", "magnifying-glass", { wis: 2 }],
+    ["Mark of Finding", 30, "Half-orc or human. Darkvision, Hunter's Intuition (+1d4 to Perception and Survival checks), and Finder's Magic: hunter's mark, plus locate object from 3rd level, each once per long rest (WIS).", "compass", { wis: 2, con: 1 }],
+    ["Mark of Handling", 30, "Human. Wild Intuition (+1d4 to Animal Handling and Nature checks), Primal Connection: animal friendship and speak with animals once each per long rest (WIS), and The Bigger They Are (from 3rd level those spells also work on monstrosities with Intelligence 3 or lower). +1 to one other ability of your choice.", "paw-print", { wis: 2 }],
+    ["Mark of Healing", 25, "Small. Halfling. Lucky, Brave, Halfling Nimbleness, Medical Intuition (+1d4 to Medicine and herbalism kit checks), and Healing Touch: cure wounds, plus lesser restoration from 3rd level, each once per long rest (WIS).", "first-aid", { dex: 2, wis: 1 }, "Small"],
+    ["Mark of Hospitality", 25, "Small. Halfling. Lucky, Brave, Halfling Nimbleness, Ever Hospitable (+1d4 to Persuasion and brewer's or cook's checks), and Innkeeper's Magic: prestidigitation, plus purify food and drink and unseen servant once each per long rest (CHA).", "house", { dex: 2, cha: 1 }, "Small"],
+    ["Mark of Making", 30, "Human. Artisan's Intuition (+1d4 to Arcana and artisan's tools checks), Maker's Gift (one artisan's tools), and Spellsmith: mending, plus magic weapon once per long rest, lasting 1 hour without concentration (INT). +1 to one other ability of your choice.", "hammer", { int: 2 }],
+    ["Mark of Passage", 35, "Human. 35 ft walking speed, Intuitive Motion (+1d4 to Acrobatics and land vehicle checks), and Magical Passage: misty step once per long rest (DEX). +1 to one other ability of your choice.", "sneaker-move", { dex: 2 }],
+    ["Mark of Scribing", 25, "Small. Gnome. Darkvision, Gnome Cunning, Gifted Scribe (+1d4 to History and calligrapher's supplies checks), and Scribe's Insight: message, plus comprehend languages and, from 3rd level, magic mouth, each once per long rest (INT).", "pen-nib", { int: 2, cha: 1 }, "Small"],
+    ["Mark of Sentinel", 30, "Human. Sentinel's Intuition (+1d4 to Insight and Perception checks), Guardian's Shield: shield once per long rest (WIS), and Vigilant Guardian (reaction: swap places with a creature within 5 feet that is hit, taking the hit instead; once per long rest).", "shield-check", { con: 2, wis: 1 }],
+    ["Mark of Shadow", 30, "Elf. Darkvision, Keen Senses, Fey Ancestry, Trance, Cunning Intuition (+1d4 to Performance and Stealth checks), and Shape Shadows: minor illusion, plus invisibility from 3rd level once per long rest (CHA).", "moon", { dex: 2, cha: 1 }],
+    ["Mark of Storm", 30, "Half-elf. Darkvision, Fey Ancestry, Windwright's Intuition (+1d4 to Acrobatics and navigator's tools checks), Storm's Boon (lightning resistance), and Headwinds: gust, plus gust of wind from 3rd level once per long rest (CHA).", "wind", { cha: 2, dex: 1 }],
+    ["Mark of Warding", 25, "Dwarf. Darkvision, Dwarven Resilience, Stonecunning, dwarven combat training, Warder's Intuition (+1d4 to Investigation and thieves' tools checks), and Wards and Seals: alarm and mage armor, plus arcane lock from 3rd level, each once per long rest (INT).", "lock", { con: 2, int: 1 }]
   ].map(row => {
     if (Object.keys(row[4]).length) row[2] += " Tasha's lets you move these ability bonuses.";
     return row;
@@ -175,7 +188,7 @@
     "Tiefling (Fierna)": tiefling("friends", "Legacy of Phlegethos: charm person as a 2nd-level spell (3rd level) and suggestion (5th level), each once per long rest (CHA)."),
     "Tiefling (Glasya)": tiefling("minor-illusion", "Legacy of Malbolge: disguise self (3rd level) and invisibility (5th level), each once per long rest (CHA)."),
     "Tiefling (Levistus)": tiefling("ray-of-frost", "Legacy of Stygia: armor of Agathys as a 2nd-level spell (3rd level) and darkness (5th level), each once per long rest (CHA)."),
-    "Tiefling (Mammon)": tiefling("mage-hand", "Legacy of Minauros: Tenser's floating disk (3rd level) and arcane lock (5th level), each once per long rest (CHA)."),
+    "Tiefling (Mammon)": tiefling("mage-hand", "Legacy of Minauros: floating disk (3rd level) and arcane lock (5th level), each once per long rest (CHA)."),
     "Tiefling (Mephistopheles)": tiefling("mage-hand", "Legacy of Cania: burning hands as a 2nd-level spell (3rd level) and flame blade (5th level), each once per long rest (CHA)."),
     "Tiefling (Zariel)": tiefling("thaumaturgy", "Legacy of Avernus: searing smite as a 2nd-level spell (3rd level) and branding smite (5th level), each once per long rest (CHA)."),
     Eladrin: { languages: ["Common", "Elvish"], skills: ["perception"] },
@@ -221,7 +234,19 @@
     Kender: { languages: ["Common", "one extra language"] },
     "Chromatic Dragonborn": { languages: ["Common", "one extra language"] },
     "Metallic Dragonborn": { languages: ["Common", "one extra language"] },
-    "Gem Dragonborn": { languages: ["Common", "one extra language"] }
+    "Gem Dragonborn": { languages: ["Common", "one extra language"] },
+    "Mark of Detection": { languages: ["Common", "Elvish", "one extra language"] },
+    "Mark of Finding": { languages: ["Common", "Goblin"] },
+    "Mark of Handling": { languages: ["Common", "one extra language"] },
+    "Mark of Healing": { languages: ["Common", "Halfling"] },
+    "Mark of Hospitality": { languages: ["Common", "Halfling"], cantrips: ["prestidigitation"] },
+    "Mark of Making": { languages: ["Common", "one extra language"], tools: ["One type of artisan's tools"], cantrips: ["mending"] },
+    "Mark of Passage": { languages: ["Common", "one extra language"] },
+    "Mark of Scribing": { languages: ["Common", "Gnomish"], cantrips: ["message"] },
+    "Mark of Sentinel": { languages: ["Common", "one extra language"] },
+    "Mark of Shadow": { languages: ["Common", "Elvish"], skills: ["perception"], cantrips: ["minor-illusion"] },
+    "Mark of Storm": { languages: ["Common", "Elvish", "one extra language"], cantrips: ["gust"] },
+    "Mark of Warding": { ...DWARF_GRANTS }
   };
   Object.entries(speciesGrants).forEach(([name, grants]) => {
     if (!(name in SPECIES_GRANTS)) SPECIES_GRANTS[name] = grants;
@@ -236,15 +261,15 @@
     // Player's Handbook (and its listed variants)
     ["Charlatan", "Deception, Sleight of Hand", "Disguise kit, forgery kit", "False Identity", "mask-happy"],
     ["Entertainer", "Acrobatics, Performance", "Disguise kit, one musical instrument", "By Popular Demand", "music-notes"],
-    ["Gladiator", "Acrobatics, Performance", "Disguise kit, one unusual weapon", "By Popular Demand", "sword"],
+    ["Gladiator", "Acrobatics, Performance", "Disguise kit, one musical instrument", "By Popular Demand", "sword"],
     ["Guild Artisan", "Insight, Persuasion", "One artisan's tools, one language", "Guild Membership", "hammer"],
     ["Guild Merchant", "Insight, Persuasion", "Navigator's tools, one language", "Guild Membership", "coins"],
     ["Hermit", "Medicine, Religion", "Herbalism kit, one language", "Discovery", "tent"],
-    ["Knight", "History, Persuasion", "Gaming set, one language", "Retainers", "shield"],
+    ["Knight", "History, Persuasion", "One type of gaming set, one language", "Retainers", "shield"],
     ["Outlander", "Athletics, Survival", "One musical instrument, one language", "Wanderer", "compass"],
     ["Sailor", "Athletics, Perception", "Navigator's tools, vehicles (water)", "Ship's Passage", "anchor"],
     ["Pirate", "Athletics, Perception", "Navigator's tools, vehicles (water)", "Bad Reputation", "skull"],
-    ["Spy", "Deception, Stealth", "Gaming set, thieves' tools", "Spy Contact", "eye"],
+    ["Spy", "Deception, Stealth", "One type of gaming set, thieves' tools", "Criminal Contact", "eye"],
     ["Urchin", "Sleight of Hand, Stealth", "Disguise kit, thieves' tools", "City Secrets", "key"],
     // Sword Coast Adventurer's Guide
     ["City Watch", "Athletics, Insight", "Two languages", "Watcher's Eye", "binoculars"],
@@ -255,7 +280,7 @@
     ["Far Traveler", "Insight, Perception", "One musical instrument or gaming set, one language", "All Eyes on You", "globe"],
     ["Inheritor", "Survival, Arcana/History/Religion (pick one)", "Gaming set or musical instrument, one language", "Inheritance", "scroll"],
     ["Knight of the Order", "Persuasion, Arcana/History/Nature/Religion (pick one)", "Gaming set or musical instrument, one language", "Knightly Regard", "shield"],
-    ["Mercenary Veteran", "Athletics, Persuasion", "Gaming set, vehicles (land)", "Mercenary Life", "sword"],
+    ["Mercenary Veteran", "Athletics, Persuasion", "One type of gaming set, vehicles (land)", "Mercenary Life", "sword"],
     ["Urban Bounty Hunter", "Two of Deception/Insight/Persuasion/Stealth", "Two of gaming set/musical instrument/thieves' tools", "Ear to the Ground", "crosshair"],
     ["Uthgardt Tribe Member", "Athletics, Survival", "Musical instrument or artisan's tools, one language", "Uthgardt Heritage", "mountains"],
     ["Waterdhavian Noble", "History, Persuasion", "Gaming set or musical instrument, one language", "Kept in Style", "crown"],
@@ -266,7 +291,7 @@
     ["House Agent", "Investigation, Persuasion", "Two tools set by your house", "House Connections", "key"],
     // Guildmasters' Guide to Ravnica
     ["Azorius Functionary", "Insight, Intimidation", "Two languages", "Legal Authority", "scales"],
-    ["Boros Legionnaire", "Athletics, Intimidation", "Gaming set, one language", "Legion Station", "shield"],
+    ["Boros Legionnaire", "Athletics, Intimidation", "One type of gaming set, one language", "Legion Station", "shield"],
     ["Dimir Operative", "Deception, Stealth", "Disguise kit, one language", "False Identity", "mask-sad"],
     ["Golgari Agent", "Nature, Survival", "Poisoner's kit, one language", "Undercity Paths", "plant"],
     ["Gruul Anarch", "Animal Handling, Athletics", "Herbalism kit, one language", "Rubblebelt Refuge", "axe"],
@@ -283,7 +308,7 @@
     // Acquisitions Incorporated
     ["Celebrity Adventurer's Scion", "Perception, Performance", "Disguise kit, two languages", "Name Dropping", "star"],
     ["Failed Merchant", "Investigation, Persuasion", "One artisan's tools, one language", "Supply Chain", "coins"],
-    ["Gambler", "Deception, Insight", "Gaming set, one language", "Never Tell Me the Odds", "club"],
+    ["Gambler", "Deception, Insight", "One type of gaming set, one language", "Never Tell Me the Odds", "club"],
     ["Plaintiff", "Medicine, Persuasion", "One artisan's tools, one language", "Legalese", "gavel"],
     ["Rival Intern", "History, Investigation", "One artisan's tools, one language", "Inside Informant", "briefcase"],
     // Ghosts of Saltmarsh
@@ -291,12 +316,12 @@
     ["Marine", "Athletics, Survival", "Vehicles (water), vehicles (land)", "Steady", "anchor"],
     ["Shipwright", "History, Perception", "Carpenter's tools, vehicles (water)", "I'll Patch It!", "hammer"],
     ["Smuggler", "Athletics, Deception", "Vehicles (water)", "Down Low", "sailboat"],
-    // Strixhaven: A Curriculum of Chaos (each feature is the matching Strixhaven Initiate feat)
-    ["Lorehold Student", "History, Religion", "Two languages", "Lorehold Initiate", "scroll"],
-    ["Prismari Student", "Acrobatics, Performance", "Artisan's tools or musical instrument, one language", "Prismari Initiate", "palette"],
-    ["Quandrix Student", "Arcana, Nature", "One artisan's tools, one language", "Quandrix Initiate", "cube"],
-    ["Silverquill Student", "Intimidation, Persuasion", "Two languages", "Silverquill Initiate", "feather"],
-    ["Witherbloom Student", "Nature, Survival", "Herbalism kit, one language", "Witherbloom Initiate", "leaf"],
+    // Strixhaven: A Curriculum of Chaos (each grants the matching Strixhaven Initiate feat; data.js BACKGROUND_FEATS)
+    ["Lorehold Student", "History, Religion", "Two languages", "Feat: Strixhaven Initiate (Lorehold)", "scroll"],
+    ["Prismari Student", "Acrobatics, Performance", "Artisan's tools or musical instrument, one language", "Feat: Strixhaven Initiate (Prismari)", "palette"],
+    ["Quandrix Student", "Arcana, Nature", "One artisan's tools, one language", "Feat: Strixhaven Initiate (Quandrix)", "cube"],
+    ["Silverquill Student", "Intimidation, Persuasion", "Two languages", "Feat: Strixhaven Initiate (Silverquill)", "feather"],
+    ["Witherbloom Student", "Nature, Survival", "Herbalism kit, one language", "Feat: Strixhaven Initiate (Witherbloom)", "leaf"],
     // The Wild Beyond the Witchlight
     ["Feylost", "Deception, Survival", "One musical instrument, one language", "Feywild Connection", "butterfly"],
     ["Witchlight Hand", "Performance, Sleight of Hand", "Disguise kit or musical instrument, one language", "Carnival Companion", "mask-happy"],
@@ -307,9 +332,15 @@
     ["Gate Warden", "Persuasion, Survival", "Two languages", "Planar Infusion", "key"],
     ["Planar Philosopher", "Arcana, one faction skill (pick one)", "Two languages", "Conviction", "infinity"],
     // Dragonlance and Baldur's Gate: Descent into Avernus
-    ["Knight of Solamnia", "Athletics, Survival", "Gaming set, one language", "Squire of Solamnia", "shield"],
-    ["Mage of High Sorcery", "Arcana, History", "Two languages", "Initiate of High Sorcery", "moon-stars"],
-    ["Faceless", "Deception, Intimidation", "Disguise kit, one language", "Dual Personalities", "mask-happy"]
+    ["Knight of Solamnia", "Athletics, Survival", "One type of gaming set, one language", "Feat: Squire of Solamnia", "shield"],
+    ["Mage of High Sorcery", "Arcana, History", "Two languages", "Feat: Initiate of High Sorcery", "moon-stars"],
+    ["Faceless", "Deception, Intimidation", "Disguise kit, one language", "Dual Personalities", "mask-happy"],
+    // Tomb of Annihilation
+    ["Anthropologist", "Insight, Religion", "Two languages", "Adept Linguist", "users-three"],
+    ["Archaeologist", "History, Survival", "Cartographer's tools or navigator's tools, one language", "Historical Knowledge", "shovel"],
+    // Bigby Presents: Glory of the Giants (each grants a feat; data.js BACKGROUND_FEATS)
+    ["Giant Foundling", "Intimidation, Survival", "One language", "Feat: Strike of the Giants", "mountains"],
+    ["Rune Carver", "History, Perception", "One type of artisan's tools, one language", "Feat: Rune Shaper", "pen-nib"]
   ], row => row[0]);
 
   // ---------------------------------------------------------------------------------------------
@@ -619,7 +650,7 @@
       "Damage increases by 1d8 for each slot level above 1st.")
   ];
   // LOCAL_SPELL_INDEX is derived from LOCAL_SPELLS once in data.js, so both are extended here.
-  const knownSpells = new Set([...LOCAL_SPELLS, ...FALLBACK_SPELLS].map(spell => spell.index));
+  const knownSpells = new Set(LOCAL_SPELLS.map(spell => spell.index));
   spells.filter(detail => !knownSpells.has(detail.index)).forEach(detail => {
     LOCAL_SPELLS.push(detail);
     LOCAL_SPELL_INDEX.push({ index: detail.index, name: detail.name, level: detail.level, classes: detail.classes.map(cls => cls.index) });
@@ -629,15 +660,15 @@
   // ITEMS. Non-SRD class focuses and trinkets from TCE/XGE, plus DMG firearms for the Gunner feat.
   // ---------------------------------------------------------------------------------------------
   addMissing(ITEM_CATALOG, [
-    itemCard("pistol", "Pistol", "Weapon", 3, "Martial ranged weapon", "1d10 piercing, ammunition 30/90, loading. (DMG firearm)"),
-    itemCard("musket", "Musket", "Weapon", 10, "Martial ranged weapon", "1d12 piercing, ammunition 40/120, loading, two-handed. (DMG firearm)"),
-    itemCard("all-purpose-tool", "All-Purpose Tool +1", "Wondrous Item", 1, "Uncommon magic item", "Counts as any artisan's tools; +1 to artificer spell attacks and save DCs; once per long rest borrow a cantrip for 8 hours. Requires attunement by an artificer. (TCE)"),
-    itemCard("amulet-of-the-devout", "Amulet of the Devout +1", "Wondrous Item", 1, "Uncommon magic item", "Holy symbol; +1 to spell attacks and save DCs; one free Channel Divinity use per long rest. Requires attunement by a cleric or paladin. (TCE)"),
+    itemCard("pistol", "Pistol", "Weapon", 3, "Martial ranged weapon", "1d10 piercing, ammunition 30/90, loading. (DMG firearm)", "250 gp"),
+    itemCard("musket", "Musket", "Weapon", 10, "Martial ranged weapon", "1d12 piercing, ammunition 40/120, loading, two-handed. (DMG firearm)", "500 gp"),
+    itemCard("all-purpose-tool", "All-Purpose Tool +1", "Wondrous Item", 1, "Uncommon magic item", "Counts as any artisan's tools; +1 to artificer spell attacks and save DCs; once per dawn, as an action, borrow a cantrip from any class list for 8 hours (it counts as an artificer cantrip). Requires attunement by an artificer. (TCE)"),
+    itemCard("amulet-of-the-devout", "Amulet of the Devout +1", "Wondrous Item", 1, "Uncommon magic item", "Holy symbol; +1 to spell attacks and save DCs; once per dawn, use Channel Divinity without spending a use. Requires attunement by a cleric or paladin. (TCE)"),
     itemCard("arcane-grimoire", "Arcane Grimoire +1", "Wondrous Item", 3, "Uncommon magic item", "Spellbook focus; +1 to wizard spell attacks and save DCs; Arcane Recovery regains one extra slot level. Requires attunement by a wizard. (TCE)"),
-    itemCard("bloodwell-vial", "Bloodwell Vial +1", "Wondrous Item", 0.5, "Uncommon magic item", "+1 to sorcerer spell attacks and save DCs; once per day, regain sorcery points when spending Hit Dice on a short rest. Requires attunement by a sorcerer. (TCE)"),
+    itemCard("bloodwell-vial", "Bloodwell Vial +1", "Wondrous Item", 0.5, "Uncommon magic item", "+1 to sorcerer spell attacks and save DCs; when you roll Hit Dice to heal while carrying it, regain 5 sorcery points (once per dawn). Requires attunement by a sorcerer. (TCE)"),
     itemCard("moon-sickle", "Moon Sickle +1", "Weapon", 2, "Uncommon magic item", "1d4 slashing, light; +1 to attack and damage, +1 to druid and ranger spell attacks and save DCs, and add 1d4 to healing spells. Requires attunement by a druid or ranger. (TCE)"),
-    itemCard("rhythm-makers-drum", "Rhythm-Maker's Drum +1", "Wondrous Item", 3, "Uncommon magic item", "Instrument focus; +1 to bard spell attacks and save DCs; once per long rest regain one Bardic Inspiration. Requires attunement by a bard. (TCE)"),
-    itemCard("guardian-emblem", "Guardian Emblem", "Wondrous Item", 0, "Uncommon magic item", "3 charges; reaction to turn a critical hit on you or an ally within 30 feet into a normal hit. Regains charges at dawn. Requires attunement by a cleric or paladin. (TCE)"),
+    itemCard("rhythm-makers-drum", "Rhythm-Maker's Drum +1", "Wondrous Item", 3, "Uncommon magic item", "Instrument focus; +1 to bard spell attacks and save DCs; once per dawn, as an action, regain one Bardic Inspiration use. Requires attunement by a bard. (TCE)"),
+    itemCard("guardian-emblem", "Guardian Emblem", "Wondrous Item", 0, "Uncommon magic item", "3 charges; reaction to turn a critical hit on you or an ally within 30 feet into a normal hit. Regains 1d3 expended charges at dawn. Requires attunement by a cleric or paladin. (TCE)"),
     itemCard("ruby-of-the-war-mage", "Ruby of the War Mage", "Wondrous Item", 0, "Common magic item", "Affix to a weapon to use it as a spellcasting focus. Requires attunement by a spellcaster. (XGE)"),
     itemCard("moon-touched-sword", "Moon-Touched Sword", "Weapon", 3, "Common magic item", "Sheds bright light 15 feet and dim light 15 feet more in darkness. Uses the base sword's damage. (XGE)"),
     itemCard("cloak-of-many-fashions", "Cloak of Many Fashions", "Wondrous Item", 1, "Common magic item", "Bonus action: change the cloak's style, color, and quality. (XGE)"),
@@ -647,11 +678,22 @@
 
   // Creation-time choices read by speciesChoices() in builder.js: "+2/+1 of your choice" lineages,
   // the SCAG half-elf variants (+1/+1, not CHA) and Tasha's Custom Lineage (+2, a skill, a feat).
-  SPECIES_PRESETS.forEach(([name, , , , bonus]) => {
+  // Also: the ERLW "+2 and +1 to one other" species, Fairy/Hexblood/Astral Elf spell ability, size picks for
+  // "Small or Medium" lineages, and the Fizban's dragonborn ancestry.
+  const otherPlusOne = ["Changeling", "Warforged", "Simic Hybrid", "Mark of Detection", "Mark of Handling", "Mark of Making", "Mark of Passage"];
+  SPECIES_PRESETS.forEach(([name, , , , bonus, size]) => {
     const grants = SPECIES_GRANTS[name] = { ...(SPECIES_GRANTS[name] || {}) };
-    if (grants.choose) return;
-    if (/^Half-Elf \(/.test(name)) grants.choose = { bonuses: [1, 1], exclude: ["cha"], ...(name === "Half-Elf (High)" ? { cantripFrom: "wizard" } : {}) };
-    else if (name === "Custom Lineage") grants.choose = { bonuses: [2], skills: 1, feat: true };
-    else if (!Object.keys(bonus || {}).length) grants.choose = { bonuses: [2, 1] };
+    const choose = { ...(grants.choose || {}) };
+    if (/^Half-Elf \(/.test(name)) Object.assign(choose, { bonuses: [1, 1], exclude: ["cha"] }, name === "Half-Elf (High)" ? { cantripFrom: "wizard" } : {});
+    // TCE p.8: +2, a feat, and either a skill or 60 ft darkvision.
+    else if (name === "Custom Lineage") Object.assign(choose, { bonuses: [2], feat: true, either: true });
+    else if (otherPlusOne.includes(name)) Object.assign(choose, { bonuses: [1], exclude: Object.keys(bonus) });
+    else if (!choose.bonuses && !Object.keys(bonus || {}).length) Object.assign(choose, { bonuses: [2, 1], alt: [1, 1, 1] });
+    if (size === "Small or Medium") choose.size = ["Small", "Medium"];
+    if (SPECIES_MAGIC[name]?.ability === "choice") choose.spellAbility = ["int", "wis", "cha"];
+    if (name === "Astral Elf") Object.assign(choose, { spellAbility: ["int", "wis", "cha"], cantripList: ["dancing-lights", "light", "sacred-flame"] });
+    if (FTD_DRAGON_ANCESTRY[name] || /Dragonborn$/.test(name)) choose.ancestry = true;
+    if (name === "Half-Elf (Wood)") choose.heritage = ["Elf weapon training", "Fleet of Foot (35 ft speed)", "Mask of the Wild"];
+    if (Object.keys(choose).length) grants.choose = choose;
   });
 })();

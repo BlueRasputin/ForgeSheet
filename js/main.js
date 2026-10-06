@@ -18,8 +18,6 @@ function init() {
   bindEvents();
   trackTabBarHeight();
   renderAll();
-  hydrateSubclasses();
-  hydrateSpells();
   initAccount();
 }
 
@@ -30,7 +28,9 @@ function buildStaticControls() {
     ["halfRoundDown", "Half caster"],
     ["halfRoundUp", "Half caster, rounded up"],
     ["third", "Third caster"],
-    ["warlock", "Pact magic"]
+    ["warlock", "Pact magic"],
+    ["pactHalf", "Pact magic (half)"],
+    ["pactThird", "Pact magic (third)"]
   ];
   fillSelect(document.querySelector("#builderCasterType"), casterOptions);
   fillSelect(document.querySelector("#builderSpellAbility"), ABILITIES);
@@ -85,21 +85,26 @@ function bindEvents() {
     "hpInput", "maxHpInput", "tempHpInput", "acInput", "speedInput", "hitDiceInput", "attacksInput",
     "featuresInput", "inventoryInput", "notesInput", "subclassMode", "officialSubclassSelect",
     "subclassType", "subclassTemplate", "showAllSpells", "exhaustionInput", "sheetSearch", "concentrationInput",
-    "coinCp", "coinSp", "coinEp", "coinGp", "coinPp", "prepMode",
+    "prepMode",
     "personalityTraitInput", "idealInput", "bondInput", "flawInput", "languagesInput", "toolsInput",
-    "armorTrainingInput", "weaponTrainingInput"
+    "armorTrainingInput", "weaponTrainingInput", "xpInput"
   ];
   watched.forEach(id => document.querySelector(`#${id}`).addEventListener("input", handleInput));
+  // Coins commit on change so "+45" is added once, not on every keystroke.
+  ["coinCp", "coinSp", "coinEp", "coinGp", "coinPp"].forEach(id => document.querySelector(`#${id}`).addEventListener("change", handleInput));
+  const hpInput = document.querySelector("#hpInput");
+  hpInput.addEventListener("focus", () => { hpInput.dataset.before = String(character.hp); });
+  hpInput.addEventListener("change", () => hpEdited(Number(hpInput.dataset.before ?? character.hp), Number(character.hp)));
   document.querySelector("#showAllSpells").addEventListener("change", event => {
     if (!event.target.checked || isRuleBroken("off-list-spells")) return;
     event.target.checked = false;
-    breakRule("off-list-spells", "Spells from other classes' lists aren't normally available to you (bards get some through Magical Secrets). Show every spell anyway?", () => {
+    breakRule("off-list-spells", "Spells from other classes' lists aren't normally available to you. Magical Secrets and feat spells don't need this: open the spell and set Learned as. Show every spell anyway?", () => {
       event.target.checked = true;
       renderAll();
     });
   });
   document.addEventListener("focusout", event => {
-    if (event.target.matches?.('input[type="number"]')) renderAll();
+    if (event.target.matches?.('input[type="number"], .money-grid input')) renderAll();
   });
 
   // Commit on change so half-typed scores (backspace, then "20") don't briefly rescale class resources.
@@ -170,7 +175,7 @@ function bindEvents() {
   document.querySelector("#closeRulesDialog").addEventListener("click", () => document.querySelector("#rulesDialog").close());
   document.querySelector("#closeClassBuilder").addEventListener("click", () => document.querySelector("#classBuilderDialog").close());
   document.querySelector("#classBuilderDialog").addEventListener("input", event => {
-    if (event.target.closest(".field-grid") || event.target.id === "builderTable") handleBuilderInput();
+    if (event.target.closest(".field-grid, #builderExtras") || event.target.id === "builderTable") handleBuilderInput();
   });
   document.querySelector("#editCustomClassSelect").addEventListener("change", event => {
     if (event.target.value) startCustomClassDraft(event.target.value);
@@ -188,7 +193,8 @@ function bindEvents() {
   document.querySelector("#applyHealButton").addEventListener("click", () => applyHeal());
   document.querySelector("#concentrationPrompt").addEventListener("click", handleConcentrationPromptClick);
   document.querySelector("#wildShapeBox").addEventListener("input", handleWildShapeInput);
-  document.querySelector("#wildShapeBox").addEventListener("change", () => renderAll());
+  // The beast search filters in place; re-rendering on its change event would drop a pending pick.
+  document.querySelector("#wildShapeBox").addEventListener("change", event => { if (!event.target.matches("[data-beast-search]")) renderAll(); });
   document.querySelector("#wildShapeBox").addEventListener("click", event => {
     if (event.target.closest("[data-wild-shape-revert]")) revertWildShape();
   });
@@ -204,9 +210,9 @@ function bindEvents() {
     const button = event.target.closest("[data-add-spell-level]");
     if (button) {
       const level = Number(button.dataset.addSpellLevel);
-      gateNewSpellRow(level, () => {
+      gateNewSpellRow(level, extra => {
         const id = crypto.randomUUID();
-        character.spells.push({ id, index: "", level, prepared: level > 0 && canPrepareAnother() });
+        character.spells.push({ id, index: "", level, prepared: level > 0 && canPrepareAnother(), ...(extra || {}) });
         persistAndRender();
         const select = document.querySelector(`[data-spell-id="${id}"] .spell-select`);
         select?.scrollIntoView({ block: "center" });
@@ -225,10 +231,20 @@ function bindEvents() {
   });
   document.querySelector("#slotGrid").addEventListener("click", handleSlotUsageClick);
   document.querySelector("#combatSpells").addEventListener("click", handleSpellCastClick);
+  document.querySelector("#groupCheckButton").addEventListener("click", rollGroupCheck);
   document.querySelector("#partyDashboard").addEventListener("click", event => {
+    const stabilize = event.target.closest("[data-party-stabilize]");
+    if (stabilize) return partyStabilizeMenu(stabilize.dataset.partyStabilize);
+    const act = event.target.closest("[data-party-act]");
+    if (act) return handlePartyAction(act);
+    if (event.target.closest(".party-member, .party-menu")) return;
     const card = event.target.closest("[data-party-sheet]");
     if (!card || card.dataset.partySheet === character.sheetId) return;
     switchToSheet(card.dataset.partySheet);
+  });
+  document.querySelector("#partyDashboard").addEventListener("change", event => {
+    const member = event.target.closest("[data-party-member]");
+    if (member) setPartyMember(member.dataset.partyMember, member.checked);
   });
   document.querySelector("#partySort").addEventListener("click", event => {
     const button = event.target.closest("[data-party-sort]");
@@ -297,6 +313,8 @@ function bindEvents() {
   document.querySelector("#spendHitDieButton").addEventListener("click", spendHitDie);
   document.querySelector("#restPreview").addEventListener("click", event => {
     if (event.target.closest("[data-undo-rest]")) undoLastRest();
+    const recovery = event.target.closest("[data-recovery]");
+    if (recovery) useArcaneRecovery(recovery.dataset.recovery);
   });
   document.querySelector("#rollDiceButton").addEventListener("click", () => rollFromInput());
   document.querySelector("#rollFormula").addEventListener("keydown", event => {
@@ -337,17 +355,16 @@ function bindEvents() {
   document.querySelector("#addCatalogEquipment").addEventListener("click", addCatalogEquipment);
   document.querySelector("#equipmentRows").addEventListener("input", handleEquipmentInput);
   document.querySelector("#equipmentRows").addEventListener("click", handleEquipmentClick);
+  document.querySelector("#equipmentRows").addEventListener("focusin", fillGrantSpellSelect);
+  document.querySelector("#equipmentRows").addEventListener("pointerdown", fillGrantSpellSelect);
   document.querySelector("#addClassOptionButton").addEventListener("click", () => addClassOption());
   document.querySelector("#classOptionPreset").addEventListener("input", handleClassOptionPreset);
   document.querySelector("#classOptionRows").addEventListener("input", handleClassOptionInput);
   document.querySelector("#classOptionRows").addEventListener("click", handleClassOptionClick);
   document.querySelector("#conditionGrid").addEventListener("click", handleConditionClick);
+  document.querySelector("#conditionGrid").addEventListener("change", handleConditionChange);
   document.querySelector("#addActionButton").addEventListener("click", addAction);
-  document.querySelector("#fightingStyleSelect").addEventListener("change", event => {
-    character.fightingStyle = event.target.value;
-    refreshGeneratedActions();
-    persistAndRender();
-  });
+  document.querySelector("#turnPrompt").addEventListener("click", handleTurnPromptClick);
   document.querySelector("#generateActionsButton").addEventListener("click", generateActions);
   document.querySelector("#actionRows").addEventListener("input", handleActionInput);
   document.querySelector("#actionRows").addEventListener("click", handleActionClick);
@@ -360,14 +377,18 @@ function bindEvents() {
   document.querySelector("#generateCode").addEventListener("click", generateSessionCode);
   document.querySelector("#shareClassButton").addEventListener("click", shareCustomClass);
   document.querySelector("#importClassButton").addEventListener("click", importSharedClass);
+  document.querySelector("#importSpellButton").addEventListener("click", () => importSharedContent(document.querySelector("#importSpellCode").value, "spell"));
   document.querySelector("#actionFilter").addEventListener("click", handleActionFilterClick);
   document.querySelector("#copyPlayerLink").addEventListener("click", () => copySyncLink("player"));
   document.querySelector("#copyDmLink").addEventListener("click", () => copySyncLink("dm"));
   document.querySelector("#sendCatalogItem").addEventListener("click", () => sendDmItem("catalog"));
   document.querySelector("#sendCustomItem").addEventListener("click", () => sendDmItem("custom"));
   document.querySelector("#dmItemCatalog").addEventListener("input", renderDmItemPreview);
-  document.querySelector("#dmItemTarget").addEventListener("input", renderDmItemPreview);
-  ["customItemName", "customItemType", "customItemWeight", "customItemQuantity", "customItemRarity", "customItemContainer", "customItemNotes"].forEach(id => {
+  document.querySelector("#dmItemTarget").addEventListener("input", event => {
+    itemCardRecipient = event.target.value.replace(/^(local|remote):/, "");
+    renderDmItemPreview();
+  });
+  ["customItemName", "customItemType", "customItemWeight", "customItemQuantity", "customItemRarity", "customItemContainer", "customItemNotes", "customItemBase", "customItemBonus"].forEach(id => {
     document.querySelector(`#${id}`).addEventListener("input", renderDmItemPreview);
   });
   ["syncRole", "syncCampaignId", "syncPlayerName", "syncSheetId", "syncFirebaseConfig"].forEach(id => {
@@ -385,6 +406,7 @@ function bindEvents() {
 }
 
 function renderAll() {
+  registerCustomSpells();
   renderViewLayout();
   renderCharacterManager();
   renderHeader();
@@ -397,6 +419,7 @@ function renderAll() {
   renderBuilder();
   renderClassTable();
   renderPartyDashboard();
+  renderSheetActivity();
   renderSearchResults();
   renderSyncPanel();
   renderDmItemTools();

@@ -1,3 +1,6 @@
+// Player-chosen class options (CLASS_OPTIONS lists), counted by builder.js classChoiceSlots(). Other code reads these keys.
+const CLASS_CHOICE_DEFAULTS = { fightingStyles: [], invocations: [], pactBoon: "", metamagic: [], maneuvers: [], infusions: [], disciplines: [], runes: [], arcaneShots: [], totems: {}, hunter: {}, favoredEnemies: [], favoredTerrains: [], bloodHunterRites: [], bloodMaledicts: [], draconicAncestry: "", landTerrain: "", genieKind: "", divineSoulAffinity: "", favoredFoe: false, deftExplorer: false, primalAwareness: false, naturesVeil: false, tomeCantrips: [], blessedWarriorCantrips: [], druidicWarriorCantrips: [], kenseiWeapons: [], stormEnvironment: "", hemocraftAbility: "" };
+
 function defaultCharacter() {
   return {
     name: "New Character",
@@ -47,21 +50,29 @@ function defaultCharacter() {
     inventory: "",
     notes: "",
     noteSections: [],
+    // Dated journal entries { id, date, session, location, title, body }, shown newest first.
+    journal: [],
+    // Class entry key ("primary" or a multiclass id) that gained the last level; the level-up dialog starts there.
+    lastLevelClass: "",
     rollHistory: [],
     currency: { cp: 0, sp: 0, ep: 0, gp: 25, pp: 0 },
     hitDiceUsed: 0,
     concentration: "",
-    resources: [
-      { id: crypto.randomUUID(), name: "Infusions", current: 2, max: 2, reset: "long" }
-    ],
+    resources: [],
     equipment: [
-      { id: crypto.randomUUID(), name: "Scale Mail", quantity: 1, weight: 45, container: "equipped", equipped: true, attuned: false, notes: "Armor" },
+      { id: crypto.randomUUID(), name: "Scale Mail", quantity: 1, weight: 45, container: "carried", equipped: true, attuned: false, notes: "Armor" },
       { id: crypto.randomUUID(), name: "Smith's Tools", quantity: 1, weight: 8, container: "backpack", equipped: false, attuned: false, notes: "Tool proficiency" }
     ],
-    classOptions: [
-      { id: crypto.randomUUID(), kind: "infusion", name: "Enhanced Defense", current: 1, max: 1, reset: "long", notes: "Record infused item and bonus here." }
-    ],
+    classOptions: [],
     planner: { multiclass: [], feats: [] },
+    // Feats from a species or background ({ name, source }); they don't use an ASI slot.
+    bonusFeats: [],
+    // What each taken feat added (ability, save, proficiencies, HP), so removing it can undo that.
+    featGrants: {},
+    classChoices: normalizeClassChoices(),
+    draconicAncestry: "",
+    size: "",
+    movement: {},
     restLog: "",
     conditions: [],
     exhaustion: 0,
@@ -95,10 +106,36 @@ function loadCharacter() {
   }
 }
 
+// fightingStyle (the Combat tab's single select) stays the first fighting style.
+function normalizeClassChoices(stored = {}, fightingStyle = "") {
+  const choices = Object.fromEntries(Object.entries(CLASS_CHOICE_DEFAULTS).map(([key, fallback]) => {
+    const value = stored?.[key];
+    if (Array.isArray(fallback)) return [key, Array.isArray(value) ? value.map(item => String(item || "")).slice(0, 24) : []];
+    if (typeof fallback === "boolean") return [key, Boolean(value)];
+    if (typeof fallback === "object") return [key, value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).slice(0, 8).map(([at, name]) => [at, String(name || "")])) : {}];
+    return [key, typeof value === "string" ? value : ""];
+  }));
+  if (fightingStyle && choices.fightingStyles[0] !== fightingStyle) choices.fightingStyles[0] = fightingStyle;
+  return choices;
+}
+
+// Older sheets kept the Variant Human / Custom Lineage feat in planner.feats, where it counted as an ASI.
+function splitSpeciesFeat(stored) {
+  const feats = [...(stored.planner?.feats || [])];
+  if (Array.isArray(stored.bonusFeats)) return { feats, bonusFeats: stored.bonusFeats.filter(item => item?.name).map(item => ({ name: String(item.name), source: item.source === "background" ? "background" : "species" })) };
+  const species = String(stored.species || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const name = species && String(stored.features || "").match(new RegExp(`^Feat \\(${species}\\): (.+)$`, "m"))?.[1];
+  const index = name ? feats.indexOf(name) : -1;
+  if (index < 0) return { feats, bonusFeats: [] };
+  feats.splice(index, 1);
+  return { feats, bonusFeats: [{ name, source: "species" }] };
+}
+
 function normalizeCharacter(value) {
   const base = defaultCharacter();
   const stored = value || {};
-  return {
+  const legacyFeats = splitSpeciesFeat(stored);
+  return migrateCustomSpellRows({
     ...base,
     ...stored,
     // Synced and imported sheets are untrusted: numbers must be numbers and ids plain ids before they reach the page.
@@ -109,7 +146,8 @@ function normalizeCharacter(value) {
     ac: Number(stored.ac ?? base.ac) || 10,
     speed: Number(stored.speed ?? base.speed) || 0,
     tempHp: clamp(Number(stored.tempHp || 0), 0, 999),
-    inspiration: clamp(Number(stored.inspiration || 0), 0, 99),
+    // PHB p.125: you have inspiration or you don't, unless the stacking house rule is on.
+    inspiration: clamp(Math.round(Number(stored.inspiration || 0)), 0, optionalRule("stackingInspiration", stored) ? 99 : 1),
     identityLocked: stored.identityLocked !== false,
     asiAcknowledgedLevel: Number(stored.asiAcknowledgedLevel || 0),
     autoSpells: stored.autoSpells || base.autoSpells,
@@ -130,27 +168,49 @@ function normalizeCharacter(value) {
     hitDiceUsed: Number(stored.hitDiceUsed || 0),
     concentration: stored.concentration || base.concentration,
     resources: stored.resources || base.resources,
-    equipment: stored.equipment || base.equipment,
+    // One way to equip: the old "Equipped" container becomes equipped: true, carried.
+    equipment: (stored.equipment || base.equipment).map(item => item?.container === "equipped" ? { ...item, container: "carried", equipped: true } : item),
+    journal: (Array.isArray(stored.journal) ? stored.journal : []).filter(entry => entry && typeof entry === "object").map(entry => ({
+      id: /^[\w-]{1,64}$/.test(String(entry.id || "")) ? entry.id : crypto.randomUUID(),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date || "")) ? entry.date : "",
+      session: String(entry.session ?? "").slice(0, 12),
+      location: String(entry.location || "").slice(0, 200),
+      title: String(entry.title || "").slice(0, 200),
+      body: String(entry.body || "")
+    })),
+    lastLevelClass: /^[\w-]{1,64}$/.test(String(stored.lastLevelClass || "")) ? stored.lastLevelClass : "",
     classOptions: stored.classOptions || base.classOptions,
     planner: {
       multiclass: stored.planner?.multiclass || base.planner.multiclass,
-      feats: stored.planner?.feats || base.planner.feats
+      feats: legacyFeats.feats
     },
+    bonusFeats: legacyFeats.bonusFeats,
+    featGrants: stored.featGrants && typeof stored.featGrants === "object" ? stored.featGrants : {},
+    classChoices: normalizeClassChoices(stored.classChoices, stored.fightingStyle),
+    movement: stored.movement && typeof stored.movement === "object" ? stored.movement : {},
     restLog: stored.restLog || base.restLog,
     conditions: stored.conditions || base.conditions,
     exhaustion: Number(stored.exhaustion || 0),
     actions: stored.actions || base.actions,
     spellSlotUsage: stored.spellSlotUsage || base.spellSlotUsage,
     homebrewRules: stored.homebrewRules || {},
+    optionalRules: { ...OPTIONAL_RULE_DEFAULTS, ...(stored.optionalRules || {}) },
     multiclasses: (Array.isArray(stored.multiclasses) ? stored.multiclasses : []).map(entry => ({
       id: /^[\w-]{1,64}$/.test(String(entry.id || "")) ? entry.id : crypto.randomUUID(),
       classId: String(entry.classId || "fighter"),
       level: clamp(Math.round(Number(entry.level) || 1), 1, 20),
       subclassName: String(entry.subclassName || ""),
+      officialIndex: String(entry.officialIndex || ""),
       rules: entry.rules === "2024" ? "2024" : "2014"
     })),
-    rulesVersion: stored.rulesVersion === "2024" ? "2024" : "2014"
-  };
+    rulesVersion: stored.rulesVersion === "2024" ? "2024" : "2014",
+    // Older sheets marked species spells racial: true; they are species-source rows now (spells.js header).
+    spells: (Array.isArray(stored.spells) ? stored.spells : base.spells).map(row => {
+      if (!row?.racial) return row;
+      const { racial, ...rest } = row;
+      return { ...rest, source: { kind: "species", name: String(stored.species || ""), ability: "" } };
+    })
+  });
 }
 
 function loadCharacterLibrary() {
@@ -220,10 +280,15 @@ function persist() {
     // sessionStorage can be unavailable (privacy modes); the shared key still works.
   }
   const down = Number(character.hp) <= 0;
-  if (!down) {
+  // PHB p.197: becoming stable (or regaining HP) resets both death save counts.
+  if (down && character.deathSaveSuccesses >= 3) character.stable = true;
+  if (!down || character.stable) {
     character.deathSaveSuccesses = 0;
     character.deathSaveFailures = 0;
   }
+  if (!down) character.stable = false;
+  // Exhaustion 4 or a max HP reduction lowers the ceiling; current HP can't sit above it.
+  if (Number(character.hp) > effectiveMaxHp()) character.hp = effectiveMaxHp();
   if (down && !character.conditions.includes("Unconscious")) {
     character.conditions.push("Unconscious");
     character.autoUnconscious = true;
@@ -234,6 +299,10 @@ function persist() {
     character.conditions = character.conditions.filter(condition => condition !== "Unconscious");
     character.autoUnconscious = false;
   }
+  // Custom class and feat definitions travel with the sheet (sync, export, DM view).
+  character.customContent = embeddedCustomContent(character);
+  // Concentration saves still owed travel with the sheet (party cards, other tabs).
+  character.pendingConcentration = concentrationQueue();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(character));
   characterLibrary[character.sheetId] = structuredCloneSafe(character);
   saveCharacterLibrary();
@@ -249,7 +318,8 @@ function persistAndRender() {
 // Max HP after temporary reductions (life drain and similar), which a long rest clears.
 // Exhaustion 4+ halves the maximum (PHB p.291).
 function effectiveMaxHp(target = character) {
-  const max = Math.max(0, Number(target.maxHp || 0) - Number(target.maxHpReduction || 0));
+  // maxHpBonus: Aid and Heroes' Feast raise the maximum until a long rest.
+  const max = Math.max(0, Number(target.maxHp || 0) + Number(target.maxHpBonus || 0) - Number(target.maxHpReduction || 0));
   return Number(target.exhaustion || 0) >= 4 ? Math.floor(max / 2) : max;
 }
 
@@ -262,7 +332,7 @@ function deleteCharacter() {
   showToast(`<span class="toast-label">Delete ${escapeHtml(character.name || "this character")}?</span><span>This removes the character from the library and can't be undone.</span>`, {
     tone: "fumble",
     actions: [{ label: "Delete", run: confirmDeleteCharacter }],
-    duration: 10000
+    persist: true
   });
 }
 
@@ -305,7 +375,7 @@ function resetCharacter() {
         persistAndRender();
       }
     }],
-    duration: 10000
+    persist: true
   });
 }
 
@@ -404,25 +474,76 @@ function handleBackgroundFile(event) {
 }
 
 function mod(ability) {
-  return Math.floor(((character.abilities[ability] || 10) - 10) / 2);
+  // Wild Shape: STR, DEX and CON come from the beast when its scores are entered (PHB p.67).
+  const beast = ["str", "dex", "con"].includes(ability) && Number(character.wildShape?.[ability]);
+  return Math.floor(((beast || effectiveScore(ability)) - 10) / 2);
+}
+
+// A magic item works once worn or wielded, and only after attuning if it needs attunement (DMG p.136-138).
+function itemAttunedIfNeeded(item) {
+  return !/attunement/i.test(item.notes || "") || Boolean(item.attuned);
+}
+
+function itemActive(item) {
+  return (item.equipped || item.container === "equipped") && itemAttunedIfNeeded(item);
+}
+
+// Two copies of the same item don't add their bonuses together (DMG p.252).
+function uniqueActiveItems(source = character) {
+  const seen = new Set();
+  return (source.equipment || []).filter(itemActive).filter(item => {
+    const key = String(item.name || "").toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const ABILITY_WORDS = { str: "strength", dex: "dexterity", con: "constitution", int: "intelligence", wis: "wisdom", cha: "charisma" };
+
+// Items that set a score ("Sets Strength to 19": no effect if yours is higher), then items that raise it
+// ("+2 Strength, max 20", Ioun stones).
+function effectiveScore(ability, source = character) {
+  const raw = Number(source.abilities?.[ability] || 10);
+  const word = ABILITY_WORDS[ability];
+  if (!word) return raw;
+  const items = uniqueActiveItems(source).map(item => String(item.notes || ""));
+  const set = Math.max(raw, ...items.map(notes => Number(notes.match(new RegExp(`sets (?:your )?${word}(?: score)? to (\\d+)`, "i"))?.[1] || 0)));
+  return items.reduce((score, notes) => {
+    const raise = notes.match(new RegExp(`\\+(\\d+) (?:to )?(?:your )?${word}[^.]*?max(?:imum)?(?: of)? (\\d+)`, "i"));
+    return raise && score < Number(raise[2]) ? Math.min(Number(raise[2]), score + Number(raise[1])) : score;
+  }, set);
 }
 
 function proficiencyBonus(level = totalLevel()) {
   return Math.ceil(level / 4) + 1;
 }
 
+// Matches a feat by name ("Strike of the Giants") or exact entry ("Strike of the Giants (Fire)"); species and
+// background feats count too.
 function hasFeat(name, source = character) {
-  return (source.planner?.feats || []).includes(name);
+  return takenFeatEntries(source).some(entry => entry === name || featBaseName(entry) === name);
+}
+
+// Dragonmarked subraces (ERLW) keep their parent race's traits: the species name plus that race, for trait tests.
+const SPECIES_BASE = {
+  "Mark of Healing": "halfling", "Mark of Hospitality": "halfling", "Mark of Warding": "dwarf", "Mark of Scribing": "gnome",
+  "Mark of Shadow": "elf", "Mark of Detection": "half-elf", "Mark of Storm": "half-elf", "Mark of Making": "human",
+  "Mark of Passage": "human", "Mark of Sentinel": "human", "Mark of Handling": "human", "Mark of Finding": "human"
+};
+function speciesLineage(source = character) {
+  const species = source.species || "";
+  return `${species} ${SPECIES_BASE[species] || ""}`.trim();
 }
 
 // Bards from 2nd level add half proficiency to any ability check they aren't proficient in.
 function jackOfAllTrades() {
-  return currentClass().id === "bard" && character.level >= 2 ? Math.floor(proficiencyBonus() / 2) : 0;
+  return classLevel("bard") >= 2 ? Math.floor(proficiencyBonus() / 2) : 0;
 }
 
 // Champion 7+: half proficiency, rounded up, to STR, DEX and CON checks you aren't proficient in.
 function remarkableAthlete(ability) {
-  return currentClass().id === "fighter" && character.level >= 7 && lookupBySubclass({ champion: true }) && ["str", "dex", "con"].includes(ability)
+  return subclassLevel("champion") >= 7 && ["str", "dex", "con"].includes(ability)
     ? Math.ceil(proficiencyBonus() / 2)
     : 0;
 }
@@ -433,63 +554,101 @@ function untrainedBonus(ability) {
 }
 
 function skillBonus(skill, ability) {
-  const proficient = character.proficientSkills.includes(skill);
+  // Beguiling Influence (PHB p.110) grants Deception and Persuasion while the invocation is known.
+  const beguiling = ["deception", "persuasion"].includes(skill) && classLevel("warlock") > 0 && typeof hasInvocation === "function" && hasInvocation("Beguiling Influence");
+  const proficient = beguiling || character.proficientSkills.includes(skill);
   const expert = (character.expertSkills || []).includes(skill);
   return mod(ability) + (proficient ? proficiencyBonus() * (expert ? 2 : 1) : untrainedBonus(ability));
 }
 
 function initiativeBonus() {
-  return mod("dex") + untrainedBonus("dex") + (hasFeat("Alert") ? 5 : 0);
+  return mod("dex") + untrainedBonus("dex") + (hasFeat("Alert") ? 5 : 0) + initiativeFeatureBonus() + customFeatModifier("initiative");
+}
+
+// Dread Ambusher (+WIS, XGE p.42), Rakish Audacity (+CHA, XGE p.47), Tactical Wit (+INT, XGE p.60),
+// Hare-Trigger (+proficiency, WBtW).
+function initiativeFeatureBonus() {
+  return (subclassLevel("gloom-stalker") >= 3 ? mod("wis") : 0)
+    + (subclassLevel("swashbuckler") >= 3 ? mod("cha") : 0)
+    + (subclassLevel("war-magic") >= 2 ? mod("int") : 0)
+    + (/harengon/i.test(character.species || "") ? proficiencyBonus() : 0);
 }
 
 // "+1 Longsword", "Shield +2": a magic bonus written in the item name.
 function itemMagicBonus(item) {
-  return Number(String(item?.name || "").match(/(?:^|\s)\+(\d)(?:\s|$)/)?.[1] || 0);
+  if (!itemAttunedIfNeeded(item || {})) return 0;
+  return Number(item?.magicBonus || String(item?.name || "").match(/(?:^|\s)\+(\d)(?:\s|$)/)?.[1] || 0);
 }
 
 // AC from equipped gear: body armor ("AC 14 + Dex modifier, max 2"), shields and magic "+N AC" bonuses.
 function calculatedArmorClass() {
+  if (Number(character.wildShape?.ac)) return Number(character.wildShape.ac);
   const worn = (character.equipment || []).filter(item => item.equipped || item.container === "equipped");
   const usable = item => !/attunement/i.test(item.notes || "") || item.attuned;
-  const armor = worn.find(item => /\bAC\s+\d+/i.test(item.notes || ""));
+  // Tortles can't wear armor (their shell is the base AC); a worn suit is ignored.
+  const armor = character.species === "Tortle" ? null : worn.find(item => /\bAC\s+\d+/i.test(item.notes || ""));
   const dex = mod("dex");
   let ac;
   if (armor) {
     const notes = armor.notes;
     const base = Number(notes.match(/\bAC\s+(\d+)/i)[1]);
     const addsDex = /\+\s*Dex/i.test(notes);
-    const cap = notes.match(/max\s+(\d+)/i);
-    ac = base + (addsDex ? (cap ? Math.min(dex, Number(cap[1])) : dex) : 0) + itemMagicBonus(armor);
-    if (typeof fightingStyle === "function" && fightingStyle() === "Defense") ac += 1;
+    // Medium Armor Master (PHB p.168): medium armor takes up to +3 DEX instead of +2.
+    const cap = notes.match(/max\s+(\d+)/i) && Number(notes.match(/max\s+(\d+)/i)[1]) + (hasFeat("Medium Armor Master") && /medium armor/i.test(notes) ? 1 : 0);
+    ac = base + (addsDex ? (cap ? Math.min(dex, cap) : dex) : 0) + itemMagicBonus(armor);
+    if (typeof hasStyle === "function" && hasStyle("Defense")) ac += 1;
   } else {
     const shield = worn.some(item => /shield/i.test(item.name || ""));
-    const id = currentClass().id;
     // Unarmored options don't stack; take the best one the character qualifies for.
     const options = [10 + dex];
-    if (id === "barbarian") options.push(10 + dex + mod("con"));
-    if (id === "monk" && !shield) options.push(10 + dex + mod("wis"));
-    if (id === "sorcerer" && lookupBySubclass({ draconic: true })) options.push(13 + dex);
+    // Unarmored Defense can't be gained twice (PHB p.164): only the first barbarian or monk class's version counts.
+    const unarmored = classEntries().find(entry => ["barbarian", "monk"].includes(entry.classId))?.classId;
+    if (unarmored === "barbarian") options.push(10 + dex + mod("con"));
+    if (unarmored === "monk" && !shield) options.push(10 + dex + mod("wis"));
+    if (subclassLevel("draconic")) options.push(13 + dex);
     if (character.mageArmor) options.push(13 + dex);
+    // Dragon Hide (XGE p.74): 13 + DEX without armor.
+    if (hasFeat("Dragon Hide")) options.push(13 + dex);
     // Natural armor (VGtM, ERLW, Locathah Rising): a base that still allows a shield.
-    const natural = { Tortle: 17, Lizardfolk: 13 + dex, Loxodon: 12 + mod("con"), Locathah: 12 + dex }[character.species];
+    const natural = { Tortle: 17, Lizardfolk: 13 + dex, Loxodon: 12 + mod("con"), Locathah: 12 + dex, Autognome: 13 + dex, "Thri-kreen": 13 + dex }[character.species];
     if (natural) options.push(natural);
     ac = Math.max(...options);
   }
-  worn.filter(usable).forEach(item => {
+  // Dual Wielder (PHB p.165): +1 while wielding a melee weapon in each hand. Revenant Blade (ERLW p.54): +1 while
+  // wielding a double-bladed scimitar with two hands.
+  const meleeWeapons = worn.filter(item => /melee weapon/i.test(item.notes || "")).length;
+  if (hasFeat("Dual Wielder") && meleeWeapons >= 2) ac += 1;
+  if (hasFeat("Revenant Blade") && worn.some(item => /double-bladed scimitar/i.test(item.name || ""))) ac += 1;
+  const shielded = worn.some(item => /shield/i.test(item.name || ""));
+  worn.filter(usable).filter(item => uniqueActiveItems().includes(item)).forEach(item => {
+    // Bracers of Defense: only with no armor and no shield.
+    if (/bracers of defense/i.test(item.name || "") && (armor || shielded)) return;
     const bonus = String(item.notes || "").match(/\+(\d+)\s*AC/i);
     if (bonus) ac += Number(bonus[1]);
     if (item !== armor && /shield/i.test(item.name || "")) ac += itemMagicBonus(item);
   });
-  return ac;
+  if (typeof featureAcBonus === "function") ac += featureAcBonus(armor, worn);
+  // Warforged Integrated Protection (ERLW p.36): +1 with or without armor.
+  if (/warforged/i.test(character.species || "")) ac += 1;
+  return ac + customFeatModifier("ac", Boolean(armor));
 }
 
 // Works for any stored character (Party and sync views), not only the open sheet.
 function passivePerception(source = character) {
-  const wisdom = source.abilities?.wis ?? 10;
-  const wisMod = Math.floor((wisdom - 10) / 2);
+  const wisMod = Math.floor((effectiveScore("wis", source) - 10) / 2);
   const proficient = source.proficientSkills?.includes("perception");
   const multiplier = source.expertSkills?.includes("perception") ? 2 : 1;
   const prof = proficiencyBonus(totalLevel(source));
-  const jack = !proficient && source.classId === "bard" && source.level >= 2 ? Math.floor(prof / 2) : 0;
-  return 10 + wisMod + (proficient ? prof * multiplier : jack) + (hasFeat("Observant", source) ? 5 : 0);
+  const jack = !proficient && classLevel("bard", source) >= 2 ? Math.floor(prof / 2) : 0;
+  return 10 + wisMod + (proficient ? prof * multiplier : jack) + (hasFeat("Observant", source) ? 5 : 0) + passiveRollModeBonus("wis", "perception", source) + customFeatModifier("passive", "perception", source);
+}
+
+// PHB p.175: advantage on the check adds 5 to the passive score, disadvantage subtracts 5 (they cancel).
+function passiveRollModeBonus(ability, skill, source = character) {
+  const conditions = source.conditions || [];
+  const against = ["Poisoned", "Frightened"].some(name => conditions.includes(name)) || Number(source.exhaustion || 0) >= 1
+    || (heavilyEncumbered(source) && ["str", "dex", "con"].includes(ability));
+  // Pallid Elf Incisive Sense: advantage on Investigation and Insight.
+  const helped = (source.raging && ability === "str") || (/pallid elf/i.test(source.species || "") && ["investigation", "insight"].includes(skill));
+  return helped === against ? 0 : helped ? 5 : -5;
 }

@@ -48,8 +48,12 @@ Alternatives: drag the folder into [Netlify Drop](https://app.netlify.com/drop),
 
 ## Rules
 
-Rules default to the 2014 Player's Handbook. Each class on a character can be switched to 2024 in **Settings** (the edition shows as a badge on the sheet); 2024 classes are labeled, but ForgeSheet's automation still follows the 2014 tables. When you do something the rules don't allow (over-preparing spells, multiclassing without the prerequisites, a fourth attunement), ForgeSheet asks once per character whether to allow it as a homebrew rule. Allowed rules are listed, and can be turned off, in Settings.
+Rules default to the 2014 Player's Handbook. Optional rules (Tasha's optional class features and expanded spell lists, feats, variant encumbrance) are switched per character in **Settings**. Each class on a character can be switched to 2024 in **Settings** (the edition shows as a badge on the sheet); 2024 classes are labeled, but ForgeSheet's automation still follows the 2014 tables. When you do something the rules don't allow (over-preparing spells, multiclassing without the prerequisites, a fourth attunement), ForgeSheet asks once per character whether to allow it as a homebrew rule. Allowed rules are listed, and can be turned off, in Settings.
 
 ## Content note
 
-Rules content is limited to the SRD 5.1 (via [dnd5eapi.co](https://www.dnd5eapi.co)) and original summaries. No D&D Beyond assets, trademarks, or non-SRD content are included.
+ForgeSheet is free, unofficial fan content and is not affiliated with Wizards of the Coast.
+
+- **SRD 5.1:** `js/srd-spells.js` bundles the 319 SRD 5.1 spells and `js/srd-beasts.js` the 87 SRD beasts for Wild Shape and familiars (regenerate with `node tools/build_srd_spells.js` / `node tools/build_srd_beasts.js`). This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.
+- **Everything else** (non-SRD spells, class and subclass features, feats, species, backgrounds and options from the 2014-era books, the Blood Hunter and Tal'Dorei Reborn) is an original mechanical summary in `js/rules-*.js` and `js/expansions.js`. The numbers follow the books; the wording does not. Spell names drop Wizards of the Coast character names the way the SRD does ("Caustic Brew", "Arcane Hand"); saved characters keep working because the spell ids are unchanged.
+- No D&D Beyond assets or trademarks are included.
