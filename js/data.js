@@ -12,7 +12,7 @@ const VIEW_LAYOUT_KEY = "forgesheet.viewLayout.v1";
 const PREFS_KEY = "forgesheet.prefs.v1";
 // Paste your Firebase project's web config JSON here when you deploy, so players can sign in without pasting it.
 // The web config is public by design; Firestore rules (firestore.rules) are what protect the data.
-const FIREBASE_DEFAULT_CONFIG = "";
+const FIREBASE_DEFAULT_CONFIG = '{"apiKey": "AIzaSyA2_ZGfT_TmXxJ94I5KKbeOgki7QwmlUi4", "authDomain": "sheetsapp-e665d.firebaseapp.com", "projectId": "sheetsapp-e665d", "storageBucket": "sheetsapp-e665d.firebasestorage.app", "messagingSenderId": "665713516250", "appId": "1:665713516250:web:8711a25737f2802648cfe3"}';
 const CUSTOM_SPELL_VALUE = "__custom_spell__";
 const CUSTOM_CLASS_VALUE = "__custom_class__";
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";

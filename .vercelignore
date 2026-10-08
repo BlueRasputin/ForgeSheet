@@ -1,0 +1,9 @@
+# Only the static app ships; dev tools, the PHB index and working docs stay local.
+tools
+data
+docs
+*.md
+firebase.json
+firestore.rules
+.firebaserc
+.claude
