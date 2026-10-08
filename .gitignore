@@ -2,3 +2,5 @@
 theme-test.html
 .claude/settings.local.json
 .firebase/
+.vercel
+.env*
