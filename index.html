@@ -143,8 +143,12 @@
               </div>
               <div class="hp-actions">
                 <button id="applyDamageButton" class="damage" type="button">Damage</button>
-                <input id="damageAmount" type="number" min="0" inputmode="numeric" placeholder="0" aria-label="Heal or damage amount">
+                <input id="damageAmount" type="number" min="1" step="1" value="1" inputmode="numeric" aria-label="Heal or damage amount">
                 <button id="applyHealButton" class="heal" type="button">Heal</button>
+                <select id="damageType" aria-label="Damage type" title="Damage type: resistances you have apply on their own">
+                  <option value="">Damage type (optional)</option>
+                  <option>acid</option><option>bludgeoning</option><option>cold</option><option>fire</option><option>force</option><option>lightning</option><option>necrotic</option><option>piercing</option><option>poison</option><option>psychic</option><option>radiant</option><option>slashing</option><option>thunder</option>
+                </select>
               </div>
               <div id="wildShapeBox" class="wild-shape" hidden></div>
               <p id="maxHpNote" class="hp-note" hidden></p>
@@ -156,10 +160,12 @@
                 <span id="hitDiceSummary">Hit dice</span>
                 <button id="spendHitDieButton" class="ghost" type="button" title="Spend a hit die (short rest)"><i class="ph-light ph-dice-five" aria-hidden="true"></i>Spend</button>
               </div>
+              <div id="familiarBox" class="familiar-card" hidden></div>
             </div>
             <div class="sheet-alerts">
               <div id="concentrationPrompt" class="concentration-prompt"></div>
               <div id="dyingPrompt" class="concentration-prompt dying-prompt"></div>
+              <div id="turnPrompt" class="concentration-prompt turn-prompt"></div>
             </div>
             <div class="stat-tile-group">
               <div class="stat-tile ac-tile">
@@ -222,6 +228,13 @@
               <p class="easy-hint">Tap a skill when the DM asks for a check, like "make a Perception check".</p>
               <div id="skills" class="skill-grid single"></div>
             </details>
+            <details id="activitySection" class="side-section" hidden>
+              <summary class="side-head">
+                <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Changes by others</h2>
+                <span id="activityCount"></span>
+              </summary>
+              <ol id="sheetActivity" class="sheet-activity"></ol>
+            </details>
           </aside>
 
           <div class="sheet-main">
@@ -281,12 +294,27 @@
                 </label>
                 <button id="addFeatPlan" class="ghost" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add feat</button>
               </div>
+              <div id="featPlannerPicks" class="feat-planner-picks"></div>
               <div id="plannerSummary" class="planner-summary"></div>
             </section>
           </div>
+          <section class="block" id="customFeatsBlock">
+            <div class="block-head">
+              <h2>Custom feats</h2>
+              <span class="muted">Homebrew feats you can pick anywhere a feat is picked</span>
+            </div>
+            <div id="customFeats" class="custom-feats"></div>
+          </section>
         </section>
 
         <section id="features" class="panel">
+          <section class="block">
+            <div class="block-head">
+              <h2>Class features</h2>
+            </div>
+            <div id="classFeatureList" class="feature-list"></div>
+          </section>
+
           <section class="block">
             <div class="block-head">
               <h2>Features and traits</h2>
@@ -327,6 +355,14 @@
             </div>
             <div id="officialSubclassDetail" class="official-subclass"></div>
             <div id="subclassSections" class="note-sections"></div>
+          </section>
+
+          <section class="block">
+            <div class="block-head">
+              <h2>Class choices</h2>
+              <span class="muted">Fighting styles, invocations, metamagic, maneuvers and other picks your levels give</span>
+            </div>
+            <div id="classChoicesBlock" class="class-choices"></div>
           </section>
 
           <section class="block advanced">
@@ -384,6 +420,13 @@
             <textarea id="notesInput" rows="12" aria-label="Notes"></textarea>
             <div id="generalNoteSections" class="note-sections"></div>
           </section>
+          <section class="block">
+            <div class="block-head">
+              <h2>Journal</h2>
+              <button id="addJournalEntry" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Entry</button>
+            </div>
+            <div id="journalEntries" class="note-sections"></div>
+          </section>
         </section>
 
         <section id="actions" class="panel active">
@@ -430,13 +473,6 @@
               </div>
             </div>
             <div id="actionRows" class="action-list"></div>
-            <label id="fightingStyleField" class="fighting-style" hidden>Fighting style
-              <select id="fightingStyleSelect">
-                <option value="">None chosen</option>
-                <option>Archery</option><option>Defense</option><option>Dueling</option>
-                <option>Great Weapon Fighting</option><option>Protection</option><option>Two-Weapon Fighting</option>
-              </select>
-            </label>
           </section>
 
           <section class="block resources-row">
@@ -487,6 +523,7 @@
             </summary>
             <div class="field-grid compact hit-dice-field">
               <label>Hit dice <input id="hitDiceInput" autocomplete="off"></label>
+              <label id="xpField" hidden>Experience points <input id="xpInput" type="number" min="0" step="1"> <small id="xpNext" class="muted"></small></label>
             </div>
             <div id="restPreview" class="rest-preview"></div>
           </details>
@@ -516,11 +553,11 @@
               <button id="addEquipmentButton" class="ghost" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Custom item</button>
             </div>
             <div class="money-grid">
-              <label>CP <input id="coinCp" type="number" min="0"></label>
-              <label>SP <input id="coinSp" type="number" min="0"></label>
-              <label>EP <input id="coinEp" type="number" min="0"></label>
-              <label>GP <input id="coinGp" type="number" min="0"></label>
-              <label>PP <input id="coinPp" type="number" min="0"></label>
+              <label>CP <input id="coinCp" type="text" autocomplete="off" spellcheck="false"></label>
+              <label>SP <input id="coinSp" type="text" autocomplete="off" spellcheck="false"></label>
+              <label>EP <input id="coinEp" type="text" autocomplete="off" spellcheck="false"></label>
+              <label>GP <input id="coinGp" type="text" autocomplete="off" spellcheck="false"></label>
+              <label>PP <input id="coinPp" type="text" autocomplete="off" spellcheck="false"></label>
               <strong id="coinSummary">0 gp</strong>
             </div>
             <div class="encumbrance-meter"><span id="encumbranceFill"></span></div>
@@ -544,6 +581,7 @@
                 <div><span>Ability</span><strong id="spellAbility">-</strong></div>
                 <div><span id="preparedLabel">Prepared</span><strong id="preparedCount">0 / 0</strong></div>
               </div>
+              <div id="spellClassStats" class="spell-class-stats"></div>
               <p id="preparedWarning" class="prepared-warning" hidden></p>
               <p class="muted">Cast spells, track slots and concentration from the Combat tab.</p>
               <p class="easy-hint">Prepared spells are the ones you can cast today. Cantrips are free; other spells use a spell slot of their level or higher. You get your slots back after a long rest.</p>
@@ -562,9 +600,16 @@
               </div>
               <label class="inline-check">
                 <input type="checkbox" id="showAllSpells">
-                Include off-list API spells
+                Include spells from other class lists
               </label>
-              <p id="apiStatus" class="muted">Loading SRD spells from the 5e API…</p>
+              <div class="custom-spell-import">
+                <p class="muted">Homebrew spells: pick "Custom spell..." in any spell row. They're saved on this device for every sheet.</p>
+                <div class="class-share">
+                  <input id="importSpellCode" autocomplete="off" placeholder="Spell share code" aria-label="Spell share code">
+                  <button id="importSpellButton" class="secondary" type="button">Import</button>
+                </div>
+                <p id="spellShareStatus" class="muted" aria-live="polite"></p>
+              </div>
             </aside>
 
             <section class="block">
@@ -586,10 +631,55 @@
                 <button type="button" data-party-sort="name">Name</button>
               </div>
               <span id="partyCount" class="muted">0 characters</span>
+              <div class="group-check" title="Everyone rolls; the group succeeds if at least half meet the DC">
+                <select id="groupCheckSkill" aria-label="Group check skill"></select>
+                <input id="groupCheckDc" type="number" min="1" max="40" value="10" aria-label="Group check DC">
+                <button id="groupCheckButton" type="button" class="ghost">Group check</button>
+              </div>
             </div>
             <div id="partySummary" class="party-summary"></div>
             <div id="partyDashboard" class="party-dashboard"></div>
           </section>
+          <details id="itemCardsSection" class="block fold">
+            <summary class="block-head">
+              <h2><i class="ph-light ph-caret-right" aria-hidden="true"></i>Item cards</h2>
+              <span id="dmItemStatus" class="muted">Choose a player and item.</span>
+            </summary>
+            <div class="dm-item-tools">
+              <label>
+                Player
+                <select id="dmItemTarget"></select>
+              </label>
+              <label>
+                Handbook item
+                <select id="dmItemCatalog"></select>
+              </label>
+              <button id="sendCatalogItem" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add</button>
+            </div>
+            <div class="dm-item-editor">
+              <label>Name <input id="customItemName" autocomplete="off" placeholder="Moon-Touched Dagger"></label>
+              <label>Type <input id="customItemType" autocomplete="off" placeholder="Weapon, wondrous item…"></label>
+              <label>Weight <input id="customItemWeight" type="number" min="0" step="0.01"></label>
+              <label>Quantity <input id="customItemQuantity" type="number" min="1" step="1"></label>
+              <label>Rarity <input id="customItemRarity" autocomplete="off" placeholder="Common"></label>
+              <label>Base weapon <select id="customItemBase"><option value="">None</option></select></label>
+              <label>Magic bonus <input id="customItemBonus" type="number" min="0" max="3" step="1" placeholder="+0"></label>
+              <label>Container
+                <select id="customItemContainer">
+                  <option value="carried">Carried</option>
+                  <option value="equipped">Equipped</option>
+                  <option value="backpack">Backpack</option>
+                  <option value="bagOfHolding">Bag of holding</option>
+                  <option value="mount">Mount or cart</option>
+                  <option value="home">Home base</option>
+                </select>
+              </label>
+              <label class="inline-check"><input id="customItemCursed" type="checkbox"> Cursed (revealed when they try to end attunement)</label>
+              <label class="custom-item-notes">Notes <textarea id="customItemNotes" rows="4" placeholder="Properties, charges, lore, curse, attunement…"></textarea></label>
+              <button id="sendCustomItem" class="primary" type="button">Send custom item</button>
+            </div>
+            <div id="dmItemPreview" class="item-card-grid"></div>
+          </details>
         </section>
 
         <section id="campaign" class="panel">
@@ -665,44 +755,6 @@
             </div>
             <div id="syncActivity" class="activity-feed"></div>
           </section>
-
-          <section class="block dm-only">
-            <div class="block-head">
-              <h2>DM item cards</h2>
-              <span id="dmItemStatus" class="muted">Choose a player and item.</span>
-            </div>
-            <div class="dm-item-tools">
-              <label>
-                Player
-                <select id="dmItemTarget"></select>
-              </label>
-              <label>
-                Handbook item
-                <select id="dmItemCatalog"></select>
-              </label>
-              <button id="sendCatalogItem" class="secondary" type="button"><i class="ph-light ph-plus" aria-hidden="true"></i>Add</button>
-            </div>
-            <div class="dm-item-editor">
-              <label>Name <input id="customItemName" autocomplete="off" placeholder="Moon-Touched Dagger"></label>
-              <label>Type <input id="customItemType" autocomplete="off" placeholder="Weapon, wondrous item…"></label>
-              <label>Weight <input id="customItemWeight" type="number" min="0" step="0.01"></label>
-              <label>Quantity <input id="customItemQuantity" type="number" min="1" step="1"></label>
-              <label>Rarity <input id="customItemRarity" autocomplete="off" placeholder="Common"></label>
-              <label>Container
-                <select id="customItemContainer">
-                  <option value="carried">Carried</option>
-                  <option value="equipped">Equipped</option>
-                  <option value="backpack">Backpack</option>
-                  <option value="bagOfHolding">Bag of holding</option>
-                  <option value="mount">Mount or cart</option>
-                  <option value="home">Home base</option>
-                </select>
-              </label>
-              <label class="custom-item-notes">Notes <textarea id="customItemNotes" rows="4" placeholder="Properties, charges, lore, curse, attunement…"></textarea></label>
-              <button id="sendCustomItem" class="primary" type="button">Send custom item</button>
-            </div>
-            <div id="dmItemPreview" class="item-card-grid"></div>
-          </section>
         </section>
 
             </div>
@@ -724,6 +776,8 @@
         <div id="levelSummary" class="level-summary"></div>
         <div id="levelSubclass" class="level-summary"></div>
         <div id="levelAsiPrompt" class="level-summary"></div>
+        <div id="levelClassChoices" class="level-summary"></div>
+        <div id="levelSkillChoices" class="level-summary"></div>
         <div id="levelSpellChoices" class="spell-rows"></div>
         <div class="dialog-actions">
           <button value="cancel" class="ghost">Cancel</button>
@@ -817,11 +871,12 @@
               <option value="rest">Rests</option>
               <option value="equipment">Equipment</option>
               <option value="class">Class options</option>
-              <option value="spell">Known spells</option>
+              <option value="spell">Spells</option>
             </select>
           </label>
         </div>
         <div id="rulesResults" class="rules-results"></div>
+        <p class="muted rules-credit">This app includes material from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at dnd.wizards.com, licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noopener">CC-BY-4.0</a>. Other rules text is original summary; see the sourcebooks for full wording. ForgeSheet is unofficial fan content, free and not affiliated with Wizards of the Coast.</p>
       </div>
     </dialog>
 
@@ -859,6 +914,25 @@
               <textarea id="builderTable" rows="10"></textarea>
             </label>
             <p class="muted">Rows use: level, feature text, new spells, cantrips. Example: <code>5, Extra Attack, 1, 0</code></p>
+            <details id="builderExtras" class="fold builder-extras">
+              <summary class="block-head"><h3><i class="ph-light ph-caret-right" aria-hidden="true"></i>Resources, subclasses and multiclassing</h3></summary>
+              <div class="field-grid">
+                <label>Subclass at level <input id="builderSubclassLevel" type="number" min="1" max="20" step="1" inputmode="numeric" placeholder="3"></label>
+                <label>ASI levels <input id="builderAsiLevels" autocomplete="off" placeholder="4, 8, 12, 16, 19"></label>
+                <label>Mystic Arcanum (pact magic) <input id="builderArcanum" autocomplete="off" placeholder="11:6, 13:7, 15:8, 17:9"></label>
+                <label>Extra spells on its list <input id="builderSpellList" autocomplete="off" placeholder="shield, misty step"></label>
+                <label>Skill choices <input id="builderSkillCount" type="number" min="0" max="6" step="1" inputmode="numeric" placeholder="2"></label>
+                <label>Skills to choose from <input id="builderSkillFrom" autocomplete="off" placeholder="Arcana, History (or any)"></label>
+                <label>Multiclass needs 13 in <input id="builderMcRequires" autocomplete="off" placeholder="str/dex, cha"></label>
+                <label>Multiclass skill picks <input id="builderMcSkills" type="number" min="0" max="6" step="1" inputmode="numeric" placeholder="0"></label>
+                <label>Multiclass armor <input id="builderMcArmor" autocomplete="off" placeholder="Light armor"></label>
+                <label>Multiclass weapons <input id="builderMcWeapons" autocomplete="off" placeholder="Simple weapons"></label>
+                <label>Multiclass tools <input id="builderMcTools" autocomplete="off" placeholder="Thieves' tools"></label>
+              </div>
+              <label>Resources, one per line <textarea id="builderResources" rows="3" placeholder="Hex Points | level/2 | short | d6"></textarea></label>
+              <p class="muted">Name | uses | short or long | optional die. Uses: a number, <code>level</code>, <code>level/2</code>, <code>prof</code>, <code>mod:cha</code> or 20 numbers.</p>
+              <label>Subclasses <textarea id="builderSubclasses" rows="6" placeholder="Subclass: Circle of Ash&#10;3: Ember Ward: Reaction, reduce fire damage by 1d10.&#10;Spells 3: shield, burning hands&#10;Resource: Ember Ward | prof | long&#10;Armor: Medium armor"></textarea></label>
+            </details>
             <div class="class-share">
               <button id="shareClassButton" class="secondary" type="button"><i class="ph-light ph-copy" aria-hidden="true"></i>Share this class</button>
               <input id="importClassCode" autocomplete="off" placeholder="Enter share code">
@@ -914,6 +988,7 @@
         <fieldset class="settings-group">
           <legend>This character</legend>
           <div id="rulesEditions" class="settings-row"></div>
+          <div id="optionalRules" class="settings-row"></div>
           <div id="homebrewList" class="homebrew-list"></div>
         </fieldset>
         <div class="dialog-actions">
@@ -975,14 +1050,7 @@
         <button class="secondary cast-spell quick-cast" type="button">Cast</button>
         <label class="prepare-toggle"><input type="checkbox" class="prepared-toggle"> Prepared</label>
         <button class="ghost remove-spell" type="button">Remove</button>
-        <div class="custom-spell-fields">
-          <label>Name <input class="custom-spell-name" autocomplete="off" placeholder="Spell name"></label>
-          <label>Casting time <input class="custom-spell-casting" autocomplete="off" placeholder="1 action"></label>
-          <label>Range <input class="custom-spell-range" autocomplete="off" placeholder="60 feet"></label>
-          <label>Duration <input class="custom-spell-duration" autocomplete="off" placeholder="Instantaneous"></label>
-          <label>Components <input class="custom-spell-components" autocomplete="off" placeholder="V, S, M"></label>
-          <label>Description <textarea class="custom-spell-desc" rows="4" placeholder="Paste or summarize the spell text here."></textarea></label>
-        </div>
+        <div class="custom-spell-fields"></div>
         <article class="spell-card"></article>
       </div>
     </template>
@@ -1021,7 +1089,6 @@
         <label class="equipment-number">Lb each <input class="equipment-weight" type="number" min="0" step="0.01"></label>
         <select class="equipment-container" aria-label="Container">
           <option value="carried">Carried</option>
-          <option value="equipped">Equipped</option>
           <option value="backpack">Backpack</option>
           <option value="bagOfHolding">Bag of holding</option>
           <option value="mount">Mount or cart</option>
@@ -1088,24 +1155,30 @@
       </article>
     </template>
 
-    <script src="./js/utils.js?v=29"></script>
-    <script src="./js/data.js?v=29"></script>
-    <script src="./js/expansions.js?v=29"></script>
-    <script src="./js/classes.js?v=29"></script>
-    <script src="./js/character.js?v=29"></script>
-    <script src="./js/layout.js?v=29"></script>
-    <script src="./js/spells.js?v=29"></script>
-    <script src="./js/sheet.js?v=29"></script>
-    <script src="./js/builder.js?v=29"></script>
-    <script src="./js/play.js?v=29"></script>
-    <script src="./js/equipment.js?v=29"></script>
-    <script src="./js/party.js?v=29"></script>
-    <script src="./js/rules.js?v=29"></script>
-    <script src="./js/import.js?v=29"></script>
-    <script src="./js/sync.js?v=29"></script>
-    <script src="./js/settings.js?v=29"></script>
-    <script src="./js/dice.js?v=29"></script>
-    <script src="./js/export.js?v=29"></script>
-    <script src="./js/main.js?v=29"></script>
+    <script src="./js/utils.js?v=33"></script>
+    <script src="./js/data.js?v=33"></script>
+    <script src="./js/expansions.js?v=33"></script>
+    <script src="./js/srd-spells.js?v=33"></script>
+    <script src="./js/srd-beasts.js?v=33"></script>
+    <script src="./js/rules-spells.js?v=33"></script>
+    <script src="./js/rules-classes.js?v=33"></script>
+    <script src="./js/rules-subclasses.js?v=33"></script>
+    <script src="./js/rules-feats.js?v=33"></script>
+    <script src="./js/classes.js?v=33"></script>
+    <script src="./js/character.js?v=33"></script>
+    <script src="./js/layout.js?v=33"></script>
+    <script src="./js/spells.js?v=33"></script>
+    <script src="./js/sheet.js?v=33"></script>
+    <script src="./js/builder.js?v=33"></script>
+    <script src="./js/play.js?v=33"></script>
+    <script src="./js/equipment.js?v=33"></script>
+    <script src="./js/party.js?v=33"></script>
+    <script src="./js/rules.js?v=33"></script>
+    <script src="./js/import.js?v=33"></script>
+    <script src="./js/sync.js?v=33"></script>
+    <script src="./js/settings.js?v=33"></script>
+    <script src="./js/dice.js?v=33"></script>
+    <script src="./js/export.js?v=33"></script>
+    <script src="./js/main.js?v=33"></script>
   </body>
 </html>

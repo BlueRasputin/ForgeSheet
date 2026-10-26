@@ -21,7 +21,21 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.message is string && request.resource.data.message.size() < 500;
     }
 
-    // Class share codes: anyone can read, signed-in users create, nobody rewrites someone else's class.
+    // Share codes for custom classes, feats and spells (sync.js shareContent). Ids are always custom-*, so an import
+    // can never stand in for a built-in class.
+    match /sharedContent/{code} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(["kind", "payload", "sharedBy", "createdAt", "schema"])
+        && request.resource.data.kind in ["class", "feat", "spell"]
+        && request.resource.data.payload is map
+        && request.resource.data.payload.id is string
+        && request.resource.data.payload.id.matches('^custom-[a-z0-9-]{1,60}$')
+        && request.resource.data.payload.name is string
+        && request.resource.data.payload.name.size() <= 80;
+    }
+
+    // Older class share codes; the app still reads them as a fallback.
     match /sharedClasses/{code} {
       allow read: if true;
       allow create: if request.auth != null

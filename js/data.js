@@ -1,16 +1,18 @@
-const API_BASE = "https://www.dnd5eapi.co/api/2014";
 const STORAGE_KEY = "forgesheet.character.v1";
 const ACTIVE_TAB_SHEET_KEY = "forgesheet.activeSheet.v1";
 const CHARACTER_LIBRARY_KEY = "forgesheet.characters.v1";
 const CUSTOM_CLASS_KEY = "forgesheet.classes.v1";
+const CUSTOM_FEAT_KEY = "forgesheet.feats.v1";
+const CUSTOM_SPELL_KEY = "forgesheet.spells.v1";
 const SYNC_CONFIG_KEY = "forgesheet.sync.v1";
+const SYNC_ROLE_KEY = "forgesheet.syncRole.v1";
 const THEME_KEY = "forgesheet.theme.v1";
 const BACKGROUND_KEY = "forgesheet.background.v1";
 const VIEW_LAYOUT_KEY = "forgesheet.viewLayout.v1";
 const PREFS_KEY = "forgesheet.prefs.v1";
 // Paste your Firebase project's web config JSON here when you deploy, so players can sign in without pasting it.
 // The web config is public by design; Firestore rules (firestore.rules) are what protect the data.
-const FIREBASE_DEFAULT_CONFIG = "";
+const FIREBASE_DEFAULT_CONFIG = '{"apiKey": "AIzaSyA2_ZGfT_TmXxJ94I5KKbeOgki7QwmlUi4", "authDomain": "sheetsapp-e665d.firebaseapp.com", "projectId": "sheetsapp-e665d", "storageBucket": "sheetsapp-e665d.firebasestorage.app", "messagingSenderId": "665713516250", "appId": "1:665713516250:web:8711a25737f2802648cfe3"}';
 const CUSTOM_SPELL_VALUE = "__custom_spell__";
 const CUSTOM_CLASS_VALUE = "__custom_class__";
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
@@ -56,6 +58,21 @@ const CONDITIONS = [
   "Stunned", "Unconscious", "Concentrating"
 ];
 
+// Optional rules from the PHB, DMG and Tasha's that a table switches on or off per character (Settings).
+const OPTIONAL_RULES = [
+  ["tashas", "Tasha's optional class features and expanded spell lists", true],
+  ["feats", "Feats (PHB p.165)", true],
+  ["variantEncumbrance", "Variant encumbrance (PHB p.176)", false],
+  // House rules (not in the books): on by default because this table plays with them.
+  ["stackingInspiration", "House rule: inspiration is a counter instead of yes/no", true],
+  ["overhealTempHp", "House rule: healing past max HP becomes temporary HP", true],
+  ["xp", "Level by experience points instead of milestones (PHB p.15)", false]
+];
+
+// XP needed to reach each character level (PHB p.15). Index = level.
+const XP_FOR_LEVEL = [null, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
+const OPTIONAL_RULE_DEFAULTS = Object.fromEntries(OPTIONAL_RULES.map(([id, , on]) => [id, on]));
+
 const ASI_LEVELS = new Set([4, 8, 12, 16, 19]);
 
 const CLASS_EXTRA_ASI_LEVELS = { fighter: [6, 14], rogue: [10] };
@@ -68,64 +85,110 @@ const PREP_SUGGESTIONS = {
   boss: ["cure-wounds", "faerie-fire", "web", "haste", "dispel-magic", "revivify"]
 };
 
-function itemCard(index, name, type, weight, rarity, notes) {
-  return { index, name, type, weight, rarity, notes };
+// cost: PHB p.145-153 list price (magic items have none).
+function itemCard(index, name, type, weight, rarity, notes, cost = "") {
+  return { index, name, type, weight, rarity, notes, cost };
 }
 
+// Armor notes carry donning/doffing times (PHB p.146): light 1 min on/off, medium 5 on/1 off, heavy 10 on/5 off, shield 1 action.
 const ITEM_CATALOG = [
-  itemCard("longsword", "Longsword", "Weapon", 3, "Martial melee weapon", "1d8 slashing, versatile 1d10."),
-  itemCard("dagger", "Dagger", "Weapon", 1, "Simple melee weapon", "1d4 piercing, finesse, light, thrown 20/60."),
-  itemCard("light-crossbow", "Light Crossbow", "Weapon", 5, "Simple ranged weapon", "1d8 piercing, ammunition, loading, two-handed."),
-  itemCard("club", "Club", "Weapon", 2, "Simple melee weapon", "1d4 bludgeoning, light."),
-  itemCard("handaxe", "Handaxe", "Weapon", 2, "Simple melee weapon", "1d6 slashing, light, thrown 20/60."),
-  itemCard("javelin", "Javelin", "Weapon", 2, "Simple melee weapon", "1d6 piercing, thrown 30/120."),
-  itemCard("mace", "Mace", "Weapon", 4, "Simple melee weapon", "1d6 bludgeoning."),
-  itemCard("quarterstaff", "Quarterstaff", "Weapon", 4, "Simple melee weapon", "1d6 bludgeoning, versatile 1d8."),
-  itemCard("spear", "Spear", "Weapon", 3, "Simple melee weapon", "1d6 piercing, thrown 20/60, versatile 1d8."),
-  itemCard("shortbow", "Shortbow", "Weapon", 2, "Simple ranged weapon", "1d6 piercing, ammunition 80/320, two-handed."),
-  itemCard("battleaxe", "Battleaxe", "Weapon", 4, "Martial melee weapon", "1d8 slashing, versatile 1d10."),
-  itemCard("greataxe", "Greataxe", "Weapon", 7, "Martial melee weapon", "1d12 slashing, heavy, two-handed."),
-  itemCard("greatsword", "Greatsword", "Weapon", 6, "Martial melee weapon", "2d6 slashing, heavy, two-handed."),
-  itemCard("rapier", "Rapier", "Weapon", 2, "Martial melee weapon", "1d8 piercing, finesse."),
-  itemCard("scimitar", "Scimitar", "Weapon", 3, "Martial melee weapon", "1d6 slashing, finesse, light."),
-  itemCard("shortsword", "Shortsword", "Weapon", 2, "Martial melee weapon", "1d6 piercing, finesse, light."),
-  itemCard("warhammer", "Warhammer", "Weapon", 2, "Martial melee weapon", "1d8 bludgeoning, versatile 1d10."),
-  itemCard("longbow", "Longbow", "Weapon", 2, "Martial ranged weapon", "1d8 piercing, ammunition 150/600, heavy, two-handed."),
-  itemCard("hand-crossbow", "Hand Crossbow", "Weapon", 3, "Martial ranged weapon", "1d6 piercing, ammunition 30/120, light, loading."),
-  itemCard("arrows", "Arrows (20)", "Ammunition", 1, "Ammunition", "For shortbows and longbows. Recover half after a battle."),
-  itemCard("crossbow-bolts", "Crossbow Bolts (20)", "Ammunition", 1.5, "Ammunition", "For crossbows. Recover half after a battle."),
-  itemCard("shield", "Shield", "Armor", 6, "Adventuring gear", "+2 AC while wielded."),
-  itemCard("padded-armor", "Padded Armor", "Armor", 8, "Light armor", "AC 11 + Dexterity modifier. Disadvantage on Stealth."),
-  itemCard("hide-armor", "Hide Armor", "Armor", 12, "Medium armor", "AC 12 + Dex modifier, max 2."),
-  itemCard("ring-mail", "Ring Mail", "Armor", 40, "Heavy armor", "AC 14. Disadvantage on Stealth."),
-  itemCard("splint-armor", "Splint Armor", "Armor", 60, "Heavy armor", "AC 17. Requires Strength 15. Disadvantage on Stealth."),
-  itemCard("leather-armor", "Leather Armor", "Armor", 10, "Light armor", "AC 11 + Dexterity modifier."),
-  itemCard("studded-leather", "Studded Leather", "Armor", 13, "Light armor", "AC 12 + Dexterity modifier."),
-  itemCard("chain-shirt", "Chain Shirt", "Armor", 20, "Medium armor", "AC 13 + Dex modifier, max 2."),
-  itemCard("scale-mail", "Scale Mail", "Armor", 45, "Medium armor", "AC 14 + Dex modifier, max 2. Disadvantage on Stealth."),
-  itemCard("breastplate", "Breastplate", "Armor", 20, "Medium armor", "AC 14 + Dex modifier, max 2."),
-  itemCard("half-plate", "Half Plate", "Armor", 40, "Medium armor", "AC 15 + Dex modifier, max 2. Disadvantage on Stealth."),
-  itemCard("chain-mail", "Chain Mail", "Armor", 55, "Heavy armor", "AC 16. Requires Strength 13. Disadvantage on Stealth."),
-  itemCard("plate", "Plate", "Armor", 65, "Heavy armor", "AC 18. Requires Strength 15. Disadvantage on Stealth."),
-  itemCard("backpack", "Backpack", "Adventuring Gear", 5, "Container", "Holds gear and supplies."),
-  itemCard("rope-hempen", "Rope, Hempen", "Adventuring Gear", 10, "Gear", "50 feet of rope."),
-  itemCard("healers-kit", "Healer's Kit", "Adventuring Gear", 3, "Gear", "10 uses. Stabilize a creature without a Medicine check."),
-  itemCard("thieves-tools", "Thieves' Tools", "Tool", 1, "Tool", "Pick locks and disarm traps with proficiency."),
-  itemCard("component-pouch", "Component Pouch", "Spellcasting Focus", 2, "Gear", "Holds material components without a listed cost."),
-  itemCard("arcane-focus", "Arcane Focus", "Spellcasting Focus", 1, "Gear", "Orb, crystal, rod, staff, or wand used in place of components."),
-  itemCard("holy-symbol", "Holy Symbol", "Spellcasting Focus", 1, "Gear", "Amulet, emblem, or reliquary used as a divine focus."),
-  itemCard("spellbook", "Spellbook", "Adventuring Gear", 3, "Gear", "100 vellum pages for recording wizard spells."),
-  itemCard("potion-of-healing", "Potion of Healing", "Potion", 0.5, "Common magic item", "Regain 2d4 + 2 hit points."),
-  itemCard("bag-of-holding", "Bag of Holding", "Wondrous Item", 15, "Uncommon magic item", "Extradimensional storage. Contents usually do not count against carried weight here."),
-  itemCard("wand-of-magic-missiles", "Wand of Magic Missiles", "Wand", 1, "Uncommon magic item", "7 charges. Cast magic missile; regains charges daily."),
+  itemCard("club", "Club", "Weapon", 2, "Simple melee weapon", "1d4 bludgeoning, light.", "1 sp"),
+  itemCard("dagger", "Dagger", "Weapon", 1, "Simple melee weapon", "1d4 piercing, finesse, light, thrown 20/60.", "2 gp"),
+  itemCard("greatclub", "Greatclub", "Weapon", 10, "Simple melee weapon", "1d8 bludgeoning, two-handed.", "2 sp"),
+  itemCard("handaxe", "Handaxe", "Weapon", 2, "Simple melee weapon", "1d6 slashing, light, thrown 20/60.", "5 gp"),
+  itemCard("javelin", "Javelin", "Weapon", 2, "Simple melee weapon", "1d6 piercing, thrown 30/120.", "5 sp"),
+  itemCard("light-hammer", "Light Hammer", "Weapon", 2, "Simple melee weapon", "1d4 bludgeoning, light, thrown 20/60.", "2 gp"),
+  itemCard("mace", "Mace", "Weapon", 4, "Simple melee weapon", "1d6 bludgeoning.", "5 gp"),
+  itemCard("quarterstaff", "Quarterstaff", "Weapon", 4, "Simple melee weapon", "1d6 bludgeoning, versatile 1d8.", "2 sp"),
+  itemCard("sickle", "Sickle", "Weapon", 2, "Simple melee weapon", "1d4 slashing, light.", "1 gp"),
+  itemCard("spear", "Spear", "Weapon", 3, "Simple melee weapon", "1d6 piercing, thrown 20/60, versatile 1d8.", "1 gp"),
+  itemCard("light-crossbow", "Light Crossbow", "Weapon", 5, "Simple ranged weapon", "1d8 piercing, ammunition 80/320, loading, two-handed.", "25 gp"),
+  itemCard("dart", "Dart", "Weapon", 0.25, "Simple ranged weapon", "1d4 piercing, finesse, thrown 20/60.", "5 cp"),
+  itemCard("shortbow", "Shortbow", "Weapon", 2, "Simple ranged weapon", "1d6 piercing, ammunition 80/320, two-handed.", "25 gp"),
+  itemCard("sling", "Sling", "Weapon", 0, "Simple ranged weapon", "1d4 bludgeoning, ammunition 30/120.", "1 sp"),
+  itemCard("battleaxe", "Battleaxe", "Weapon", 4, "Martial melee weapon", "1d8 slashing, versatile 1d10.", "10 gp"),
+  itemCard("flail", "Flail", "Weapon", 2, "Martial melee weapon", "1d8 bludgeoning.", "10 gp"),
+  itemCard("glaive", "Glaive", "Weapon", 6, "Martial melee weapon", "1d10 slashing, heavy, reach, two-handed.", "20 gp"),
+  itemCard("greataxe", "Greataxe", "Weapon", 7, "Martial melee weapon", "1d12 slashing, heavy, two-handed.", "30 gp"),
+  itemCard("greatsword", "Greatsword", "Weapon", 6, "Martial melee weapon", "2d6 slashing, heavy, two-handed.", "50 gp"),
+  itemCard("halberd", "Halberd", "Weapon", 6, "Martial melee weapon", "1d10 slashing, heavy, reach, two-handed.", "20 gp"),
+  itemCard("lance", "Lance", "Weapon", 6, "Martial melee weapon", "1d12 piercing, reach, special. Disadvantage on attacks against a target within 5 feet; needs two hands unless you are mounted.", "10 gp"),
+  itemCard("longsword", "Longsword", "Weapon", 3, "Martial melee weapon", "1d8 slashing, versatile 1d10.", "15 gp"),
+  itemCard("maul", "Maul", "Weapon", 10, "Martial melee weapon", "2d6 bludgeoning, heavy, two-handed.", "10 gp"),
+  itemCard("morningstar", "Morningstar", "Weapon", 4, "Martial melee weapon", "1d8 piercing.", "15 gp"),
+  itemCard("pike", "Pike", "Weapon", 18, "Martial melee weapon", "1d10 piercing, heavy, reach, two-handed.", "5 gp"),
+  itemCard("rapier", "Rapier", "Weapon", 2, "Martial melee weapon", "1d8 piercing, finesse.", "25 gp"),
+  itemCard("scimitar", "Scimitar", "Weapon", 3, "Martial melee weapon", "1d6 slashing, finesse, light.", "25 gp"),
+  itemCard("shortsword", "Shortsword", "Weapon", 2, "Martial melee weapon", "1d6 piercing, finesse, light.", "10 gp"),
+  itemCard("trident", "Trident", "Weapon", 4, "Martial melee weapon", "1d6 piercing, thrown 20/60, versatile 1d8.", "5 gp"),
+  itemCard("war-pick", "War Pick", "Weapon", 2, "Martial melee weapon", "1d8 piercing.", "5 gp"),
+  itemCard("warhammer", "Warhammer", "Weapon", 2, "Martial melee weapon", "1d8 bludgeoning, versatile 1d10.", "15 gp"),
+  itemCard("whip", "Whip", "Weapon", 3, "Martial melee weapon", "1d4 slashing, finesse, reach.", "2 gp"),
+  // ERLW p.22; used by the Revenant Blade feat.
+  itemCard("double-bladed-scimitar", "Double-Bladed Scimitar", "Weapon", 6, "Martial melee weapon", "2d4 slashing, two-handed, special. After you attack with it as part of the Attack action, a bonus action attack with the other blade deals 1d4 slashing.", "100 gp"),
+  itemCard("blowgun", "Blowgun", "Weapon", 1, "Martial ranged weapon", "1d1 piercing (always 1), ammunition 25/100, loading.", "10 gp"),
+  itemCard("hand-crossbow", "Hand Crossbow", "Weapon", 3, "Martial ranged weapon", "1d6 piercing, ammunition 30/120, light, loading.", "75 gp"),
+  itemCard("heavy-crossbow", "Heavy Crossbow", "Weapon", 18, "Martial ranged weapon", "1d10 piercing, ammunition 100/400, heavy, loading, two-handed.", "50 gp"),
+  itemCard("longbow", "Longbow", "Weapon", 2, "Martial ranged weapon", "1d8 piercing, ammunition 150/600, heavy, two-handed.", "50 gp"),
+  itemCard("net", "Net", "Weapon", 3, "Martial ranged weapon", "Special, thrown 5/15. A hit restrains a Large or smaller creature until it escapes (DC 10 Strength check as an action) or the net (AC 10, 5 HP, slashing) is destroyed. Only one attack per action, bonus action, or reaction with it.", "1 gp"),
+  itemCard("arrows", "Arrows (20)", "Ammunition", 1, "Ammunition", "For shortbows and longbows. Recover half after a battle.", "1 gp"),
+  itemCard("crossbow-bolts", "Crossbow Bolts (20)", "Ammunition", 1.5, "Ammunition", "For crossbows. Recover half after a battle.", "1 gp"),
+  itemCard("sling-bullets", "Sling Bullets (20)", "Ammunition", 1.5, "Ammunition", "For slings. Recover half after a battle.", "4 cp"),
+  itemCard("blowgun-needles", "Blowgun Needles (50)", "Ammunition", 1, "Ammunition", "For blowguns. Recover half after a battle.", "1 gp"),
+  itemCard("shield", "Shield", "Armor", 6, "Shield", "+2 AC while wielded. Don or doff: 1 action.", "10 gp"),
+  itemCard("padded-armor", "Padded Armor", "Armor", 8, "Light armor", "AC 11 + Dexterity modifier. Disadvantage on Stealth. Don 1 min, doff 1 min.", "5 gp"),
+  itemCard("leather-armor", "Leather Armor", "Armor", 10, "Light armor", "AC 11 + Dexterity modifier. Don 1 min, doff 1 min.", "10 gp"),
+  itemCard("studded-leather", "Studded Leather", "Armor", 13, "Light armor", "AC 12 + Dexterity modifier. Don 1 min, doff 1 min.", "45 gp"),
+  itemCard("hide-armor", "Hide Armor", "Armor", 12, "Medium armor", "AC 12 + Dex modifier, max 2. Don 5 min, doff 1 min.", "10 gp"),
+  itemCard("chain-shirt", "Chain Shirt", "Armor", 20, "Medium armor", "AC 13 + Dex modifier, max 2. Don 5 min, doff 1 min.", "50 gp"),
+  itemCard("scale-mail", "Scale Mail", "Armor", 45, "Medium armor", "AC 14 + Dex modifier, max 2. Disadvantage on Stealth. Don 5 min, doff 1 min.", "50 gp"),
+  itemCard("breastplate", "Breastplate", "Armor", 20, "Medium armor", "AC 14 + Dex modifier, max 2. Don 5 min, doff 1 min.", "400 gp"),
+  itemCard("half-plate", "Half Plate", "Armor", 40, "Medium armor", "AC 15 + Dex modifier, max 2. Disadvantage on Stealth. Don 5 min, doff 1 min.", "750 gp"),
+  itemCard("ring-mail", "Ring Mail", "Armor", 40, "Heavy armor", "AC 14. Disadvantage on Stealth. Don 10 min, doff 5 min.", "30 gp"),
+  itemCard("chain-mail", "Chain Mail", "Armor", 55, "Heavy armor", "AC 16. Requires Strength 13. Disadvantage on Stealth. Don 10 min, doff 5 min.", "75 gp"),
+  itemCard("splint-armor", "Splint Armor", "Armor", 60, "Heavy armor", "AC 17. Requires Strength 15. Disadvantage on Stealth. Don 10 min, doff 5 min.", "200 gp"),
+  itemCard("plate", "Plate", "Armor", 65, "Heavy armor", "AC 18. Requires Strength 15. Disadvantage on Stealth. Don 10 min, doff 5 min.", "1,500 gp"),
+  itemCard("backpack", "Backpack", "Adventuring Gear", 5, "Container", "Holds gear and supplies.", "2 gp"),
+  itemCard("rope-hempen", "Rope, Hempen", "Adventuring Gear", 10, "Gear", "50 feet of rope.", "1 gp"),
+  itemCard("healers-kit", "Healer's Kit", "Adventuring Gear", 3, "Gear", "10 uses. As an action, spend one use to stabilize a creature at 0 HP without a Medicine check.", "5 gp"),
+  itemCard("thieves-tools", "Thieves' Tools", "Tool", 1, "Tool", "Pick locks and disarm traps with proficiency.", "25 gp"),
+  itemCard("component-pouch", "Component Pouch", "Spellcasting Focus", 2, "Gear", "Holds material components without a listed cost.", "25 gp"),
+  itemCard("arcane-focus", "Arcane Focus", "Spellcasting Focus", 1, "Gear", "Orb, crystal, rod, staff, or wand used in place of components.", "5-20 gp"),
+  itemCard("druidic-focus", "Druidic Focus", "Spellcasting Focus", 1, "Gear", "Mistletoe, totem, wooden staff, or yew wand used in place of components.", "1-10 gp"),
+  itemCard("holy-symbol", "Holy Symbol", "Spellcasting Focus", 1, "Gear", "Amulet, emblem, or reliquary used as a divine focus.", "5 gp"),
+  itemCard("spellbook", "Spellbook", "Adventuring Gear", 3, "Gear", "100 vellum pages for recording wizard spells.", "50 gp"),
+  itemCard("lute", "Lute", "Tool", 2, "Musical instrument", "A musical instrument; usable as a bard's spellcasting focus.", "35 gp"),
+  // Equipment packs (PHB p.151), contents summarized.
+  itemCard("burglars-pack", "Burglar's Pack", "Adventuring Gear", 44.5, "Equipment pack", "Backpack, 1,000 ball bearings, 10 ft string, bell, 5 candles, crowbar, hammer, 10 pitons, hooded lantern, 2 flasks of oil, 5 days rations, tinderbox, waterskin, 50 ft hempen rope.", "16 gp"),
+  itemCard("diplomats-pack", "Diplomat's Pack", "Adventuring Gear", 36, "Equipment pack", "Chest, 2 map or scroll cases, fine clothes, ink, pen, lamp, 2 flasks of oil, 5 sheets of paper, perfume, sealing wax, soap.", "39 gp"),
+  itemCard("dungeoneers-pack", "Dungeoneer's Pack", "Adventuring Gear", 61.5, "Equipment pack", "Backpack, crowbar, hammer, 10 pitons, 10 torches, tinderbox, 10 days rations, waterskin, 50 ft hempen rope.", "12 gp"),
+  itemCard("entertainers-pack", "Entertainer's Pack", "Adventuring Gear", 38, "Equipment pack", "Backpack, bedroll, 2 costumes, 5 candles, 5 days rations, waterskin, disguise kit.", "40 gp"),
+  itemCard("explorers-pack", "Explorer's Pack", "Adventuring Gear", 59, "Equipment pack", "Backpack, bedroll, mess kit, tinderbox, 10 torches, 10 days rations, waterskin, 50 ft hempen rope.", "10 gp"),
+  itemCard("priests-pack", "Priest's Pack", "Adventuring Gear", 24, "Equipment pack", "Backpack, blanket, 10 candles, tinderbox, alms box, 2 blocks of incense, censer, vestments, 2 days rations, waterskin.", "19 gp"),
+  itemCard("scholars-pack", "Scholar's Pack", "Adventuring Gear", 10, "Equipment pack", "Backpack, book of lore, ink, ink pen, 10 sheets of parchment, little bag of sand, small knife.", "40 gp"),
+  itemCard("potion-of-healing", "Potion of Healing", "Potion", 0.5, "Common magic item", "Regain 2d4 + 2 hit points.", "50 gp"),
+  itemCard("bag-of-holding", "Bag of Holding", "Wondrous Item", 15, "Uncommon magic item", "Extradimensional storage: holds up to 500 lb, not exceeding 64 cubic feet. The bag always weighs 15 lb, whatever is inside."),
+  itemCard("wand-of-magic-missiles", "Wand of Magic Missiles", "Wand", 1, "Uncommon magic item", "7 charges. Cast magic missile: 1 charge per spell level (1st-3rd). Regains 1d6 + 1 expended charges at dawn. Last charge: roll a d20; on a 1 the wand crumbles to ash."),
   itemCard("cloak-of-protection", "Cloak of Protection", "Wondrous Item", 1, "Uncommon magic item", "+1 AC and saving throws. Requires attunement."),
-  itemCard("ring-of-protection", "Ring of Protection", "Ring", 0, "Rare magic item", "+1 AC and saving throws. Requires attunement.")
+  itemCard("ring-of-protection", "Ring of Protection", "Ring", 0, "Rare magic item", "+1 AC and saving throws. Requires attunement."),
+  itemCard("potion-of-greater-healing", "Potion of Greater Healing", "Potion", 0.5, "Uncommon magic item", "Regain 4d4 + 4 hit points."),
+  itemCard("potion-of-superior-healing", "Potion of Superior Healing", "Potion", 0.5, "Rare magic item", "Regain 8d4 + 8 hit points."),
+  itemCard("potion-of-supreme-healing", "Potion of Supreme Healing", "Potion", 0.5, "Very rare magic item", "Regain 10d4 + 20 hit points."),
+  itemCard("amulet-of-health", "Amulet of Health", "Wondrous Item", 1, "Rare magic item", "Sets your Constitution score to 19 while worn (no effect if it's already 19 or higher). Requires attunement."),
+  itemCard("gauntlets-of-ogre-power", "Gauntlets of Ogre Power", "Wondrous Item", 1, "Uncommon magic item", "Sets your Strength score to 19 while worn (no effect if it's already 19 or higher). Requires attunement."),
+  itemCard("headband-of-intellect", "Headband of Intellect", "Wondrous Item", 1, "Uncommon magic item", "Sets your Intelligence score to 19 while worn (no effect if it's already 19 or higher). Requires attunement."),
+  ...[["hill", 21, "Rare"], ["stone", 23, "Very rare"], ["frost", 23, "Very rare"], ["fire", 25, "Very rare"], ["cloud", 27, "Legendary"], ["storm", 29, "Legendary"]].map(([kind, score, rarity]) =>
+    itemCard(`belt-of-${kind}-giant-strength`, `Belt of ${kind[0].toUpperCase()}${kind.slice(1)} Giant Strength`, "Wondrous Item", 1, `${rarity} magic item`, `Sets your Strength score to ${score} while worn (no effect if it's already ${score} or higher). Requires attunement.`)),
+  itemCard("bracers-of-defense", "Bracers of Defense", "Wondrous Item", 1, "Rare magic item", "+2 AC while you wear no armor and use no shield. Requires attunement."),
+  itemCard("periapt-of-wound-closure", "Periapt of Wound Closure", "Wondrous Item", 1, "Uncommon magic item", "You stabilize whenever you start your turn dying. Hit Dice you roll to regain hit points restore double. Requires attunement."),
+  ...[["strength", "Strength"], ["agility", "Dexterity"], ["fortitude", "Constitution"], ["intellect", "Intelligence"], ["insight", "Wisdom"], ["leadership", "Charisma"]].map(([kind, ability]) =>
+    itemCard(`ioun-stone-${kind}`, `Ioun Stone (${kind[0].toUpperCase()}${kind.slice(1)})`, "Wondrous Item", 0, "Very rare magic item", `+2 ${ability} score, to a maximum of 20, while it orbits your head. Requires attunement.`))
 ];
 
 const SPECIES_PRESETS = [
   ["Dragonborn", 30, "Draconic ancestry grants a breath weapon and resistance to its damage type.", "fire", { str: 2, cha: 1 }],
-  ["Hill Dwarf", 25, "Darkvision, dwarven resilience against poison, and +1 HP per level (Dwarven Toughness).", "hammer", { con: 2, wis: 1 }],
-  ["Mountain Dwarf", 25, "Darkvision, dwarven resilience, and light and medium armor training.", "mountains", { str: 2, con: 2 }],
+  ["Hill Dwarf", 25, "Darkvision, dwarven resilience against poison, Stonecunning (History checks about stonework count as proficient and add double your proficiency bonus), and +1 HP per level (Dwarven Toughness).", "hammer", { con: 2, wis: 1 }],
+  ["Mountain Dwarf", 25, "Darkvision, dwarven resilience, Stonecunning (History checks about stonework count as proficient and add double your proficiency bonus), and light and medium armor training.", "mountains", { str: 2, con: 2 }],
   ["High Elf", 30, "Darkvision, keen senses, fey ancestry, trance, elf weapon training, and one wizard cantrip.", "moon-stars", { dex: 2, int: 1 }],
   ["Wood Elf", 35, "Darkvision, keen senses, fey ancestry, trance, elf weapon training, and Mask of the Wild.", "tree-evergreen", { dex: 2, wis: 1 }],
   ["Forest Gnome", 25, "Darkvision, gnome cunning, the minor illusion cantrip, and Speak with Small Beasts.", "gear", { int: 2, dex: 1 }],
@@ -176,10 +239,10 @@ const CLASS_ABILITY_PRIORITY = {
 };
 
 // What each species grants beyond ability scores (2014 PHB).
-const DWARF_GRANTS = { languages: ["Common", "Dwarvish"], weapons: ["Battleaxe, handaxe, light hammer, warhammer"], tools: ["Smith's tools, brewer's supplies, or mason's tools (choose one)"] };
+const DWARF_GRANTS = { languages: ["Common", "Dwarvish"], weapons: ["Battleaxe, handaxe, light hammer, warhammer"], tools: [], choose: { tool: ["Smith's tools", "Brewer's supplies", "Mason's tools"] } };
 const ELF_GRANTS = { languages: ["Common", "Elvish"], skills: ["perception"], weapons: ["Longsword, shortsword, shortbow, longbow"] };
 const SPECIES_GRANTS = {
-  Dragonborn: { languages: ["Common", "Draconic"] },
+  Dragonborn: { languages: ["Common", "Draconic"], choose: { ancestry: true } },
   Dwarf: DWARF_GRANTS,
   "Hill Dwarf": { ...DWARF_GRANTS, hpPerLevel: 1 },
   "Mountain Dwarf": { ...DWARF_GRANTS, armor: ["Light armor, medium armor"] },
@@ -273,11 +336,11 @@ const CLASS_SAVES = {
 
 const BACKGROUND_PRESETS = [
   ["Acolyte", "Insight, Religion", "Two languages", "Shelter of the Faithful", "church"],
-  ["Criminal", "Deception, Stealth", "Gaming set, thieves' tools", "Criminal Contact", "key"],
-  ["Folk Hero", "Animal Handling, Survival", "Artisan's tools, vehicles", "Rustic Hospitality", "plant"],
-  ["Noble", "History, Persuasion", "Gaming set, one language", "Position of Privilege", "crown"],
+  ["Criminal", "Deception, Stealth", "One type of gaming set, thieves' tools", "Criminal Contact", "key"],
+  ["Folk Hero", "Animal Handling, Survival", "One type of artisan's tools, vehicles (land)", "Rustic Hospitality", "plant"],
+  ["Noble", "History, Persuasion", "One type of gaming set, one language", "Position of Privilege", "crown"],
   ["Sage", "Arcana, History", "Two languages", "Researcher", "scroll"],
-  ["Soldier", "Athletics, Intimidation", "Gaming set, vehicles", "Military Rank", "medal"]
+  ["Soldier", "Athletics, Intimidation", "One type of gaming set, vehicles (land)", "Military Rank", "medal"]
 ];
 
 const PERSONALITY_PROMPTS = {
@@ -302,12 +365,272 @@ const PERSONALITY_PROMPTS = {
   ]
 };
 
+// Per-background personality tables for "Generate" (PHB backgrounds). Original wording, written for ForgeSheet.
+const BACKGROUND_PERSONALITY = {
+  Acolyte: {
+    traits: ["I find a lesson from my faith in almost everything that happens.", "I keep the small rituals of my temple even on the road.", "I listen patiently, the way I listened to worshippers who came for counsel.", "Plain food and a hard bed don't bother me; I was raised on both."],
+    ideals: ["Devotion. My god's will matters more than my comfort.", "Mercy. Everyone deserves a second chance to do right.", "Order. Sacred rules exist so people can live together."],
+    bonds: ["The temple that raised me can always count on me.", "I carry a holy text I have sworn to return to its shrine.", "A fellow acolyte left the faith, and I want to know why."],
+    flaws: ["I judge people who don't share my beliefs more harshly than I should.", "I trust anyone who wears the right holy symbol.", "Once I decide something is righteous, I stop listening."]
+  },
+  Charlatan: {
+    traits: ["I have a different name ready for every town.", "I compliment people out of habit, sincere or not.", "I can't pass up a chance to test a new story on a stranger.", "I laugh off danger, because looking nervous is bad for business."],
+    ideals: ["Independence. Nobody tells me who to be.", "Fairness. I only fleece people who can afford it.", "Ambition. One big score and I'm done with this life."],
+    bonds: ["A mark I ruined deserves to be repaid someday.", "My old partner saved me from the noose, and I owe them.", "There's a forged deed in my pack that could change everything."],
+    flaws: ["I can't resist a con, even when honesty would work better.", "When cornered, I lie first and think second.", "I spend money as fast as I swindle it."]
+  },
+  Criminal: {
+    traits: ["I always know where the exits are.", "I size up everyone's purse before their face.", "I speak quietly and expect others to do the same.", "I keep my promises to thieves and break them to lords."],
+    ideals: ["Loyalty. You don't sell out your crew.", "Freedom. Laws are chains for people too timid to break them.", "Greed. I want enough coin that I never go hungry again."],
+    bonds: ["My old gang still thinks I owe them a cut.", "Someone took the fall for me, and I mean to get them out.", "A city watch captain has sworn to see me hang."],
+    flaws: ["When I see something valuable, I start planning how to take it.", "I don't trust anyone who hasn't broken a law.", "If a plan goes bad, my first instinct is to run."]
+  },
+  Entertainer: {
+    traits: ["Every room is a stage, and I can't help performing.", "I collect songs and stories wherever I go.", "I get restless when no one is paying attention to me.", "I answer bad news with a joke."],
+    ideals: ["Beauty. A good performance makes the world better.", "Honesty. Art should show people the truth.", "Fame. I want my name remembered after I'm gone."],
+    bonds: ["My first instrument was a gift from someone I'll never forget.", "A rival performer stole my best act, and I want it back.", "The troupe that raised me is still out there on the road."],
+    flaws: ["I'll do almost anything for applause.", "I can't stand to share the spotlight.", "I make promises on stage that I can't keep off it."]
+  },
+  "Folk Hero": {
+    traits: ["I judge people by how they treat farmers and laborers.", "I fix broken things whenever I find them.", "When I make up my mind, I don't back down.", "I'm more comfortable in a field than a palace."],
+    ideals: ["Justice. The powerful must answer for what they do.", "Hope. Ordinary people can change their own fate.", "Duty. Someone has to stand up, so it may as well be me."],
+    bonds: ["My home village is counting on me.", "I still keep the tool I used on the day I became a hero.", "A lord's cruelty drove me from my family, and I haven't forgiven it."],
+    flaws: ["I believe the stories people tell about me a little too much.", "I'm stubborn even when I'm wrong.", "I have no patience for nobles or their manners."]
+  },
+  "Guild Artisan": {
+    traits: ["I can't stop pointing out how something could be made better.", "I measure twice and act once.", "I talk business with anyone who will listen.", "I'm proud of my calluses."],
+    ideals: ["Craft. Good work is its own reward.", "Community. The guild looks after its members, and so do I.", "Prosperity. Honest trade should make honest people rich."],
+    bonds: ["My guild gave me everything, and I owe it my best work.", "My master's finest piece was stolen, and I'll find it.", "I'm building something that will outlast me."],
+    flaws: ["I look down on shoddy work and the people who make it.", "I'll bend the truth to close a deal.", "I take any criticism of my craft personally."]
+  },
+  Hermit: {
+    traits: ["I'm comfortable with long silences.", "I forget everyday manners after years alone.", "I ask strange questions and wait carefully for the answers.", "I notice small things in nature that others walk past."],
+    ideals: ["Insight. Quiet reflection reveals what noise hides.", "Self-knowledge. Understand yourself before judging others.", "Solitude. Some truths can only be found alone."],
+    bonds: ["My retreat gave me a discovery I must share with the right person.", "I left someone behind when I withdrew from the world.", "I tend a hidden place that must stay safe."],
+    flaws: ["I'm slow to trust people after so long on my own.", "I keep secrets even when sharing them would help.", "I get lost in my own thoughts at the worst moments."]
+  },
+  Noble: {
+    traits: ["I expect good manners and offer them in return.", "I know the names and crests of every great house.", "I take charge without thinking about it.", "I dress well, even on the road."],
+    ideals: ["Responsibility. Rank exists to protect those beneath it.", "Family. My house's honor comes before my own.", "Power. Influence is a tool, and I mean to use it."],
+    bonds: ["My family's lands are in danger, and I'll do anything to save them.", "I'm betrothed to someone I've never met.", "A rival house wronged mine, and I won't forget it."],
+    flaws: ["I assume commoners will do what I tell them.", "I hide my mistakes to protect my family's name.", "I can't turn down a challenge to my honor."]
+  },
+  Outlander: {
+    traits: ["I'd rather sleep under the stars than in a bed.", "I keep track of the weather without meaning to.", "Cities make me twitchy.", "I speak bluntly and expect the same."],
+    ideals: ["Nature. The wild has its own balance worth keeping.", "Strength. Only the strong survive out there.", "Kinship. My tribe or clan is my family."],
+    bonds: ["My people sent me out to bring something home.", "I'm the last to remember the old ways of my land.", "A beast I spared once spared me in return."],
+    flaws: ["I don't understand why people put up with laws.", "I solve arguments with my fists.", "I'd let a town burn before I'd let the forest be cut."]
+  },
+  Sage: {
+    traits: ["I explain things in far more detail than anyone wants.", "I keep notes on everything.", "I'd rather read than talk.", "I correct people's facts, even when it's rude."],
+    ideals: ["Knowledge. Understanding is worth almost any price.", "Truth. A comforting lie is still a lie.", "Logic. Feelings shouldn't cloud a good argument."],
+    bonds: ["I'm searching for a book that may not exist.", "My old mentor's research is unfinished, and I mean to finish it.", "The library that trained me is in danger."],
+    flaws: ["I forget that people are more than puzzles.", "I'll take reckless risks to learn a secret.", "I can't admit I don't know something."]
+  },
+  Sailor: {
+    traits: ["I swear by the sea and curse like a deckhand.", "I tie knots when I'm nervous.", "I trust my crewmates with my life.", "I have a story for every port."],
+    ideals: ["Freedom. The horizon belongs to everyone.", "Teamwork. A ship sinks if one hand slacks.", "Adventure. There's always another shore to find."],
+    bonds: ["My first ship went down, and I'm the only one who knows why.", "I owe my captain a debt I can't repay in coin.", "Someone waits for me in a port town."],
+    flaws: ["I drink too much once I'm ashore.", "I follow orders even when I shouldn't.", "I pick fights to prove I'm not afraid."]
+  },
+  Soldier: {
+    traits: ["I keep my gear clean and ready.", "I make camp the same way every night.", "I joke about death to keep fear at bay.", "I respect rank, even when the officer doesn't deserve it."],
+    ideals: ["Discipline. Order keeps people alive.", "Protection. I fight so others don't have to.", "Glory. I want to be remembered for my deeds in battle."],
+    bonds: ["I still carry a token from a comrade who fell beside me.", "My old unit is the closest thing I have to family.", "An enemy commander escaped me, and I'll find them."],
+    flaws: ["I see every problem as a battle to win.", "I obey orders without asking if they're right.", "Memories of the war still haunt me at night."]
+  },
+  Urchin: {
+    traits: ["I eat fast, in case someone takes my food.", "I know every alley and rooftop in my old city.", "I'm quick to make friends with stray animals.", "I hide a little of everything I'm given."],
+    ideals: ["Survival. Whatever it takes to see tomorrow.", "Generosity. I remember being hungry, so I share.", "Change. Nobody should have to live the way I did."],
+    bonds: ["The other street kids from my old corner are my family.", "A stranger once showed me kindness, and I want to pay it forward.", "I'll return to my city someday and make it better."],
+    flaws: ["I steal small things out of habit.", "I don't trust anyone who's never been poor.", "I panic when I'm trapped in small, closed spaces."]
+  }
+};
+
 const FEAT_PRESETS = [
   "Ability Score Improvement", "Alert", "Athlete", "Crossbow Expert", "Defensive Duelist",
   "Dual Wielder", "Dungeon Delver", "Durable", "Elemental Adept", "Great Weapon Master",
   "Healer", "Inspiring Leader", "Lucky", "Magic Initiate", "Mobile", "Resilient",
   "Sentinel", "Sharpshooter", "Skilled", "Spell Sniper", "Tough", "War Caster"
 ];
+
+// ---------------------------------------------------------------------------------------------
+// Character-creation tables (PHB ch.1-5). Choices the wizard offers; summaries are original wording.
+// ---------------------------------------------------------------------------------------------
+// PHB p.123.
+const STANDARD_LANGUAGES = ["Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc"];
+const EXOTIC_LANGUAGES = ["Abyssal", "Celestial", "Deep Speech", "Draconic", "Infernal", "Primordial", "Sylvan", "Undercommon"];
+
+// PHB p.154-155.
+const TOOL_GROUPS = {
+  artisan: ["Alchemist's supplies", "Brewer's supplies", "Calligrapher's supplies", "Carpenter's tools", "Cartographer's tools", "Cobbler's tools", "Cook's utensils", "Glassblower's tools", "Jeweler's tools", "Leatherworker's tools", "Mason's tools", "Painter's supplies", "Potter's tools", "Smith's tools", "Tinker's tools", "Weaver's tools", "Woodcarver's tools"],
+  gaming: ["Dice set", "Dragonchess set", "Playing card set", "Three-Dragon Ante set"],
+  instrument: ["Bagpipes", "Drum", "Dulcimer", "Flute", "Lute", "Lyre", "Horn", "Pan flute", "Shawm", "Viol"],
+  other: ["Disguise kit", "Forgery kit", "Herbalism kit", "Navigator's tools", "Poisoner's kit", "Thieves' tools", "Vehicles (land)", "Vehicles (water)"]
+};
+
+// Class starting gold instead of class equipment (PHB p.143; TCE for the artificer). "5d4*10" = 5d4 x 10 gp.
+const CLASS_STARTING_GOLD = {
+  artificer: "5d4*10", barbarian: "2d4*10", bard: "5d4*10", cleric: "5d4*10", druid: "2d4*10", fighter: "5d4*10",
+  monk: "5d4", paladin: "5d4*10", ranger: "5d4*10", rogue: "4d4*10", sorcerer: "3d4*10", warlock: "4d4*10", wizard: "4d4*10"
+};
+
+// Class starting equipment (PHB ch.3, TCE artificer). Each group lists its options; a group with one option is given.
+// Tokens: a catalog item name ("x2" for several), "pick:<kind>" for "any <kind>" (simple, simpleMelee, martial,
+// martialMelee, instrument), or "text:<item>" for gear the catalog doesn't carry.
+const CLASS_STARTING_EQUIPMENT = {
+  artificer: [[["pick:simple", "pick:simple"]], [["Light Crossbow", "Crossbow Bolts (20)"]], [["Studded Leather"], ["Scale Mail"]], [["Thieves' Tools", "Dungeoneer's Pack"]]],
+  barbarian: [[["Greataxe"], ["pick:martialMelee"]], [["Handaxe x2"], ["pick:simple"]], [["Explorer's Pack", "Javelin x4"]]],
+  bard: [[["Rapier"], ["Longsword"], ["pick:simple"]], [["Diplomat's Pack"], ["Entertainer's Pack"]], [["Lute"], ["pick:instrument"]], [["Leather Armor", "Dagger"]]],
+  // VERIFY: Blood Hunter (2020) starting equipment as recalled; no starting-gold formula is recorded for it.
+  bloodhunter: [[["pick:martial"], ["pick:simple", "pick:simple"]], [["Light Crossbow", "Crossbow Bolts (20)"], ["Hand Crossbow", "Crossbow Bolts (20)"]], [["Studded Leather"], ["Scale Mail"]], [["Explorer's Pack", "text:Alchemist's supplies"]]],
+  cleric: [[["Mace"], ["Warhammer"]], [["Scale Mail"], ["Leather Armor"], ["Chain Mail"]], [["Light Crossbow", "Crossbow Bolts (20)"], ["pick:simple"]], [["Priest's Pack"], ["Explorer's Pack"]], [["Shield", "Holy Symbol"]]],
+  druid: [[["Shield"], ["pick:simple"]], [["Scimitar"], ["pick:simpleMelee"]], [["Leather Armor", "Explorer's Pack", "Druidic Focus"]]],
+  fighter: [[["Chain Mail"], ["Leather Armor", "Longbow", "Arrows (20)"]], [["pick:martial", "Shield"], ["pick:martial", "pick:martial"]], [["Light Crossbow", "Crossbow Bolts (20)"], ["Handaxe x2"]], [["Dungeoneer's Pack"], ["Explorer's Pack"]]],
+  monk: [[["Shortsword"], ["pick:simple"]], [["Dungeoneer's Pack"], ["Explorer's Pack"]], [["Dart x10"]]],
+  paladin: [[["pick:martial", "Shield"], ["pick:martial", "pick:martial"]], [["Javelin x5"], ["pick:simpleMelee"]], [["Priest's Pack"], ["Explorer's Pack"]], [["Chain Mail", "Holy Symbol"]]],
+  ranger: [[["Scale Mail"], ["Leather Armor"]], [["Shortsword x2"], ["pick:simpleMelee", "pick:simpleMelee"]], [["Dungeoneer's Pack"], ["Explorer's Pack"]], [["Longbow", "Arrows (20)"]]],
+  rogue: [[["Rapier"], ["Shortsword"]], [["Shortbow", "Arrows (20)"], ["Shortsword"]], [["Burglar's Pack"], ["Dungeoneer's Pack"], ["Explorer's Pack"]], [["Leather Armor", "Dagger x2", "Thieves' Tools"]]],
+  sorcerer: [[["Light Crossbow", "Crossbow Bolts (20)"], ["pick:simple"]], [["Component Pouch"], ["Arcane Focus"]], [["Dungeoneer's Pack"], ["Explorer's Pack"]], [["Dagger x2"]]],
+  warlock: [[["Light Crossbow", "Crossbow Bolts (20)"], ["pick:simple"]], [["Component Pouch"], ["Arcane Focus"]], [["Scholar's Pack"], ["Dungeoneer's Pack"]], [["Leather Armor", "pick:simple", "Dagger x2"]]],
+  wizard: [[["Quarterstaff"], ["Dagger"]], [["Component Pouch"], ["Arcane Focus"]], [["Scholar's Pack"], ["Explorer's Pack"]], [["Spellbook"]]]
+};
+
+// Background equipment and purse (PHB ch.4, variants included). Other books: add gear on the sheet.
+const BACKGROUND_STARTING = {
+  Acolyte: { gold: 15, gear: ["Holy Symbol", "text:Prayer book or prayer wheel", "text:Incense (5 sticks)", "text:Vestments", "text:Common clothes"] },
+  Charlatan: { gold: 15, gear: ["text:Fine clothes", "text:Disguise kit", "text:Con tools of your choice"] },
+  Criminal: { gold: 15, gear: ["text:Crowbar", "text:Dark common clothes with a hood"] },
+  Spy: { gold: 15, gear: ["text:Crowbar", "text:Dark common clothes with a hood"] },
+  Entertainer: { gold: 15, gear: ["pick:instrument", "text:Favor of an admirer", "text:Costume"] },
+  Gladiator: { gold: 15, gear: ["text:Cheap unusual weapon, such as a trident or net", "text:Favor of an admirer", "text:Costume"] },
+  "Folk Hero": { gold: 10, gear: ["pick:artisan", "text:Shovel", "text:Iron pot", "text:Common clothes"] },
+  "Guild Artisan": { gold: 15, gear: ["pick:artisan", "text:Guild letter of introduction", "text:Traveler's clothes"] },
+  "Guild Merchant": { gold: 15, gear: ["text:Mule and cart (in place of artisan's tools)", "text:Guild letter of introduction", "text:Traveler's clothes"] },
+  Hermit: { gold: 5, gear: ["text:Scroll case of notes", "text:Winter blanket", "text:Common clothes", "text:Herbalism kit"] },
+  Noble: { gold: 25, gear: ["text:Fine clothes", "text:Signet ring", "text:Scroll of pedigree"] },
+  Knight: { gold: 25, gear: ["text:Fine clothes", "text:Signet ring", "text:Scroll of pedigree"] },
+  Outlander: { gold: 10, gear: ["Quarterstaff", "text:Hunting trap", "text:Animal trophy", "text:Traveler's clothes"] },
+  Sage: { gold: 10, gear: ["text:Bottle of ink", "text:Quill", "text:Small knife", "text:Letter from a dead colleague", "text:Common clothes"] },
+  Sailor: { gold: 10, gear: ["Club", "text:Silk rope (50 ft)", "text:Lucky charm", "text:Common clothes"] },
+  Pirate: { gold: 10, gear: ["Club", "text:Silk rope (50 ft)", "text:Lucky charm", "text:Common clothes"] },
+  Soldier: { gold: 10, gear: ["text:Insignia of rank", "text:Trophy from a fallen enemy", "pick:gaming", "text:Common clothes"] },
+  Urchin: { gold: 10, gear: ["text:Small knife", "text:Map of your home city", "text:Pet mouse", "text:Token from your parents", "text:Common clothes"] }
+};
+
+// Feats a background grants (SAiS, SCC, Planescape, Dragonlance, BGG). "(Variant)" fixes the feat's choice.
+const BACKGROUND_FEATS = {
+  "Astral Drifter": "Magic Initiate (Cleric)",
+  Wildspacer: "Tough",
+  "Lorehold Student": "Strixhaven Initiate (Lorehold)",
+  "Prismari Student": "Strixhaven Initiate (Prismari)",
+  "Quandrix Student": "Strixhaven Initiate (Quandrix)",
+  "Silverquill Student": "Strixhaven Initiate (Silverquill)",
+  "Witherbloom Student": "Strixhaven Initiate (Witherbloom)",
+  "Gate Warden": "Scion of the Outer Planes",
+  "Planar Philosopher": "Scion of the Outer Planes",
+  "Knight of Solamnia": "Squire of Solamnia",
+  "Mage of High Sorcery": "Initiate of High Sorcery",
+  "Giant Foundling": "Strike of the Giants",
+  "Rune Carver": "Rune Shaper"
+};
+
+// Extra movement modes (VGtM, EEPC, SCAG, MOoT, WBtW, VRGtR, AAG, LR, OGA). "walk" = equal to walking speed.
+const SPECIES_MOVEMENT = {
+  Aarakocra: { fly: 50, note: "no flying in medium or heavy armor" },
+  "Tiefling (Winged)": { fly: 30 },
+  Owlin: { fly: "walk", note: "no flying in medium or heavy armor" },
+  Fairy: { fly: "walk", note: "no flying in medium or heavy armor" },
+  Triton: { swim: 30 }, Lizardfolk: { swim: 30 }, "Water Genasi": { swim: 30 }, "Sea Elf": { swim: 30 }, Locathah: { swim: 30 },
+  "Half-Elf (Aquatic)": { swim: 30 }, Giff: { swim: "walk" },
+  Tabaxi: { climb: 20 }, Grung: { climb: 25 }, Dhampir: { climb: "walk" }, Hadozee: { climb: "walk" }
+};
+
+// Fizban's dragonborn ancestries (FTD p.10-12): breath is a 15 ft cone or 30 ft line (pick each use), DEX save.
+const FTD_DRAGON_ANCESTRY = {
+  "Chromatic Dragonborn": [["Black", "acid"], ["Blue", "lightning"], ["Green", "poison"], ["Red", "fire"], ["White", "cold"]],
+  "Metallic Dragonborn": [["Brass", "fire"], ["Bronze", "lightning"], ["Copper", "acid"], ["Gold", "fire"], ["Silver", "cold"]],
+  "Gem Dragonborn": [["Amethyst", "force"], ["Crystal", "radiant"], ["Emerald", "psychic"], ["Sapphire", "thunder"], ["Topaz", "necrotic"]]
+};
+
+// Innate spells cast without a slot (B13). [spell, character level, recharge, cast at slot level]. ability "choice" = INT,
+// WIS or CHA picked at creation. Cantrips stay in SPECIES_GRANTS.cantrips.
+const SPECIES_MAGIC = {
+  Tiefling: { ability: "cha", spells: [["hellish-rebuke", 3, "long", 2], ["darkness", 5, "long"]] },
+  "Tiefling (Feral)": { ability: "cha", spells: [["hellish-rebuke", 3, "long", 2], ["darkness", 5, "long"]] },
+  "Tiefling (Devil's Tongue)": { ability: "cha", spells: [["charm-person", 3, "long", 2], ["enthrall", 5, "long"]] },
+  "Tiefling (Hellfire)": { ability: "cha", spells: [["burning-hands", 3, "long", 2], ["darkness", 5, "long"]] },
+  "Tiefling (Baalzebul)": { ability: "cha", spells: [["ray-of-sickness", 3, "long", 2], ["crown-of-madness", 5, "long"]] },
+  "Tiefling (Dispater)": { ability: "cha", spells: [["disguise-self", 3, "long"], ["detect-thoughts", 5, "long"]] },
+  "Tiefling (Fierna)": { ability: "cha", spells: [["charm-person", 3, "long", 2], ["suggestion", 5, "long"]] },
+  "Tiefling (Glasya)": { ability: "cha", spells: [["disguise-self", 3, "long"], ["invisibility", 5, "long"]] },
+  "Tiefling (Levistus)": { ability: "cha", spells: [["armor-of-agathys", 3, "long", 2], ["darkness", 5, "long"]] },
+  "Tiefling (Mammon)": { ability: "cha", spells: [["floating-disk", 3, "long"], ["arcane-lock", 5, "long"]] },
+  "Tiefling (Mephistopheles)": { ability: "cha", spells: [["burning-hands", 3, "long", 2], ["flame-blade", 5, "long"]] },
+  "Tiefling (Zariel)": { ability: "cha", spells: [["searing-smite", 3, "long", 2], ["branding-smite", 5, "long"]] },
+  Drow: { ability: "cha", spells: [["faerie-fire", 3, "long"], ["darkness", 5, "long"]] },
+  "Half-Elf (Drow)": { ability: "cha", spells: [["faerie-fire", 3, "long"], ["darkness", 5, "long"]] },
+  Duergar: { ability: "int", spells: [["enlarge-reduce", 3, "long"], ["invisibility", 5, "long"]] },
+  Githyanki: { ability: "int", spells: [["jump", 3, "long"], ["misty-step", 5, "long"]] },
+  Githzerai: { ability: "wis", spells: [["shield", 3, "long"], ["detect-thoughts", 5, "long"]] },
+  "Air Genasi": { ability: "con", spells: [["levitate", 1, "long"]] },
+  "Earth Genasi": { ability: "con", spells: [["pass-without-trace", 1, "long"]] },
+  "Fire Genasi": { ability: "con", spells: [["burning-hands", 3, "long"]] },
+  "Water Genasi": { ability: "con", spells: [["create-or-destroy-water", 3, "long", 2]] },
+  "Yuan-ti Pureblood": { ability: "cha", spells: [["animal-friendship", 1, "will"], ["suggestion", 3, "long"]] },
+  Triton: { ability: "cha", spells: [["fog-cloud", 1, "long"], ["gust-of-wind", 3, "long"], ["wall-of-water", 5, "long"]] },
+  Firbolg: { ability: "wis", spells: [["detect-magic", 1, "short"], ["disguise-self", 1, "short"]] },
+  "Pallid Elf": { ability: "wis", spells: [["sleep", 3, "long"], ["invisibility", 5, "long"]] },
+  "Lotusden Halfling": { ability: "wis", spells: [["entangle", 3, "long"], ["spike-growth", 5, "long"]] },
+  Fairy: { ability: "choice", spells: [["faerie-fire", 3, "long"], ["enlarge-reduce", 5, "long"]] },
+  Hexblood: { ability: "choice", spells: [["disguise-self", 1, "long"], ["hex", 1, "long"]] },
+  "Mark of Detection": { ability: "int", spells: [["detect-magic", 1, "long"], ["detect-poison-and-disease", 1, "long"], ["see-invisibility", 3, "long"]] },
+  "Mark of Finding": { ability: "wis", spells: [["hunters-mark", 1, "long"], ["locate-object", 3, "long"]] },
+  "Mark of Handling": { ability: "wis", spells: [["animal-friendship", 1, "long"], ["speak-with-animals", 1, "long"]] },
+  "Mark of Healing": { ability: "wis", spells: [["cure-wounds", 1, "long"], ["lesser-restoration", 3, "long"]] },
+  "Mark of Hospitality": { ability: "cha", spells: [["purify-food-and-drink", 1, "long"], ["unseen-servant", 1, "long"]] },
+  "Mark of Making": { ability: "int", spells: [["magic-weapon", 1, "long"]] },
+  "Mark of Passage": { ability: "dex", spells: [["misty-step", 1, "long"]] },
+  "Mark of Scribing": { ability: "int", spells: [["comprehend-languages", 1, "long"], ["magic-mouth", 3, "long"]] },
+  "Mark of Sentinel": { ability: "wis", spells: [["shield", 1, "long"]] },
+  "Mark of Shadow": { ability: "cha", spells: [["invisibility", 3, "long"]] },
+  "Mark of Storm": { ability: "cha", spells: [["gust-of-wind", 3, "long"]] },
+  "Mark of Warding": { ability: "int", spells: [["alarm", 1, "long"], ["mage-armor", 1, "long"], ["arcane-lock", 3, "long"]] }
+};
+
+// Limited-use species traits that aren't spells: (level, prof) => [[name, uses, "short"|"long"]].
+const aasimarTrackers = name => level => [["Healing Hands", 1, "long"], level >= 3 ? [name, 1, "long"] : null];
+const SPECIES_TRACKERS = {
+  Dragonborn: () => [["Breath Weapon", 1, "short"]],
+  "Draconblood Dragonborn": () => [["Breath Weapon", 1, "short"], ["Forceful Presence", 1, "short"]],
+  "Ravenite Dragonborn": () => [["Breath Weapon", 1, "short"], ["Vengeful Assault", 1, "short"]],
+  "Chromatic Dragonborn": (level, prof) => [["Breath Weapon", prof, "long"], level >= 5 ? ["Chromatic Warding", 1, "long"] : null],
+  "Metallic Dragonborn": (level, prof) => [["Breath Weapon", prof, "long"], level >= 5 ? ["Metallic Breath Weapon", 1, "long"] : null],
+  "Gem Dragonborn": (level, prof) => [["Breath Weapon", prof, "long"], level >= 5 ? ["Gem Flight", 1, "long"] : null],
+  "Protector Aasimar": aasimarTrackers("Radiant Soul"),
+  "Scourge Aasimar": aasimarTrackers("Radiant Consumption"),
+  "Fallen Aasimar": aasimarTrackers("Necrotic Shroud"),
+  Firbolg: () => [["Hidden Step", 1, "short"]],
+  Goliath: () => [["Stone's Endurance", 1, "short"]],
+  Goblin: () => [["Fury of the Small", 1, "short"]],
+  Hobgoblin: () => [["Saving Face", 1, "short"]],
+  Kobold: () => [["Grovel, Cower, and Beg", 1, "short"]],
+  Lizardfolk: () => [["Hungry Jaws", 1, "short"]],
+  Eladrin: () => [["Fey Step", 1, "short"]],
+  "Shadar-kai": () => [["Blessing of the Raven Queen", 1, "long"]],
+  "Beasthide Shifter": () => [["Shifting", 1, "short"]],
+  "Longtooth Shifter": () => [["Shifting", 1, "short"]],
+  "Swiftstride Shifter": () => [["Shifting", 1, "short"]],
+  "Wildhunt Shifter": () => [["Shifting", 1, "short"]],
+  Leonin: () => [["Daunting Roar", 1, "short"]],
+  "Astral Elf": (level, prof) => [["Starlight Step", prof, "long"]],
+  Harengon: (level, prof) => [["Rabbit Hop", prof, "long"]],
+  Hadozee: (level, prof) => [["Hadozee Dodge", prof, "long"]],
+  Kender: (level, prof) => [["Taunt", prof, "long"]],
+  Dhampir: (level, prof) => [["Vampiric Bite boost", prof, "long"]],
+  Reborn: (level, prof) => [["Knowledge from a Past Life", prof, "long"]],
+  "Mark of Sentinel": () => [["Vigilant Guardian", 1, "long"]]
+};
 
 const TAB_DEFS = [
   ["actions", "Combat"],
@@ -337,18 +660,22 @@ const RULES_REFERENCE = [
   rule("action", "Hide", "Make a Dexterity (Stealth) check when conditions allow hiding."),
   rule("action", "Ready", "Choose a trigger and action. Use your reaction when the trigger occurs."),
   rule("combat", "Cover", "Half cover (low wall, another creature): +2 AC and Dexterity saves. Three-quarters cover (arrow slit, thick tree): +5 AC and Dexterity saves. Total cover: can't be targeted directly by attacks or spells."),
-  rule("combat", "Death Saving Throws", "At 0 HP, roll a d20 at the start of each turn: 10+ is a success, 9 or lower a failure. Three successes: stable. Three failures: dead. Natural 20: regain 1 HP. Natural 1: two failures. Taking damage at 0 HP is one failure (two on a critical hit). Any healing resets the count."),
+  rule("combat", "Death Saving Throws", "At 0 HP, roll a d20 at the start of each turn: 10+ is a success, 9 or lower a failure. Three successes: stable. Three failures: dead. Natural 20: regain 1 HP. Natural 1: two failures. Taking damage at 0 HP is one failure (two on a critical hit). Healing or becoming stable resets both counts. A stable creature that isn't healed regains 1 HP after 1d4 hours. Stabilize: Wisdom (Medicine) DC 10 as an action, or a healer's kit use."),
   rule("combat", "Opportunity Attacks", "When a hostile creature you can see leaves your reach, you can use your reaction to make one melee attack against it. Disengaging, teleporting, or being moved without using movement doesn't provoke."),
   rule("combat", "Two-Weapon Fighting", "When you attack with a light melee weapon in one hand, you can use a bonus action to attack with a different light melee weapon in the other. Don't add your ability modifier to the bonus attack's damage unless it's negative."),
   rule("combat", "Grappling and Shoving", "Replace one attack: Athletics vs the target's Athletics or Acrobatics. Grapple sets its speed to 0; shove knocks it prone or pushes it 5 feet. The target can be at most one size larger than you."),
   rule("combat", "Critical Hits", "A natural 20 on an attack roll always hits and is a critical: roll all of the attack's damage dice twice, then add modifiers once. A natural 1 always misses."),
+  rule("combat", "Squeezing", "A creature can squeeze through a space sized for a creature one size smaller. Each foot of movement there costs 1 extra foot, and while squeezing it has disadvantage on attack rolls and Dexterity saves, and attacks against it have advantage."),
+  rule("combat", "Underwater Combat", "Melee weapon attacks have disadvantage unless the weapon is a dagger, javelin, shortsword, spear or trident (or the attacker has a swimming speed). Ranged weapon attacks miss beyond normal range and have disadvantage within it, unless made with a crossbow, a net, or a thrown weapon such as a javelin, spear, trident or dart. Anything fully underwater resists fire damage."),
+  rule("combat", "Mounted Combat", "Mounting or dismounting costs half your speed. A controlled mount moves on your initiative and can only Dash, Disengage or Dodge. If something moves your mount against its will, or knocks you or it prone, make a DC 10 Dexterity save or fall prone in a space within 5 feet."),
   rule("combat", "Surprise", "A creature that doesn't notice a threat at the start of combat is surprised: it can't move or take actions on its first turn and can't take reactions until that turn ends."),
-  rule("rest", "Short Rest", "At least 1 hour. You can spend Hit Dice to heal. Short-rest resources refresh."),
-  rule("rest", "Long Rest", "At least 8 hours. Restores HP, spell slots, many resources, and reduces exhaustion by 1 if conditions are met."),
-  rule("equipment", "Carrying Capacity", "Your carrying capacity is Strength score x 15 pounds. This app flags heavy load at two-thirds capacity."),
-  rule("equipment", "Attunement", "Most characters can attune to up to 3 magic items at a time."),
+  rule("rest", "Short Rest", "At least 1 hour. Spend Hit Dice to heal: roll each die plus your CON modifier. Short-rest resources refresh."),
+  rule("rest", "Long Rest", "At least 8 hours, at most once per 24 hours, and you must start it with at least 1 HP. Regain all HP and up to half your total Hit Dice (minimum 1). Exhaustion drops by 1 if you also ate and drank."),
+  rule("equipment", "Carrying Capacity", "Strength score x 15 lb; push, drag or lift up to twice that, moving only 5 ft while over your capacity. Each size above Medium doubles both (Powerful Build counts as one size larger); Tiny halves them. 50 coins weigh 1 lb. Variant: over STR x 5 is encumbered (-10 ft); over STR x 10 is heavily encumbered (-20 ft and disadvantage on STR, DEX and CON checks, attacks and saves)."),
+  rule("equipment", "Attunement", "Up to 3 attuned magic items (artificers: 4 at 10th, 5 at 14th, 6 at 18th). Attuning or ending attunement takes a short rest. A cursed item can't be unattuned until the curse is lifted, for example by Remove Curse."),
+  rule("equipment", "Donning and Doffing Armor", "Light armor: 1 minute to put on, 1 minute to take off. Medium: 5 minutes on, 1 minute off. Heavy: 10 minutes on, 5 minutes off. A shield takes an action to don or doff. Someone helping halves the time to put armor on."),
   rule("condition", "Deafened", "Can't hear and automatically fails any ability check that requires hearing."),
-  rule("condition", "Petrified", "Turned to stone: incapacitated, can't move or speak, unaware of surroundings. Attacks against it have advantage; it fails Strength and Dexterity saves and resists all damage."),
+  rule("condition", "Petrified", "Turned to stone: incapacitated, can't move or speak, unaware of surroundings. Attacks against it have advantage; it fails Strength and Dexterity saves, resists all damage, and is immune to poison and disease."),
   rule("condition", "Unconscious", "Incapacitated, can't move or speak, unaware of surroundings; drops what it holds and falls prone. Fails Strength and Dexterity saves. Attacks against it have advantage, and hits from within 5 feet are critical."),
   rule("condition", "Exhaustion", "Six levels: 1 disadvantage on checks, 2 speed halved, 3 disadvantage on attacks and saves, 4 HP maximum halved, 5 speed 0, 6 death. A long rest with food and drink removes one level."),
   rule("condition", "Blinded", "A blinded creature cannot see and automatically fails ability checks requiring sight. Attacks against it have advantage, and its attacks have disadvantage."),
@@ -362,10 +689,10 @@ const RULES_REFERENCE = [
   rule("condition", "Prone", "A prone creature's only movement option is crawling unless it stands, and it has disadvantage on attack rolls. Attacks against it from within 5 feet have advantage; attacks from farther away have disadvantage."),
   rule("condition", "Restrained", "Speed becomes 0, attacks against the creature have advantage, its attacks have disadvantage, and it has disadvantage on Dexterity saves."),
   rule("condition", "Stunned", "A stunned creature is incapacitated, cannot move, speaks falteringly, fails Strength and Dexterity saves, and attacks against it have advantage."),
-  rule("class", "Artificer Infusions", "Track known infusions, infused items, active items, and whether an infusion is replaced on level-up."),
-  rule("class", "Warlock Invocations", "Track chosen invocations, prerequisites, passive benefits, and limited-use invocations."),
-  rule("class", "Metamagic", "Track sorcery point costs and which spells or situations pair well with each option."),
-  rule("class", "Wild Shape", "Track uses, CR limits, movement restrictions, beast forms, and form HP notes.")
+  rule("class", "Artificer Infusions", "Infusions known / items infused at once: 4/2 at artificer 2, 6/3 at 6, 8/4 at 10, 10/5 at 14, 12/6 at 18. You can swap one known infusion when you gain an artificer level."),
+  rule("class", "Warlock Invocations", "Invocations known: 2 at warlock 2, 3 at 5, 4 at 7, 5 at 9, 6 at 12, 7 at 15, 8 at 18. You can swap one known invocation when you gain a warlock level."),
+  rule("class", "Metamagic", "Metamagic options known: 2 at sorcerer 3, 3 at 10, 4 at 17. Only one option per spell unless it says otherwise (Empowered Spell can join another)."),
+  rule("class", "Wild Shape", "2 uses per short or long rest, lasting up to half your druid level in hours. Max beast CR 1/4 with no flying or swimming speed at druid 2, CR 1/2 with no flying speed at 4, CR 1 at 8. Circle of the Moon: CR 1 at 2, then druid level divided by 3 (rounded down) from 6.")
 ];
 
 const FULL_CASTER_SLOTS = {
@@ -405,7 +732,7 @@ const ARTIFICER_SPELLS = new Set([
   "elemental-weapon", "protection-from-energy", "revivify", "water-breathing", "water-walk",
   "arcane-eye", "fabricate", "freedom-of-movement", "secret-chest",
   "faithful-hound", "private-sanctum", "resilient-sphere", "stone-shape", "stoneskin",
-  "animate-objects", "arcane-hand", "arcane-hand", "creation", "greater-restoration", "wall-of-stone"
+  "animate-objects", "arcane-hand", "creation", "greater-restoration", "wall-of-stone"
 ]);
 
 const SUBCLASS_SPELLS = {
@@ -461,33 +788,12 @@ const EXPANDED_SUBCLASS_SPELLS = {
   undead: ["bane", "false-life", "blindness-deafness", "phantasmal-force", "phantom-steed", "speak-with-dead", "death-ward", "greater-invisibility", "antilife-shell", "cloudkill"]
 };
 
-function spell(index, name, level, classes) {
-  return { index, name, level, classes };
-}
-
-const FALLBACK_SPELLS = [
-  spell("acid-splash", "Acid Splash", 0, ["sorcerer", "wizard", "artificer"]),
-  spell("cure-wounds", "Cure Wounds", 1, ["bard", "cleric", "druid", "paladin", "ranger", "artificer"]),
-  spell("detect-magic", "Detect Magic", 1, ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "wizard", "artificer"]),
-  spell("faerie-fire", "Faerie Fire", 1, ["bard", "druid", "artificer"]),
-  spell("fireball", "Fireball", 3, ["sorcerer", "wizard"]),
-  spell("grease", "Grease", 1, ["wizard", "artificer"]),
-  spell("identify", "Identify", 1, ["bard", "wizard", "artificer"]),
-  spell("mending", "Mending", 0, ["bard", "cleric", "druid", "sorcerer", "wizard", "artificer"]),
-  spell("message", "Message", 0, ["bard", "sorcerer", "wizard", "artificer"]),
-  spell("prestidigitation", "Prestidigitation", 0, ["bard", "sorcerer", "warlock", "wizard", "artificer"]),
-  spell("ray-of-frost", "Ray of Frost", 0, ["sorcerer", "wizard", "artificer"]),
-  spell("revivify", "Revivify", 3, ["cleric", "paladin", "artificer"]),
-  spell("sanctuary", "Sanctuary", 1, ["cleric", "artificer"]),
-  spell("shocking-grasp", "Shocking Grasp", 0, ["sorcerer", "wizard", "artificer"]),
-  spell("web", "Web", 2, ["sorcerer", "wizard", "artificer"])
-];
-
 function localSpell(index, name, level, classIds, castingTime, range, components, duration, concentration, summary) {
   return {
     index, name, level,
     classes: classIds.map(id => ({ index: id, name: id.charAt(0).toUpperCase() + id.slice(1) })),
     casting_time: castingTime, range, components, duration, concentration,
+    ritual: /ritual/i.test(castingTime),
     desc: [summary],
     local: true
   };
@@ -511,7 +817,7 @@ const LOCAL_SPELLS = [
   localSpell("hunger-of-hadar", "Hunger of Hadar", 3, ["warlock"], "1 action", "150 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
     "A 20-foot-radius sphere of blackness and bitter cold. Creatures fully inside are blinded. A creature that starts its turn there takes 2d6 cold damage; one that ends its turn there makes a Dexterity save or takes 2d6 acid damage."),
   localSpell("staggering-smite", "Staggering Smite", 4, ["paladin"], "1 bonus action", "Self", ["V"], "Concentration, up to 1 minute", true,
-    "Your next melee weapon hit deals an extra 4d6 psychic damage, and the target makes a Wisdom save or has disadvantage on attack rolls and ability checks and can't take reactions until the end of its next turn."),
+    "Your next melee weapon hit deals an extra 4d6 psychic damage, and the target makes a Wisdom save; on a failure, until the end of its next turn it rolls attacks and ability checks with disadvantage and has no reactions."),
   localSpell("watery-sphere", "Watery Sphere", 4, ["druid", "sorcerer", "wizard"], "1 action", "90 feet", ["V", "S", "M"], "Concentration, up to 1 minute", true,
     "A 5-foot-radius sphere of water. Each creature in its space makes a Strength save or is restrained inside it. As an action you can move the sphere up to 30 feet, carrying restrained creatures with it."),
   localSpell("booming-blade", "Booming Blade", 0, ["artificer", "sorcerer", "warlock", "wizard"], "1 action", "Self (5-foot radius)", ["S", "M"], "1 round", false,

@@ -36,17 +36,22 @@ Each sheet document carries `partyStatus`, a small, flat object made for display
   "ac": 16,
   "speed": 30,            // after class bonuses, feats, exhaustion and grappled/restrained
   "initiativeBonus": 1,
-  "initiative": 20,       // most recent initiative roll, or null
-  "state": "bloodied",    // "healthy" | "bloodied" | "down" | "stable" | "dead"
+  "initiative": 20,       // latest initiative roll this combat, or null (cleared when combat ends)
+  "inParty": true,        // false when the sheet is unticked "In party" on the Party tab (NPCs, spare sheets)
+  "state": "bloodied",    // "healthy" | "bloodied" | "down" | "stable" | "dead" (dead also at exhaustion 6)
   "deathSaves": { "successes": 0, "failures": 0 },
   "conditions": ["Poisoned"],
   "exhaustion": 0,
   "concentration": "Hex", // spell name or null
+  "concentrationSaves": [10], // CON save DCs still owed for that concentration, one per hit taken; [] when none
   "raging": false,
+  "wildShape": null,      // or { "name": "Brown bear", "hp": 5, "max": 34 } while in Wild Shape; damage hits these HP first
   "inspiration": 0,
-  "passives": { "perception": 11, "investigation": 10, "insight": 11 },
+  "passives": { "perception": 11, "investigation": 10, "insight": 11 }, // ±5 while the check has advantage/disadvantage
   "saves": { "str": -1, "dex": 1, "con": 2, "int": 0, "wis": 4, "cha": 6 },
-  "spellSave": 14,        // null for non-casters
+  "spellSave": 14,        // first casting class's DC; null for non-casters (kept for older readers)
+  "spellSaves": [{ "class": "warlock", "ability": "cha", "dc": 14 }], // one per casting class (multiclass DCs differ)
+  "hemocraftDc": null,    // blood hunter curse/brand DC (8 + prof + INT or WIS), null without blood hunter levels
   "resources": [{ "name": "Hexblade's Curse", "current": 1, "max": 1, "reset": "short" }],
   "spellSlots": [{ "level": 4, "max": 2, "remaining": 2 }],
   "updatedAtMs": 1790873082599
@@ -76,3 +81,7 @@ The `activity` collection holds short, human-readable events, newest first by `c
 - **Same campaign code.** A Cartomancer party maps to one `campaignId`. Storing that ID on the Cartomancer party record is enough to link them.
 - **Identity.** When a player is signed in to ForgeSheet, `partyStatus.ownerUid` is their Firebase Auth uid. If Cartomancer signs users in with the same project, it can match a sheet to a Cartomancer account by that uid.
 - **Writes back.** ForgeSheet treats the `character` field as the source of truth and applies remote changes to it live. That's how the DM's "send item" works. Cartomancer should treat `partyStatus` as read-only. Any change should go through `character` and keep the same shape. The safest approach is to limit writes to appending to `activity`.
+- **Telling the player.** A writer that changes `character` can also prepend an entry to `character.activity`:
+  `{ "id": "<uuid>", "at": <ms epoch>, "who": "DM", "text": "DM sent you Potion of Healing" }` (newest first, keep at
+  most 20). The open sheet shows each new entry as a toast and lists them under "Changes by others". ForgeSheet's own
+  party-card actions and item cards write these entries.
