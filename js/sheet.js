@@ -801,6 +801,8 @@ function classFeatureRows(source = character) {
       ...(CLASS_FEATURE_DETAILS[entry.classId] || []).map(([level, name, summary, meta = {}]) => ({ level, name, summary, meta, source: meta.source || "" })),
       ...(sub?.features || []).map(([level, name, summary, meta = {}]) => ({ level, name, summary, meta, source: sub.source }))
     ].filter(row => row.source !== "TCE-optional" || tashas)
+      // Rows that exist in only one edition (the 2024 Armorer's Dreadnaught) show for that edition only.
+      .filter(row => !row.meta.edition || row.meta.edition === entry.rules)
       // With a subclass chosen, its real features replace the generic "Circle Feature" placeholder rows.
       .filter(row => !(sub && SUBCLASS_PLACEHOLDER.test(row.name) && sub.features.some(([level]) => level === row.level)))
       .sort((a, b) => a.level - b.level);

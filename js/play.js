@@ -4471,6 +4471,11 @@ function wardAndPortentRows({ level, subclass, add }) {
   if (subclass === "divination" && level >= 2) add("portent", { name: "Portent", type: "Free", notes: `${(character.portentDice || []).join(", ") || "No dice left"}. Replace a roll you can see.`, use: { kind: "portent" } });
 }
 
+// The 2024 Armorer (Eberron: Forge of the Artificer) adds the Dreadnaught model; the 2014 (Tasha's) one doesn't have it.
+function armorer2024() {
+  return classEntries().some(entry => entry.classId === "artificer" && entry.rules === "2024" && subclassIndexFor(entry) === "armorer");
+}
+
 Object.assign(CLASS_FEATURE_ACTIONS, {
   artificer({ level, subclass, add, prof }) {
     const int = Math.max(1, mod("int"));
@@ -4478,6 +4483,10 @@ Object.assign(CLASS_FEATURE_ACTIONS, {
     if (level >= 11) add("spell-storing-item", { name: "Spell-Storing Item", type: "Action", notes: `The holder casts the stored 1st- or 2nd-level spell (DC ${8 + prof + mod("int")}).`, use: { cost: ["Spell-Storing Item", 1], kind: "note", text: `The stored spell takes effect, using your spellcasting modifier (DC ${8 + prof + mod("int")}, +${prof + mod("int")} to hit).` } });
     if (subclass === "armorer" && level >= 3) {
       add("thunder-gauntlets", { name: "Thunder Gauntlets (Guardian)", type: "Action", attack: formatMod(prof + mod("int")), damage: `1d8${formatMod(mod("int"))} thunder`, notes: "Guardian model. A creature you hit has disadvantage on attacks against others until your next turn." });
+      if (armorer2024()) {
+        add("armor-flail", { name: "Armor Flail (Dreadnaught)", type: "Action", attack: formatMod(prof + mod("int")), damage: `1d10${formatMod(mod("int"))} bludgeoning`, notes: "Dreadnaught model. Wrecking Ball: on a hit against a creature at least one size smaller than you, push it up to 10 ft away or pull it up to 10 ft toward you." });
+        add("giant-stature", { name: "Giant Stature (Dreadnaught)", type: "Bonus Action", notes: "1 minute: reach +5 ft, and you and your gear become Large if you're smaller and there's room.", use: { cost: ["Giant Stature (Dreadnaught)", 1], kind: "note", text: "For 1 minute your reach increases by 5 feet, and if you're smaller than Large you become Large along with what you wear, provided there's room." } });
+      }
       add("lightning-launcher", { name: "Lightning Launcher (Infiltrator)", type: "Action", attack: formatMod(prof + mod("int")), damage: `1d6${formatMod(mod("int"))} lightning`, notes: "Infiltrator model, 90/300 ft. Once per turn +1d6 lightning on a hit." });
     }
     if (subclass === "battle-smith" && level >= 9) add("arcane-jolt", { name: "Arcane Jolt", type: "Free", notes: `Once per turn on a magic weapon or defender hit: ${level >= 15 ? 4 : 2}d6 force, or heal that much to a creature within 30 ft.`, use: { cost: ["Arcane Jolt", 1], kind: "give", heal: true, roll: `${level >= 15 ? 4 : 2}d6`, text: "Force damage to the target, or healing for a creature within 30 ft of it." } });

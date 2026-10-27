@@ -70,7 +70,7 @@ function spellTip(row) {
 }
 
 // The class or subclass feature behind a resource pool ("Channel Divinity", "Ki Points" -> Monk's Focus / Ki).
-const RESOURCE_FEATURE_NAMES = { "Ki Points": ["Ki", "Monk's Focus"], "Superiority Dice": ["Combat Superiority"], "Sorcery Points": ["Font of Magic"], "Lay on Hands (HP pool)": ["Lay On Hands", "Lay on Hands"], "Psionic Energy Dice": ["Psionic Power"], "Favored Enemy (Hunter's Mark)": ["Favored Enemy"] };
+const RESOURCE_FEATURE_NAMES = { "Ki Points": ["Ki", "Monk's Focus"], "Superiority Dice": ["Combat Superiority"], "Sorcery Points": ["Font of Magic"], "Lay on Hands (HP pool)": ["Lay On Hands", "Lay on Hands"], "Psionic Energy Dice": ["Psionic Power"], "Favored Enemy (Hunter's Mark)": ["Favored Enemy"], "Giant Stature (Dreadnaught)": ["Dreadnaught (armor model)"] };
 
 function featureTextFor(name) {
   const base = name.replace(/\s*\(.*\)$/, "");
@@ -81,7 +81,7 @@ function featureTextFor(name) {
     const rows = cls.srd2024
       ? [...cls.srd2024.levels.flatMap(level => level.features.map(feature => [feature.name, feature.text])), ...(srdSubclass2024(cls, slug)?.features || []).map(feature => [feature.name, feature.text])]
       : [...(CLASS_FEATURE_DETAILS[entry.classId] || []).map(([, featureName, summary]) => [featureName, summary]), ...(SUBCLASS_FEATURES[slug]?.features || []).map(([, featureName, summary]) => [featureName, summary])];
-    const found = rows.find(([featureName]) => wanted.includes(featureName.toLowerCase().replace(/\s*\(.*\)$/, "")));
+    const found = rows.find(([featureName]) => wanted.includes(featureName.toLowerCase()) || wanted.includes(featureName.toLowerCase().replace(/\s*\(.*\)$/, "")));
     if (found) return { text: found[1], edition: cls.srd2024 ? "2024" : "" };
   }
   return null;
