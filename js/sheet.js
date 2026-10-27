@@ -783,6 +783,18 @@ function classFeatureRows(source = character) {
   return classEntries(source).map(entry => {
     const cls = getClasses()[entry.classId];
     const slug = subclassIndexFor(entry);
+    // A 2024 class lists the SRD 5.2 features (and its SRD subclass's), with their text.
+    const srdClass = entry.rules === "2024" ? class2024(cls || {}) : null;
+    if (srdClass) {
+      const sub = srdSubclass2024(srdClass, slug);
+      const rows = [
+        ...srdClass.srd2024.levels.flatMap(level => level.features.map(feature => ({ level: level.level, name: feature.name, summary: feature.text, meta: {}, source: "SRD 5.2" }))),
+        ...(sub?.features || []).map(feature => ({ level: feature.level, name: feature.name, summary: feature.text, meta: {}, source: "SRD 5.2" }))
+      ].filter(row => !(sub && / Subclass$/.test(row.name) && sub.features.some(feature => feature.level === row.level)))
+        .sort((a, b) => a.level - b.level);
+      const subName = officialSubclasses.find(item => item.index === slug)?.name || entry.subclassName || "";
+      return { entry, name: cls?.name || entry.classId, subName, reached: rows.filter(row => row.level <= entry.level && row.name !== "Ability Score Improvement"), next: rows.find(row => row.level > entry.level) };
+    }
     const sub = SUBCLASS_FEATURES[slug];
     const subName = officialSubclasses.find(item => item.index === slug)?.name || entry.subclassName || "";
     let rows = [
