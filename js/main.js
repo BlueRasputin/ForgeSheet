@@ -16,6 +16,7 @@ function init() {
   ensureCharacterInLibrary();
   buildStaticControls();
   bindEvents();
+  bindHoverTips();
   trackTabBarHeight();
   renderAll();
   initAccount();
