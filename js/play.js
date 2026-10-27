@@ -66,8 +66,50 @@ function classFeatureTrackers(cls = currentClass(), level = character.level, sub
   const feats = shared ? grantTrackers(prof) : [];
   if (cls.id === "druid" && level >= 2 && lookupBySubclass({ land: true }, subclassName)) extras.push(["Natural Recovery", 1, "long"]);
   // A custom class's own resources and Mystic Arcanum (classes.js customClassTrackers); a 4th number is the resource's die.
-  return [...(byClass[cls.id] || []), ...customClassTrackers(cls, level, prof), ...extras, ...feats].filter(Boolean)
-    .map(([name, max, reset, die]) => ({ name, max, reset, ...(Number(die) > 0 ? { die: Number(die) } : {}) }));
+  // A 2024 class takes its pools from the SRD 5.2 table instead of the 2014 numbers above.
+  return [...(cls.srd2024 ? trackers2024(cls, level) : byClass[cls.id] || []), ...customClassTrackers(cls, level, prof), ...extras, ...feats].filter(Boolean)
+    .map(([name, max, reset, die, label]) => ({ name, max, reset, ...(Number(die) > 0 ? { die: Number(die) } : {}), ...(label ? { label } : {}) }));
+}
+
+// 2024 class pools (SRD 5.2). "shortOne": one use back on a short rest, all on a long rest (Rage, Channel Divinity,
+// Wild Shape, Second Wind). Names match the 2014 trackers so the Use buttons keep working; a 5th entry is the 2024 label.
+function trackers2024(cls, level) {
+  const rows = cls.srd2024.levels.slice(0, level);
+  const at = rows[rows.length - 1]?.specific || {};
+  const times = name => rows.filter(row => row.features.some(feature => feature.name === name)).length;
+  const chaMod = Math.max(1, mod("cha"));
+  const byClass = {
+    barbarian: [["Rage", at.rage_count, "shortOne"]],
+    bard: [["Bardic Inspiration", chaMod, times("Font of Inspiration") ? "short" : "long", at.bardic_inspiration_die]],
+    cleric: [
+      at.channel_divinity_charges ? ["Channel Divinity", at.channel_divinity_charges, "shortOne"] : null,
+      times("Divine Intervention") ? ["Divine Intervention", 1, "long"] : null
+    ],
+    druid: [at.wild_shape_uses ? ["Wild Shape", at.wild_shape_uses, "shortOne"] : null],
+    fighter: [
+      ["Second Wind", at.second_wind_uses, "shortOne"],
+      times("Action Surge") ? ["Action Surge", times("Action Surge"), "short"] : null,
+      times("Indomitable") ? ["Indomitable", times("Indomitable"), "long"] : null
+    ],
+    monk: [at.focus_points ? ["Ki Points", at.focus_points, "short", 0, "Focus Points"] : null],
+    paladin: [
+      ["Lay on Hands (HP pool)", level * 5, "long"],
+      at.channel_divinity_charges ? ["Channel Divinity", at.channel_divinity_charges, "shortOne"] : null
+    ],
+    // Favored Enemy: Hunter's Mark without a slot this many times per long rest.
+    ranger: [at.favored_enemies ? ["Favored Enemy (Hunter's Mark)", at.favored_enemies, "long"] : null],
+    rogue: [times("Stroke of Luck") ? ["Stroke of Luck", 1, "short"] : null],
+    sorcerer: [
+      times("Innate Sorcery") ? ["Innate Sorcery", 2, "long"] : null,
+      at.sorcery_points ? ["Sorcery Points", at.sorcery_points, "long"] : null
+    ],
+    warlock: [
+      times("Magical Cunning") ? ["Magical Cunning", 1, "long"] : null,
+      ...[[11, 6], [13, 7], [15, 8], [17, 9]].filter(([gate]) => level >= gate).map(([, spellLevel]) => [`Mystic Arcanum (${ordinal(spellLevel)})`, 1, "long"])
+    ],
+    wizard: [["Arcane Recovery", 1, "long"]]
+  };
+  return byClass[cls.id] || [];
 }
 
 // Every class's trackers, multiclass levels included. A feature two classes share keeps the larger pool.
@@ -98,17 +140,19 @@ function ensureClassResources() {
     if (manualNames.has(feature.name.toLowerCase())) return;
     const existing = character.resources.find(item => item.auto && item.name === feature.name);
     if (existing) {
-      if (existing.max !== feature.max || existing.reset !== feature.reset || existing.die !== feature.die) {
+      if (existing.max !== feature.max || existing.reset !== feature.reset || existing.die !== feature.die || existing.label !== feature.label) {
         existing.current = clamp(Number(existing.current || 0) + Math.max(0, feature.max - existing.max), 0, feature.max);
         existing.max = feature.max;
         existing.reset = feature.reset;
         if (feature.die) existing.die = feature.die;
         else delete existing.die;
+        if (feature.label) existing.label = feature.label;
+        else delete existing.label;
         changed = true;
       }
       return;
     }
-    character.resources.push({ id: crypto.randomUUID(), name: feature.name, current: feature.max, max: feature.max, reset: feature.reset, auto: true, ...(feature.die ? { die: feature.die } : {}) });
+    character.resources.push({ id: crypto.randomUUID(), name: feature.name, current: feature.max, max: feature.max, reset: feature.reset, auto: true, ...(feature.die ? { die: feature.die } : {}), ...(feature.label ? { label: feature.label } : {}) });
     changed = true;
   });
   if (changed) persist();
@@ -129,6 +173,14 @@ function resourceDie(name) {
   return 0;
 }
 
+// Martial Arts die: d4-d10 in 2014 (PHB p.78); d6-d12 for a 2024 monk (SRD 5.2 table).
+function martialArtsDie(level = classLevel("monk")) {
+  const monk = classEntries().find(entry => entry.classId === "monk");
+  const srd = monk ? entryClass(monk).srd2024 : null;
+  if (srd) return Number(srd.levels[clamp(level, 1, 20) - 1]?.specific.martial_arts_die) || 6;
+  return level >= 17 ? 10 : level >= 11 ? 8 : level >= 5 ? 6 : 4;
+}
+
 function renderSideResources() {
   const root = document.querySelector("#sideResources");
   const resources = (character.resources || []).filter(item => item.name && Number(item.max) > 0);
@@ -138,15 +190,16 @@ function renderSideResources() {
     const current = Number(item.current || 0);
     const max = Number(item.max || 0);
     const die = resourceDie(item.name);
-    const recharge = { short: "SR", long: "LR" }[item.reset] || "";
+    const recharge = { short: "SR", long: "LR", shortOne: "SR+1" }[item.reset] || "";
+    const label = item.label || item.name;
     // Up to 10 uses read best as pips; bigger pools (Ki, Lay on Hands) get a stepper.
     const counter = max <= 10
-      ? `<span class="res-pips" role="group" aria-label="${escapeHtml(item.name)}: ${current} of ${max}">${Array.from({ length: max }, (_, index) => `<button type="button" class="res-pip ${index < current ? "filled" : ""}" data-res-pip="${index}" aria-pressed="${index < current}" aria-label="${escapeHtml(item.name)} use ${index + 1}"></button>`).join("")}</span>`
-      : `<span class="res-stepper"><button type="button" class="ghost" data-res-step="-1" aria-label="Spend one ${escapeHtml(item.name)}">${icon("minus")}</button><b>${current}/${max}</b><button type="button" class="ghost" data-res-step="1" aria-label="Regain one ${escapeHtml(item.name)}">${icon("plus")}</button></span>`;
+      ? `<span class="res-pips" role="group" aria-label="${escapeHtml(label)}: ${current} of ${max}">${Array.from({ length: max }, (_, index) => `<button type="button" class="res-pip ${index < current ? "filled" : ""}" data-res-pip="${index}" aria-pressed="${index < current}" aria-label="${escapeHtml(label)} use ${index + 1}"></button>`).join("")}</span>`
+      : `<span class="res-stepper"><button type="button" class="ghost" data-res-step="-1" aria-label="Spend one ${escapeHtml(label)}">${icon("minus")}</button><b>${current}/${max}</b><button type="button" class="ghost" data-res-step="1" aria-label="Regain one ${escapeHtml(label)}">${icon("plus")}</button></span>`;
     return `
       <div class="side-resource ${current ? "" : "is-spent"}" data-res-id="${escapeHtml(item.id)}">
-        <span class="res-name">${escapeHtml(item.name)}${die ? ` <em>d${die}</em>` : ""}</span>
-        ${recharge ? `<span class="res-recharge" title="${recharge === "SR" ? "Refills on a short or long rest" : "Refills on a long rest"}">${recharge}</span>` : ""}
+        <span class="res-name">${escapeHtml(label)}${die ? ` <em>d${die}</em>` : ""}</span>
+        ${recharge ? `<span class="res-recharge" title="${{ SR: "Refills on a short or long rest", LR: "Refills on a long rest", "SR+1": "One back on a short rest, all on a long rest" }[recharge]}">${recharge}</span>` : ""}
         ${counter}
         ${item.name === "Portent" && character.portentDice?.length ? `<span class="res-portent">${character.portentDice.map((value, index) => `<button type="button" class="ghost" data-portent-use="${index}" aria-label="Use portent die ${value}">${value}</button>`).join("")}</span>` : ""}
         ${die && item.name !== "Bardic Inspiration" ? `<button type="button" class="ghost res-roll" data-res-roll ${current ? "" : "disabled"} title="Spend one and roll a d${die}">${icon("dice-five")}<span class="visually-hidden">Roll</span></button>` : ""}
@@ -1092,12 +1145,13 @@ function renderRestPreview() {
   const shortRefresh = [
     ...(slotsArePact() || pactSlotPool() ? [{ name: "Pact magic slots" }] : []),
     ...character.resources.filter(item => item.reset === "short"),
+    ...character.resources.filter(item => item.reset === "shortOne").map(item => ({ name: `${item.label || item.name} (one use)` })),
     ...character.classOptions.filter(item => item.reset === "short")
-  ].map(item => item.name).filter(Boolean);
+  ].map(item => item.label || item.name).filter(Boolean);
   const longRefresh = [
-    ...character.resources.filter(item => item.reset === "long" || item.reset === "short"),
+    ...character.resources.filter(item => ["long", "short", "shortOne"].includes(item.reset)),
     ...character.classOptions.filter(item => item.reset === "long" || item.reset === "short")
-  ].map(item => item.name).filter(Boolean);
+  ].map(item => item.label || item.name).filter(Boolean);
   document.querySelector("#restSummary").textContent = character.restLog || "No rest taken yet";
   const pools = hitDicePools();
   const spent = hitDiceSpent();
@@ -1314,7 +1368,8 @@ function takeRest(type, options = {}) {
     character.equipment = (character.equipment || []).filter(item => !berriesSpoiled(item));
   }
   character.resources.forEach(resource => {
-    if (resource.reset === type || (type === "long" && resource.reset === "short")) resource.current = resource.max;
+    if (resource.reset === type || (type === "long" && ["short", "shortOne"].includes(resource.reset))) resource.current = resource.max;
+    else if (type === "short" && resource.reset === "shortOne") resource.current = Math.min(Number(resource.max), Number(resource.current || 0) + 1);
   });
   character.classOptions.forEach(option => {
     if (option.reset === type || (type === "long" && option.reset === "short")) option.current = option.max;
@@ -1527,13 +1582,15 @@ function renderResources() {
   character.resources.forEach(resource => {
     const node = template.content.firstElementChild.cloneNode(true);
     node.dataset.resourceId = resource.id;
-    node.querySelector(".resource-name").value = resource.name;
+    node.querySelector(".resource-name").value = resource.label || resource.name;
     node.querySelector(".resource-current").value = resource.current;
     node.querySelector(".resource-max").value = resource.max;
     node.querySelector(".resource-name").title = resource.name;
     if (resource.auto) {
       node.querySelector(".resource-max").readOnly = true;
       node.querySelector(".resource-max").title = "Set by your class and level";
+      // A renamed class pool would stop matching its feature and come back as a duplicate.
+      node.querySelector(".resource-name").readOnly = Boolean(resource.label);
     }
     node.querySelector(".resource-reset").value = resource.reset;
     root.appendChild(node);
@@ -2584,7 +2641,7 @@ function weaponAction(item, grip = "", die = "", text = `${item.name} ${item.not
   const monkWeapon = monkLevel > 0 && monkUnarmored() && (dedicated || kenseiWeapon(item) || (!traits.rangedWeapon && !traits.heavy && !traits.twoHanded && (/simple/.test(text) || /shortsword/.test(text))));
   if (monkWeapon) {
     if (mod("dex") > mod(ability)) ability = "dex";
-    const martial = monkLevel >= 17 ? 10 : monkLevel >= 11 ? 8 : monkLevel >= 5 ? 6 : 4;
+    const martial = martialArtsDie(monkLevel);
     const [count, sides] = die.split("d").map(Number);
     if (count === 1 && sides < martial) die = `1d${martial}`;
     notes2.push("Martial Arts.");
@@ -2683,7 +2740,7 @@ const CLASS_FEATURE_ACTIONS = {
     }
   },
   monk({ level, subclass, add, prof }) {
-    const die = level >= 17 ? 10 : level >= 11 ? 8 : level >= 5 ? 6 : 4;
+    const die = martialArtsDie(level);
     const martial = monkUnarmored();
     const ability = martial && mod("dex") > mod("str") ? "dex" : "str";
     // Martial Arts needs no armor and no shield (PHB p.78); otherwise it's a plain 1 + STR unarmed strike.
@@ -4246,7 +4303,7 @@ function featureDamageRiders(options = {}) {
   if (options.kensei && options.rangedWeapon && hasEffect("Kensei's Shot")) riders.push({ name: "Kensei's Shot", formula: "1d4" });
   if (options.kensei && subclassLevel("kensei") >= 6 && Number(character.resources.find(item => item.name === "Ki Points")?.current) > 0) {
     const monk = classLevel("monk");
-    riders.push({ name: "Deft Strike (1 ki)", formula: `1d${monk >= 17 ? 10 : monk >= 11 ? 8 : monk >= 5 ? 6 : 4}`, once: "deft-strike", spend: ["Ki Points", 1] });
+    riders.push({ name: "Deft Strike (1 ki)", formula: `1d${martialArtsDie(monk)}`, once: "deft-strike", spend: ["Ki Points", 1] });
   }
   const lycan = subclassLevel("lycan");
   if (character.hybrid && options.melee && lycan) riders.push({ name: "Feral Might", formula: String(lycan >= 18 ? 3 : lycan >= 11 ? 2 : 1), flat: true });
@@ -4414,6 +4471,11 @@ function wardAndPortentRows({ level, subclass, add }) {
   if (subclass === "divination" && level >= 2) add("portent", { name: "Portent", type: "Free", notes: `${(character.portentDice || []).join(", ") || "No dice left"}. Replace a roll you can see.`, use: { kind: "portent" } });
 }
 
+// The 2024 Armorer (Eberron: Forge of the Artificer) adds the Dreadnaught model; the 2014 (Tasha's) one doesn't have it.
+function armorer2024() {
+  return classEntries().some(entry => entry.classId === "artificer" && entry.rules === "2024" && subclassIndexFor(entry) === "armorer");
+}
+
 Object.assign(CLASS_FEATURE_ACTIONS, {
   artificer({ level, subclass, add, prof }) {
     const int = Math.max(1, mod("int"));
@@ -4421,6 +4483,10 @@ Object.assign(CLASS_FEATURE_ACTIONS, {
     if (level >= 11) add("spell-storing-item", { name: "Spell-Storing Item", type: "Action", notes: `The holder casts the stored 1st- or 2nd-level spell (DC ${8 + prof + mod("int")}).`, use: { cost: ["Spell-Storing Item", 1], kind: "note", text: `The stored spell takes effect, using your spellcasting modifier (DC ${8 + prof + mod("int")}, +${prof + mod("int")} to hit).` } });
     if (subclass === "armorer" && level >= 3) {
       add("thunder-gauntlets", { name: "Thunder Gauntlets (Guardian)", type: "Action", attack: formatMod(prof + mod("int")), damage: `1d8${formatMod(mod("int"))} thunder`, notes: "Guardian model. A creature you hit has disadvantage on attacks against others until your next turn." });
+      if (armorer2024()) {
+        add("armor-flail", { name: "Armor Flail (Dreadnaught)", type: "Action", attack: formatMod(prof + mod("int")), damage: `1d10${formatMod(mod("int"))} bludgeoning`, notes: "Dreadnaught model. Wrecking Ball: on a hit against a creature at least one size smaller than you, push it up to 10 ft away or pull it up to 10 ft toward you." });
+        add("giant-stature", { name: "Giant Stature (Dreadnaught)", type: "Bonus Action", notes: "1 minute: reach +5 ft, and you and your gear become Large if you're smaller and there's room.", use: { cost: ["Giant Stature (Dreadnaught)", 1], kind: "note", text: "For 1 minute your reach increases by 5 feet, and if you're smaller than Large you become Large along with what you wear, provided there's room." } });
+      }
       add("lightning-launcher", { name: "Lightning Launcher (Infiltrator)", type: "Action", attack: formatMod(prof + mod("int")), damage: `1d6${formatMod(mod("int"))} lightning`, notes: "Infiltrator model, 90/300 ft. Once per turn +1d6 lightning on a hit." });
     }
     if (subclass === "battle-smith" && level >= 9) add("arcane-jolt", { name: "Arcane Jolt", type: "Free", notes: `Once per turn on a magic weapon or defender hit: ${level >= 15 ? 4 : 2}d6 force, or heal that much to a creature within 30 ft.`, use: { cost: ["Arcane Jolt", 1], kind: "give", heal: true, roll: `${level >= 15 ? 4 : 2}d6`, text: "Force damage to the target, or healing for a creature within 30 ft of it." } });

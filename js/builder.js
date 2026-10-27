@@ -491,7 +491,7 @@ function levelTarget() {
   const plan = levelPlan;
   if (plan.target === "new") {
     const base = getClasses()[plan.newClassId];
-    return base ? { key: "new", classId: base.id, from: 0, to: 1, cls: base, rules: plan.newRules, subclassName: "" } : null;
+    return base ? { key: "new", classId: base.id, from: 0, to: 1, cls: editionClass(base, plan.newRules), rules: plan.newRules, subclassName: "" } : null;
   }
   const entry = classEntries().find(item => item.key === plan.target) || classEntries()[0];
   let cls = entryClass(entry);
@@ -622,14 +622,16 @@ function renderLevelSummaryAndChoices() {
   const slotLine = isPactCaster(cls)
     ? `Pact slots: ${pactSlots.length ? `${pactSlots[pactSlots.length - 1]} × ${ordinal(pactSlots.length)} level, regained on a short rest` : "none yet"}${multiclassed ? " (pact slots are separate from the multiclass table)" : ""}.`
     : multiclassed ? "Spell slots follow the multiclass spellcaster table (PHB p.165)." : `Spell slots: ${spellSlotsFor(cls, to).map((count, index) => count ? `${ordinal(index + 1)} ×${count}` : "").filter(Boolean).join(" · ") || "none yet"}`;
-  const gained = rules === "2024" ? [] : levelFeaturesGained(target);
+  const entryNow = classEntries().find(entry => entry.key === target.key);
+  const subclassSlug = plan.subclass || (entryNow ? subclassIndexFor(entryNow) : "");
+  const gained = cls.srd2024 ? srdFeaturesGained(cls, to, subclassSlug) : rules === "2024" ? [] : levelFeaturesGained(target);
   document.querySelector("#levelSummary").innerHTML = `
     <div><span class="edition-badge" data-edition="${rules}">${rules} rules</span> ${escapeHtml(cls.name)} level ${to}</div>
     <div>Proficiency bonus: ${formatMod(profNext)}${profNext !== profNow ? ` (up from ${formatMod(profNow)})` : ""} · Hit dice gain a d${cls.hitDie}</div>
     ${gained.length ? `<div class="level-features"><span>New features (tap one to read it):</span>${gained.map(feature => featureRowHtml({ name: feature.name, summary: feature.summary, chips: [[`${cls.name} ${feature.level}`], feature.source === "TCE-optional" ? ["Optional (Tasha's)", "is-optional"] : null] })).join("")}</div>`
       : `<div>Features: ${escapeHtml(levelFeatureText(row.features, plan.subclass || (classEntries().find(entry => entry.key === target.key) ? subclassIndexFor(classEntries().find(entry => entry.key === target.key)) : ""), to) || "No new class feature this level.")}</div>`}
     ${cls.casterType === "none" ? "" : `<div>${escapeHtml(slotLine)}</div>`}
-    ${rules === "2024" ? `<div class="muted">2024 rules: check the 2024 Player's Handbook for this level's features; ForgeSheet's automation follows the 2014 tables.</div>` : ""}
+    ${rules === "2024" && !cls.srd2024 ? `<div class="muted">The 2024 ${escapeHtml(cls.name)} isn't in the free 2024 rules (SRD 5.2), so this level uses ForgeSheet's 2014 table. Check your 2024 book for differences.</div>` : ""}
   `;
   const subclassOptions = officialSubclasses.filter(item => item.classIndex === target.classId);
   const needsSubclass = !target.subclassName && to >= subclassUnlockLevel(target.classId, rules) && subclassOptions.length;
@@ -647,13 +649,12 @@ function renderLevelSummaryAndChoices() {
   const picks = target.key === "new" && cls.preparedFormula !== "known" && !cls.knownTable && cls.id !== "wizard"
     ? { spells: 0, cantrips: cantripCap(cls, 1) }
     : levelUpPicks(cls, from, to);
-  if (rules === "2024") picks.spells = 0;
+  if (rules === "2024" && !cls.srd2024) picks.spells = 0;
   // Subclass bonus cantrips (Nature, Arcana, Death domains; Circle of the Land) arrive with the subclass level.
-  const entryNow = classEntries().find(entry => entry.key === target.key);
-  const bonus = SUBCLASS_BONUS_CANTRIPS[plan.subclass || (entryNow ? subclassIndexFor(entryNow) : "")];
+  const bonus = cls.srd2024 ? null : SUBCLASS_BONUS_CANTRIPS[subclassSlug];
   if (bonus && from < bonus.level && to >= bonus.level) picks.cantrips += bonus.count;
   // Mystic Arcanum (PHB p.108): one 6th/7th/8th/9th-level warlock spell at 11/13/15/17, separate from spells known.
-  const arcanum = rules !== "2024" ? arcanumLevelsFor(cls)[to] || 0 : 0;
+  const arcanum = rules !== "2024" || cls.srd2024 ? arcanumLevelsFor(cls)[to] || 0 : 0;
   // Magical Secrets (bard 10/14/18): two of this level's new spells may come from any class list (PHB p.54).
   // Additional Magical Secrets (Lore 6): two more from any list, on top of spells known (PHB p.55).
   const secrets = target.classId === "bard" && rules !== "2024" && [10, 14, 18].includes(to) ? Math.min(2, picks.spells) : 0;
@@ -689,10 +690,16 @@ function renderLevelSummaryAndChoices() {
   });
   if (plan.choices.some(choice => choice.prepare)) choices.insertAdjacentHTML("afterbegin", `<p class="muted">Ticked spells are prepared now if you have room under your prepared limit.</p>`);
   if (!kinds.length && cls.casterType !== "none") {
-    choices.insertAdjacentHTML("afterbegin", `<p class="muted">${rules === "2024" ? "2024 casters prepare spells from their class list: update them in the Spells tab after leveling." : `No new spells to learn this level${cls.preparedFormula === "known" ? "" : " (you prepare from your full class list)"}.`}</p>`);
+    const limitNow = preparedLimitFor(cls, from || 1);
+    const limitNext = preparedLimitFor(cls, to);
+    choices.insertAdjacentHTML("afterbegin", `<p class="muted">${cls.srd2024 && isPreparedCaster(cls)
+      ? `You prepare spells from the full ${escapeHtml(cls.name)} list${limitNext > limitNow ? `; your limit rises from ${limitNow} to ${limitNext}` : ""}. Choose them in the Spells tab.`
+      : rules === "2024" ? "2024 casters prepare spells from their class list: update them in the Spells tab after leveling."
+      : `No new spells to learn this level${cls.preparedFormula === "known" ? "" : " (you prepare from your full class list)"}.`}</p>`);
   }
   // Known casters may swap one known spell for another on gaining a level (bard, sorcerer, warlock, ranger, EK, AT).
-  const knownRows = (cls.preparedFormula === "known" || cls.knownTable) && from >= 1 && rules !== "2024"
+  // 2024 bards, sorcerers, warlocks and rangers may also replace one spell on gaining a level.
+  const knownRows = (cls.preparedFormula === "known" || cls.knownTable) && from >= 1 && (rules !== "2024" || cls.srd2024)
     ? character.spells.filter(row => spellRowHasSpell(row) && spellLevelForRow(row) > 0 && spellLevelForRow(row) <= 5 && !spellAlwaysPrepared(row) && !row.itemId && !row.secret && !row.ritualBook && spellRowKey(row) === target.key)
     : [];
   if (knownRows.length) {
@@ -708,6 +715,25 @@ function renderLevelSummaryAndChoices() {
     newSelect.addEventListener("change", event => { plan.replace.to = event.target.value; });
     choices.appendChild(wrapper);
   }
+}
+
+// SRD 5.2 has one subclass per class; a 2014 slug maps to it when it's the same subclass.
+const SRD_2024_SUBCLASS_SLUGS = { berserker: "path-of-the-berserker", lore: "college-of-lore", life: "life-domain", land: "circle-of-the-land", champion: "champion", "open-hand": "warrior-of-the-open-hand", devotion: "oath-of-devotion", hunter: "hunter", thief: "thief", draconic: "draconic-sorcery", fiend: "fiend-patron", evocation: "evoker" };
+
+function srdSubclass2024(cls, slug) {
+  const sub = cls.srd2024?.subclass;
+  return sub && slug && SRD_2024_SUBCLASS_SLUGS[slug] === sub.index ? sub : null;
+}
+
+// The 2024 features a class level adds, with their SRD text; subclass placeholders become the real features.
+function srdFeaturesGained(cls, level, slug = "") {
+  const row = cls.srd2024.levels[level - 1];
+  const sub = srdSubclass2024(cls, slug);
+  const subFeatures = (sub?.features || []).filter(feature => feature.level === level);
+  return [
+    ...(row?.features || []).filter(feature => !(subFeatures.length && /subclass( feature)?$/i.test(feature.name))).map(feature => ({ name: feature.name, summary: feature.text, level })),
+    ...subFeatures.map(feature => ({ name: feature.name, summary: feature.text, level }))
+  ];
 }
 
 // The sheet as it would be after this level: the target entry one level up, with the subclass picked here.
@@ -790,18 +816,24 @@ function renderLevelAsi(due, rules) {
     return;
   }
   const plan = levelPlan;
-  const feats = optionalRule("feats");
+  const target = levelTarget();
+  const epic = Boolean(target?.cls.epicBoonLevels?.includes(target.to));
+  const feats = optionalRule("feats") || rules === "2024";
   if (!feats) plan.asiMode = "asi";
+  const legend = epic ? "Epic Boon (2024): an Epic Boon feat, or another feat you qualify for"
+    : rules === "2024" ? "Ability Score Improvement (2024): the Ability Score Improvement feat, or another feat you qualify for"
+    : "Ability score improvement";
   root.innerHTML = `
     <fieldset class="level-asi">
-      <legend>Ability score improvement${rules === "2024" ? " (2024: or any feat you qualify for)" : ""}</legend>
+      <legend>${escapeHtml(legend)}</legend>
       <label class="inline-check"><input type="radio" name="asiMode" value="asi" ${plan.asiMode === "asi" ? "checked" : ""}> Raise scores: +1 and +1 (pick the same ability twice for +2)</label>
       <div class="level-asi-picks">
         ${["asiFirst", "asiSecond"].map((id, index) => `<select id="${id}" aria-label="${index ? "Second" : "First"} ability to raise">${ABILITIES.map(([ability, label]) => `<option value="${ability}" ${plan.asiPicks[index] === ability ? "selected" : ""}>${label} (${character.abilities[ability]})</option>`).join("")}</select>`).join("")}
       </div>
       <p id="levelAsiResult" class="level-asi-result" aria-live="polite">${escapeHtml(levelAsiResultText(plan.asiPicks))}</p>
       ${feats ? `<label class="inline-check"><input type="radio" name="asiMode" value="feat" ${plan.asiMode === "feat" ? "checked" : ""}> Take a feat instead</label>
-      <div class="level-feat-picker" ${plan.asiMode === "feat" ? "" : "hidden"}>${featPickerHtml(plan.feat, character, "level")}</div>` : `<p class="muted">Feats are off for this character (Settings).</p>`}
+      <div class="level-feat-picker" ${plan.asiMode === "feat" ? "" : "hidden"}>${featPickerHtml(plan.feat, character, "level", { edition: rules, epic })}</div>
+      ${rules === "2024" ? `<p class="muted">The 2024 list holds the feats in the free 2024 rules (SRD 5.2). For another feat from your 2024 book, add it as a custom feat.</p>` : ""}` : `<p class="muted">Feats are off for this character (Settings).</p>`}
     </fieldset>`;
 }
 
@@ -956,7 +988,9 @@ function applyLevelUp(event) {
   const rule = featState && featRule(featState.name);
   const featAbility = rule?.ability.includes(featState.ability) ? featState.ability : rule?.ability.length === 1 ? rule.ability[0] : "";
   const raised = [...(asiMode === "asi" ? plan.asiPicks : []), featAbility].filter(Boolean);
-  const over = ABILITIES.find(([id]) => Number(character.abilities[id]) + raised.filter(item => item === id).length > 20);
+  // Epic Boons raise a score to as much as 30; everything else stops at 20.
+  const capFor = id => id === featAbility && Number(rule?.abilityMax) > 20 && !(asiMode === "asi" && plan.asiPicks.includes(id)) ? Number(rule.abilityMax) : 20;
+  const over = ABILITIES.find(([id]) => Number(character.abilities[id]) + raised.filter(item => item === id).length > capFor(id));
   if (over && !plan.capOk && !isRuleBroken("ability-cap")) {
     breakRule("ability-cap", `${over[1]} would go above 20, the most an ability score can reach without magic.`, () => { plan.capOk = true; document.querySelector("#confirmLevelUp").click(); });
     return;
@@ -2420,6 +2454,27 @@ const FEAT_PREREQS = {
   FEAT_PREREQS[feat] = [source => level4(source) && hasFeat(needs, source), `4th level and ${needs}`];
 });
 
+// 2024 feats from SRD 5.2, registered as "Alert (2024)" etc. so they never collide with 2014 feats of the same name.
+// Their ability increase comes from the "Ability Score Increase" line; Epic Boons go to 30.
+const FEATS_2024 = SRD_2024_FEATS.filter(feat => feat.name !== "Ability Score Improvement").map(feat => {
+  const name = `${feat.name} (2024)`;
+  const increase = feat.text.match(/\*\*Ability Score Increase\.\*\*([^\n]*)/)?.[1] || "";
+  const ability = /one ability score of your choice/i.test(increase)
+    ? ABILITIES.map(([id]) => id)
+    : ABILITIES.filter(([, label]) => new RegExp(`\\b${label}\\b`, "i").test(increase)).map(([id]) => id);
+  const level = Number(feat.prereq.minimum_level || 0);
+  const feature = feat.prereq.feature_named || "";
+  FEAT_DETAILS[name] = {
+    source: "SRD 5.2", edition: "2024", type: feat.type, repeatable: feat.repeatable, ability,
+    abilityMax: Number(increase.match(/maximum of (\d+)/)?.[1] || 20),
+    prereq: [level ? `Level ${level}+` : "", feature ? `${feature} feature` : ""].filter(Boolean).join(", "),
+    summary: feat.text.replace(/\*\*/g, "").replace(/\n/g, " ")
+  };
+  if (feature === "Fighting Style") FEAT_PREREQS[name] = [source => classEntries(source).some(entry => ["fighter", "paladin", "ranger"].includes(entry.classId) && entry.level >= (entry.classId === "fighter" ? 1 : 2)), "the Fighting Style feature"];
+  if (feature === "Spellcasting") FEAT_PREREQS[name] = [source => classEntries(source).some(entry => entryClass(entry).casterType !== "none"), "the Spellcasting or Pact Magic feature"];
+  return { name, type: feat.type };
+});
+
 // Everything the app knows about one feat: official (FEAT_DETAILS + tables above) or custom.
 function featRule(name, source = character) {
   const custom = customFeatByName(name, source);
@@ -2435,7 +2490,8 @@ function featRule(name, source = character) {
   return {
     source: details?.source || "", summary: details?.summary || "", prereqText: details?.prereq || "",
     ability: details?.ability || [], repeatable: Boolean(details?.repeatable), saveProficiency: name === "Resilient",
-    hpPerLevel: FEAT_HP_PER_LEVEL[name] || 0, ok, needs, note, variants: FEAT_VARIANTS[name]
+    hpPerLevel: FEAT_HP_PER_LEVEL[name] || 0, ok, needs, note, variants: FEAT_VARIANTS[name],
+    edition: details?.edition || "2014", abilityMax: details?.abilityMax || 20
   };
 }
 
@@ -2448,6 +2504,8 @@ function featEntry(name, variant = "") {
 }
 
 function featBaseName(entry) {
+  // "Alert (2024)" is its own feat, not a variant of the 2014 Alert.
+  if (FEAT_DETAILS[entry]) return String(entry);
   const match = String(entry || "").match(/^(.*) \(([^()]*)\)$/);
   return match && (FEAT_VARIANTS[match[1]] || FEAT_PRESETS.includes(match[1])) ? match[1] : String(entry || "");
 }
@@ -2498,8 +2556,12 @@ function draftFeatSource(draft = creationDraft) {
 }
 
 // ---- Feat picker (Builder planner, level-up, creation): select, details, and the feat's own choices ----
-function featOptionsHtml(selected, source, { blockDisabled = false } = {}) {
-  return allFeatNames().filter(name => name !== "Ability Score Improvement").map(name => {
+// edition "2024" lists the SRD 5.2 feats (Epic Boons only when epic) plus custom feats; otherwise the 2014 feats.
+function featOptionsHtml(selected, source, { blockDisabled = false, edition = "2014", epic = false } = {}) {
+  const names = edition === "2024"
+    ? [...FEATS_2024.filter(feat => epic || feat.type !== "epic-boon").map(feat => feat.name), ...Object.values(customFeats).map(feat => feat.name)]
+    : allFeatNames();
+  return names.filter(name => name !== "Ability Score Improvement").map(name => {
     const why = featBlocked(name, source);
     const custom = customFeatByName(name, source);
     const disabled = why === "already taken" || (blockDisabled && Boolean(why));
@@ -2584,10 +2646,10 @@ function featPicksHtml(name, state, source, scope) {
 }
 
 // The whole picker; state = { name, variant, ability, skills: [], ... } kept by the caller.
-function featPickerHtml(state, source, scope, { label = "Feat", blockDisabled = false } = {}) {
+function featPickerHtml(state, source, scope, { label = "Feat", blockDisabled = false, edition = "2014", epic = false } = {}) {
   return `
     <label class="create-name">${escapeHtml(label)}
-      <select data-feat-name data-feat-scope="${scope}"><option value="">Choose a feat…</option>${featOptionsHtml(state.name, source, { blockDisabled })}</select>
+      <select data-feat-name data-feat-scope="${scope}"><option value="">Choose a feat…</option>${featOptionsHtml(state.name, source, { blockDisabled, edition, epic })}</select>
     </label>
     ${state.name ? `${featDetailHtml(state.name, source, state.variant)}<div class="feat-picks">${featPicksHtml(state.name, state, source, scope)}</div>` : ""}`;
 }
@@ -2626,7 +2688,8 @@ function takeFeat(state, { kind = "asi", raiseAbility = true, hp = false, level 
   const ability = rule.ability.includes(state.ability) ? state.ability : rule.ability.length === 1 ? rule.ability[0] : "";
   if (ability) {
     // At creation the +1 is already in the scores; it is still recorded so removing the feat undoes it.
-    if (raiseAbility) character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, isRuleBroken("ability-cap") ? 30 : 20);
+    // Epic Boons (2024) allow up to 30; other feats stop at 20 unless the ability-cap house rule is on.
+    if (raiseAbility) character.abilities[ability] = clamp(Number(character.abilities[ability]) + 1, 1, isRuleBroken("ability-cap") ? 30 : rule.abilityMax || 20);
     record.ability = ability;
     notes.push(`+1 ${ability.toUpperCase()}`);
   }

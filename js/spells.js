@@ -1684,7 +1684,7 @@ function quickCastState(row, level) {
 
 // Prepared casters (cleric, druid, paladin, wizard, artificer) prepare up to a class limit after each long rest.
 function isPreparedCaster(cls = currentClass()) {
-  return ["levelPlusMod", "halfLevelPlusMod"].includes(cls.preparedFormula);
+  return ["levelPlusMod", "halfLevelPlusMod", "table"].includes(cls.preparedFormula);
 }
 
 // A row needs preparing when the class it belongs to prepares spells (not species, feat, item or ritual-book rows).
@@ -1703,7 +1703,7 @@ function gatePrepare(proceed, key = "primary") {
   const entry = classEntries().find(candidate => candidate.key === key) || classEntries()[0];
   const cls = entryClass(entry);
   const limit = preparedLimitFor(cls, entry.level);
-  const formula = cls.preparedFormula === "levelPlusMod" ? `${cls.name} level + ${String(cls.spellAbility).toUpperCase()} modifier` : `half your ${cls.name} level + ${String(cls.spellAbility).toUpperCase()} modifier`;
+  const formula = cls.preparedFormula === "table" ? `the 2024 ${cls.name} table` : cls.preparedFormula === "levelPlusMod" ? `${cls.name} level + ${String(cls.spellAbility).toUpperCase()} modifier` : `half your ${cls.name} level + ${String(cls.spellAbility).toUpperCase()} modifier`;
   breakRule("prepared-limit", `You're already at your maximum of ${limit} prepared ${cls.name} spells (${formula}). Always-prepared spells from your subclass don't count toward it.`, proceed);
 }
 

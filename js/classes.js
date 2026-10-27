@@ -456,9 +456,52 @@ function cantripCap(cls = currentClass(), level = character.level) {
 }
 
 function currentClass() {
-  const cls = getClasses()[character.classId] || (character.classId ? missingClass(character.classId) : BUILT_IN_CLASSES.artificer);
+  const base = getClasses()[character.classId] || (character.classId ? missingClass(character.classId) : BUILT_IN_CLASSES.artificer);
+  const cls = editionClass(base, character.rulesVersion);
   const casting = cls.casterType === "none" ? lookupBySubclass(SUBCLASS_CASTING) : null;
   return casting ? { ...cls, ...casting } : cls;
+}
+
+// A class set to the 2024 rules: its SRD 5.2 table drives features, ASI levels, cantrips, prepared spells and slots.
+// Classes with no 2024 SRD table (artificer, blood hunter, custom classes) keep their 2014 tables.
+function editionClass(cls, rules) {
+  return rules === "2024" ? class2024(cls) || cls : cls;
+}
+
+const class2024Cache = {};
+
+function class2024(cls) {
+  const srd = SRD_2024_CLASSES[cls.id];
+  if (!srd || !BUILT_IN_CLASSES[cls.id]) return null;
+  if (class2024Cache[cls.id]) return class2024Cache[cls.id];
+  const levels = srd.levels;
+  const caster = levels.some(level => level.slots.some(Boolean));
+  const prepared = levels.map(level => level.prepared);
+  const has = name => levels.filter(level => level.features.some(feature => feature.name === name)).map(level => level.level);
+  // Bards, sorcerers, warlocks and rangers change their list on level up only; the rest re-prepare after a long rest.
+  const listCaster = caster && cls.preparedFormula === "known";
+  const built = {
+    ...cls,
+    rules: "2024",
+    srd2024: srd,
+    subclassLevel: 3,
+    asiLevels: [...has("Ability Score Improvement"), ...has("Epic Boon")],
+    epicBoonLevels: has("Epic Boon"),
+    // 2024 paladins and rangers cast from 1st level: their slots match the full-caster table at half level, rounded up.
+    casterType: ["paladin", "ranger"].includes(cls.id) ? "halfRoundUp" : cls.casterType,
+    cantripTable: caster ? levels.map(level => level.cantrips) : undefined,
+    knownTable: listCaster ? prepared : undefined,
+    preparedTable: caster && !listCaster ? prepared : undefined,
+    preparedFormula: !caster ? "none" : listCaster ? "known" : "table",
+    table: makeTable(Object.fromEntries(levels.map(level => [level.level, [
+      level.features.map(feature => feature.name).join(", "),
+      // A wizard still copies two spells into the spellbook each level; other prepared casters prepare from the full list.
+      cls.id === "wizard" ? (level.level === 1 ? 6 : 2) : 0,
+      0
+    ]])))
+  };
+  class2024Cache[cls.id] = built;
+  return built;
 }
 
 function isPactCaster(cls = currentClass()) {
@@ -510,7 +553,7 @@ function subclassLevel(...indexes) {
 // The class definition for any class entry, with subclass casting (Eldritch Knight and similar) applied.
 function entryClass(entry) {
   if (entry.key === "primary") return currentClass();
-  const cls = getClasses()[entry.classId] || missingClass(entry.classId);
+  const cls = editionClass(getClasses()[entry.classId] || missingClass(entry.classId), entry.rules);
   const casting = cls.casterType === "none" ? lookupBySubclass(SUBCLASS_CASTING, subclassIndexFor(entry) || entry.subclassName) : null;
   return casting ? { ...cls, ...casting } : cls;
 }
@@ -632,6 +675,7 @@ function asiLevelsFor(cls = currentClass()) {
 
 function preparedLimitFor(cls, level = character.level) {
   if (cls.preparedFormula === "none") return 0;
+  if (cls.preparedTable) return cls.preparedTable[level - 1] || 0;
   if (cls.preparedFormula === "known") return knownSpellCap(cls, level) ?? character.spells.filter(row => row.index).length;
   if (cls.preparedFormula === "levelPlusMod") return Math.max(1, level + mod(cls.spellAbility));
   // Artificers: INT mod + half level rounded down, min 1, from 1st level (TCE). Paladins prepare nothing before 2nd.

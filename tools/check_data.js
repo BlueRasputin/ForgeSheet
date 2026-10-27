@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const modules = ["utils.js", "data.js", "expansions.js", "srd-spells.js", "srd-beasts.js", "rules-spells.js", "rules-classes.js", "rules-subclasses.js", "rules-feats.js", "classes.js", "character.js", "spells.js", "sheet.js", "builder.js", "play.js", "equipment.js", "party.js", "rules.js", "sync.js", "dice.js"]
+const modules = ["utils.js", "data.js", "expansions.js", "srd-spells.js", "srd-beasts.js", "srd-2024.js", "rules-spells.js", "rules-classes.js", "rules-subclasses.js", "rules-feats.js", "classes.js", "character.js", "spells.js", "sheet.js", "builder.js", "play.js", "equipment.js", "party.js", "rules-reference.js", "rules.js", "sync.js", "dice.js"]
   .map(file => fs.readFileSync(path.join(__dirname, "..", "js", file), "utf8"))
   .join("\n");
 
@@ -2228,6 +2228,28 @@ assert.strictEqual(beaconHealing({ effects: {} }, { total: 7, formula: "1d10+5" 
   persist = saved.persist;
   saveCharacterLibrary = saved.saveCharacterLibrary;
 }
+
+// 2024 rules (SRD 5.2): each class's slots, prepared spells and cantrips match its table; ASIs and Epic Boons land
+// on the table's levels; classes without a 2024 SRD table keep their 2014 tables.
+Object.entries(SRD_2024_CLASSES).forEach(([id, srd]) => {
+  const cls = class2024(BUILT_IN_CLASSES[id]);
+  srd.levels.forEach(row => {
+    const slots = Array.from({ length: 9 }, (_, index) => spellSlotsFor(cls, row.level)[index] || 0);
+    assert.deepStrictEqual(slots, Array.from({ length: 9 }, (_, index) => row.slots[index] || 0), id + " " + row.level + " slots");
+    if (row.slots.some(Boolean)) {
+      const limit = cls.preparedFormula === "known" ? knownSpellCap(cls, row.level) : preparedLimitFor(cls, row.level);
+      assert.strictEqual(limit, row.prepared, id + " " + row.level + " prepared spells");
+      assert.strictEqual(cantripCap(cls, row.level), row.cantrips, id + " " + row.level + " cantrips");
+    }
+  });
+  assert(cls.asiLevels.includes(19) && cls.epicBoonLevels.includes(19), id + " Epic Boon at 19");
+});
+assert.deepStrictEqual([...asiLevelsFor(class2024(BUILT_IN_CLASSES.fighter))].sort((a, b) => a - b), [4, 6, 8, 12, 14, 16, 19]);
+assert.strictEqual(class2024(BUILT_IN_CLASSES.artificer), null, "no 2024 SRD artificer");
+assert.strictEqual(editionClass(BUILT_IN_CLASSES.artificer, "2024"), BUILT_IN_CLASSES.artificer);
+assert.strictEqual(FEAT_DETAILS["Boon of Fate (2024)"].abilityMax, 30);
+assert.deepStrictEqual(FEAT_DETAILS["Grappler (2024)"].ability, ["str", "dex"]);
+assert.strictEqual(featBaseName("Alert (2024)"), "Alert (2024)", "a 2024 feat isn't a variant of the 2014 feat");
 
 console.log("OK: " + LOCAL_SPELLS.length + " local spells, slot math and creation wizard checks passed");
 `;
