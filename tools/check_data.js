@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const modules = ["utils.js", "data.js", "expansions.js", "srd-spells.js", "srd-beasts.js", "srd-2024.js", "rules-spells.js", "rules-classes.js", "rules-subclasses.js", "rules-feats.js", "classes.js", "character.js", "spells.js", "sheet.js", "builder.js", "play.js", "equipment.js", "party.js", "rules.js", "sync.js", "dice.js"]
+const modules = ["utils.js", "data.js", "expansions.js", "srd-spells.js", "srd-beasts.js", "srd-2024.js", "rules-spells.js", "rules-classes.js", "rules-subclasses.js", "rules-feats.js", "classes.js", "character.js", "spells.js", "sheet.js", "builder.js", "play.js", "equipment.js", "party.js", "rules-reference.js", "rules.js", "sync.js", "dice.js"]
   .map(file => fs.readFileSync(path.join(__dirname, "..", "js", file), "utf8"))
   .join("\n");
 

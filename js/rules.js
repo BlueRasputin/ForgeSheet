@@ -10,6 +10,28 @@ RULES_REFERENCE.push(
 );
 
 let lookupSpellRules = null;
+let lookupSpellRules2024 = null;
+
+// The 2024 SRD 5.2 spells (bundled text), for 2024 characters and side-by-side lookups.
+function spellLookupRules2024() {
+  lookupSpellRules2024 ||= (typeof SRD_2024_SPELLS === "undefined" ? [] : SRD_2024_SPELLS).map(spell => ({
+    category: "spell",
+    edition: "2024",
+    title: spell.name,
+    source: "SRD 5.2",
+    meta: [
+      spell.level ? `Level ${spell.level} ${spell.school}` : `${spell.school} cantrip`,
+      spell.ritual ? "ritual" : "",
+      `Casting time: ${spell.casting_time}`,
+      `Range: ${spell.range}`,
+      `Components: ${spell.components.join(", ")}${spell.material ? ` (${spell.material})` : ""}`,
+      `Duration: ${spell.concentration && !/^concentration/i.test(spell.duration) ? `Concentration, ${spell.duration}` : spell.duration}`,
+      `Classes: ${spell.classes.map(id => getClasses()[id]?.name || id).join(", ") || "None"}`
+    ].filter(Boolean).join(" · "),
+    body: `${spell.text.replace(/\*\*/g, "").replace(/\n/g, " ")}${spell.higher_level ? ` Using a higher-level spell slot: ${spell.higher_level}` : ""}`
+  }));
+  return lookupSpellRules2024;
+}
 
 // Every bundled spell, whether or not the open sheet knows it.
 function spellLookupRules() {
@@ -28,14 +50,31 @@ function spellLookupRules() {
       `Classes: ${(spell.classes || []).map(cls => cls.name).join(", ") || "None"}${optional.length ? `; optional (Tasha's): ${optional.join(", ")}` : ""}`
     ].filter(Boolean).join(" · ");
     const higher = (spell.higher_level || []).join(" ");
-    return { category: "spell", title: spell.name, meta, body: `${(spell.desc || []).join(" ")}${higher ? ` At higher levels: ${higher}` : ""}` };
+    return { category: "spell", edition: "2014", title: spell.name, source: spell.source === "SRD" ? "SRD 5.1" : "", meta, body: `${(spell.desc || []).join(" ")}${higher ? ` At higher levels: ${higher}` : ""}` };
   });
   return lookupSpellRules;
+}
+
+// The editions the rules dialog shows: the character's own (each class can differ), one edition, or both.
+function rulesEditionsShown() {
+  const choice = document.querySelector("#rulesEdition")?.value || "character";
+  if (choice === "both") return ["2014", "2024"];
+  if (choice === "2014" || choice === "2024") return [choice];
+  return [...new Set(classEntries().map(entry => entry.rules))];
+}
+
+// Curated entries for both editions, plus the older 2014 entries not yet covered by a curated one.
+function coreRuleEntries() {
+  const curated = [...RULES_2014, ...RULES_2024];
+  const covered = new Set(RULES_2014.map(entry => entry.title.toLowerCase()));
+  const legacy = RULES_REFERENCE.filter(entry => !covered.has(entry.title.toLowerCase())).map(entry => ({ ...entry, edition: entry.edition || "2014" }));
+  return [...curated, ...legacy];
 }
 
 function renderRulesReference() {
   const query = document.querySelector("#rulesSearch")?.value.trim().toLowerCase() || "";
   const category = document.querySelector("#rulesCategory")?.value || "all";
+  const editions = rulesEditionsShown();
   const bundled = new Set(LOCAL_SPELLS.map(spell => spell.index));
   // Custom spells on this sheet; bundled ones come from the full lookup below.
   const spellRules = character.spells
@@ -49,11 +88,12 @@ function renderRulesReference() {
     .filter(option => option.name || option.notes)
     .map(option => rule("class", option.name || "Class option", `${option.kind || "custom"} · ${option.notes || "No notes yet."}`));
   // The full spell list joins once you search or pick Spells, so the opening list stays short.
-  const entries = [...RULES_REFERENCE, ...spellRules, ...moduleRules, ...(query || category === "spell" ? spellLookupRules() : [])];
+  const lookups = query || category === "spell" ? [...spellLookupRules(), ...spellLookupRules2024()] : [];
+  const entries = [...coreRuleEntries(), ...lookups].filter(entry => editions.includes(entry.edition || "2014")).concat(spellRules, moduleRules);
   const rank = entry => entry.title.toLowerCase() === query ? 0 : entry.title.toLowerCase().startsWith(query) ? 1 : entry.title.toLowerCase().includes(query) ? 2 : 3;
   const filtered = entries
     .filter(entry => category === "all" || entry.category === category)
-    .filter(entry => !query || `${entry.title} ${entry.meta || ""} ${entry.body} ${entry.category}`.toLowerCase().includes(query))
+    .filter(entry => !query || `${entry.title} ${entry.meta || ""} ${entry.body} ${entry.category} ${entry.changes || ""}`.toLowerCase().includes(query))
     .sort((a, b) => (query ? rank(a) - rank(b) : 0));
   // ponytail: first 60 cards only; a longer list needs paging or virtual scroll.
   const shown = filtered.slice(0, 60);
@@ -61,10 +101,12 @@ function renderRulesReference() {
   document.querySelector("#rulesResults").innerHTML = shown.length
     ? shown.map(entry => `
       <article class="rule-card">
-        <span>${escapeHtml(ruleCategoryLabel(entry.category))}</span>
+        <span>${escapeHtml(ruleCategoryLabel(entry.category))}${entry.edition ? ` <em class="edition-badge" data-edition="${escapeHtml(entry.edition)}">${escapeHtml(entry.edition)}</em>` : ""}</span>
         <strong>${escapeHtml(entry.title)}</strong>
         ${entry.meta ? `<em class="rule-meta">${escapeHtml(entry.meta)}</em>` : ""}
         <p>${escapeHtml(entry.body)}</p>
+        ${entry.changes ? `<p class="rule-changes">${escapeHtml(entry.changes)}</p>` : ""}
+        ${entry.source ? `<small class="rule-source">${escapeHtml(entry.source)}</small>` : ""}
       </article>
     `).join("")
     : `<p class="empty-state">No matching rules.</p>`;
@@ -73,6 +115,11 @@ function renderRulesReference() {
 function ruleCategoryLabel(category) {
   return {
     core: "Core",
+    check: "Checks",
+    health: "Health",
+    adventuring: "Adventuring",
+    spellcasting: "Spellcasting",
+    character: "Character",
     condition: "Condition",
     action: "Action",
     combat: "Combat",
@@ -83,6 +130,9 @@ function ruleCategoryLabel(category) {
   }[category] || category;
 }
 
+// A condition's text in the character's (primary class's) edition, falling back to the other edition, then the old entry.
 function conditionRule(condition) {
-  return RULES_REFERENCE.find(entry => entry.category === "condition" && entry.title === condition)?.body || "Open Rules in the top bar for condition details.";
+  const edition = classEntries()[0]?.rules || "2014";
+  const match = list => list.find(entry => entry.category === "condition" && entry.title.toLowerCase() === condition.toLowerCase());
+  return (match(edition === "2024" ? RULES_2024 : RULES_2014) || match(RULES_2014) || match(RULES_REFERENCE))?.body || "Open Rules in the top bar for condition details.";
 }

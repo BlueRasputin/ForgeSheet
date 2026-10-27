@@ -394,7 +394,7 @@ function bindEvents() {
   ["syncRole", "syncCampaignId", "syncPlayerName", "syncSheetId", "syncFirebaseConfig"].forEach(id => {
     document.querySelector(`#${id}`).addEventListener("input", handleSyncSettingsInput);
   });
-  ["rulesSearch", "rulesCategory"].forEach(id => {
+  ["rulesSearch", "rulesCategory", "rulesEdition"].forEach(id => {
     document.querySelector(`#${id}`).addEventListener("input", renderRulesReference);
   });
   document.querySelector("#addSubclassSection").addEventListener("click", () => addNoteSection("subclass"));

@@ -865,18 +865,32 @@
             <select id="rulesCategory">
               <option value="all">All</option>
               <option value="core">Core rules</option>
-              <option value="condition">Conditions</option>
+              <option value="check">Checks and saves</option>
               <option value="action">Actions</option>
               <option value="combat">Combat</option>
+              <option value="health">Hit points and dying</option>
+              <option value="condition">Conditions</option>
+              <option value="spellcasting">Spellcasting</option>
+              <option value="adventuring">Adventuring</option>
               <option value="rest">Rests</option>
               <option value="equipment">Equipment</option>
+              <option value="character">Character building</option>
               <option value="class">Class options</option>
               <option value="spell">Spells</option>
             </select>
           </label>
+          <label>
+            Edition
+            <select id="rulesEdition">
+              <option value="character">Match my character</option>
+              <option value="2014">2014 rules</option>
+              <option value="2024">2024 rules</option>
+              <option value="both">Both, side by side</option>
+            </select>
+          </label>
         </div>
         <div id="rulesResults" class="rules-results"></div>
-        <p class="muted rules-credit">This app includes material from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at dnd.wizards.com, licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noopener">CC-BY-4.0</a>. Other rules text is original summary; see the sourcebooks for full wording. ForgeSheet is unofficial fan content, free and not affiliated with Wizards of the Coast.</p>
+        <p class="muted rules-credit">This app includes material from the System Reference Documents 5.1 and 5.2 ("SRD 5.1", "SRD 5.2") by Wizards of the Coast LLC, available at dnd.wizards.com and dndbeyond.com/srd, licensed under <a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noopener">CC-BY-4.0</a>. Other rules text is original summary; see the sourcebooks for full wording. ForgeSheet is unofficial fan content, free and not affiliated with Wizards of the Coast.</p>
       </div>
     </dialog>
 
@@ -1175,7 +1189,8 @@
     <script src="./js/play.js?v=33"></script>
     <script src="./js/equipment.js?v=33"></script>
     <script src="./js/party.js?v=33"></script>
-    <script src="./js/rules.js?v=33"></script>
+    <script src="./js/rules-reference.js?v=34"></script>
+    <script src="./js/rules.js?v=34"></script>
     <script src="./js/import.js?v=33"></script>
     <script src="./js/sync.js?v=33"></script>
     <script src="./js/settings.js?v=33"></script>

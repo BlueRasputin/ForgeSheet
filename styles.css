@@ -5472,6 +5472,21 @@ dialog.roll-dialog {
   display: none;
 }
 
+/* ===== Rules reference cards ===== */
+
+.rule-changes {
+  margin: 4px 0 0;
+  border-left: 3px solid var(--accent-line);
+  padding-left: 8px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.rule-source {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 /* ===== Print ===== */
 
 @page {
