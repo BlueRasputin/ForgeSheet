@@ -4919,6 +4919,15 @@ body:not(.is-editing) :is(.skill-row, .ability-save) input[type="checkbox"]:disa
   font-variant-numeric: tabular-nums;
 }
 
+button.edition-toggle {
+  min-height: 0;
+  cursor: pointer;
+}
+
+button.edition-toggle:hover {
+  border-color: var(--accent);
+}
+
 .edition-badge[data-edition="2024"] {
   border-color: var(--accent-line);
   background: var(--accent-soft);
@@ -5470,6 +5479,111 @@ dialog.roll-dialog {
 
 .sign-in-buttons[hidden] {
   display: none;
+}
+
+/* ===== Rules assistant ===== */
+
+dialog.ai-dialog {
+  width: min(780px, 100vw - 32px);
+}
+
+.ai-modal {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: end;
+}
+
+.ai-key-field {
+  display: flex;
+  flex: 1 1 280px;
+  gap: 8px;
+  align-items: end;
+}
+
+.ai-key-field[hidden] {
+  display: none;
+}
+
+.ai-key-field label {
+  flex: 1;
+}
+
+.ai-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.ai-log {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 160px;
+  max-height: min(52dvh, 520px);
+  overflow-y: auto;
+  border-radius: var(--r-control);
+  padding: 12px;
+  background: var(--inset);
+}
+
+.ai-message {
+  display: grid;
+  gap: 4px;
+  max-width: 92%;
+  border-radius: var(--r-control);
+  padding: 10px 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-message[data-role="user"] {
+  justify-self: end;
+  background: var(--accent-soft);
+}
+
+.ai-message strong:first-child {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.ai-text p {
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.ai-text p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-error {
+  margin: 0;
+  border-radius: var(--r-chip);
+  padding: 8px 10px;
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.ai-form {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ai-form-row .inline-check {
+  margin-right: auto;
 }
 
 /* ===== Print ===== */

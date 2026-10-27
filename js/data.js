@@ -17,9 +17,16 @@ const CUSTOM_SPELL_VALUE = "__custom_spell__";
 const CUSTOM_CLASS_VALUE = "__custom_class__";
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 const PDFJS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
-const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-const FIREBASE_FIRESTORE_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+// All Firebase modules must share one version (they share the app registry). 13.x adds AI Logic.
+const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+const FIREBASE_FIRESTORE_URL = "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+const FIREBASE_AI_URL = "https://www.gstatic.com/firebasejs/13.1.0/firebase-ai.js";
+const FIREBASE_APP_CHECK_URL = "https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js";
+// The free shared assistant turns on once this holds a reCAPTCHA Enterprise site key registered with Firebase App Check.
+const RECAPTCHA_SITE_KEY = "";
+// Gemini model for both the shared assistant and players' own Gemini keys (free tier on the Gemini Developer API).
+const AI_GEMINI_MODEL = "gemini-3.8-flash";
 const THEMES = ["beyond", "light", "dark", "retro"];
 
 const ABILITIES = [

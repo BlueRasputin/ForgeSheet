@@ -232,7 +232,12 @@ function renderIdentityDisplay() {
     character.background,
     character.alignment
   ].filter(Boolean).join(", ");
-  const editions = classEntries().map(entry => `<span class="edition-badge" data-edition="${entry.rules}" title="${escapeHtml(getClasses()[entry.classId]?.name || "")} uses the ${entry.rules} rules">${classEntries().length > 1 ? `${escapeHtml(getClasses()[entry.classId]?.name || "")} ` : ""}${entry.rules}</span>`).join("");
+  // Each badge is a switch: click to move that class between the 2014 and 2024 rules.
+  const editions = classEntries().map(entry => {
+    const name = escapeHtml(getClasses()[entry.classId]?.name || "");
+    const other = entry.rules === "2024" ? "2014" : "2024";
+    return `<button type="button" class="edition-badge edition-toggle" data-edition="${entry.rules}" data-edition-entry="${escapeHtml(entry.key)}" aria-label="${name} uses the ${entry.rules} rules. Switch to ${other}" title="${name}: ${entry.rules} rules. Click to switch to ${other}.">${classEntries().length > 1 ? `${name} ` : ""}${entry.rules}</button>`;
+  }).join("");
   document.querySelector("#identityDisplay").innerHTML = `
     <strong>${escapeHtml(character.name || "Unnamed Character")}</strong>
     <span>${escapeHtml(classLine)}</span>

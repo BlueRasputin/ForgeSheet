@@ -186,7 +186,17 @@ function bindEvents() {
     renderAll();
   });
   document.querySelector("#identityLock").addEventListener("click", toggleIdentityLock);
-  document.querySelector("#identityDisplay").addEventListener("dblclick", toggleIdentityLock);
+  document.querySelector("#identityDisplay").addEventListener("dblclick", event => {
+    if (!event.target.closest(".edition-toggle")) toggleIdentityLock();
+  });
+  document.querySelector("#identityDisplay").addEventListener("click", event => {
+    const badge = event.target.closest(".edition-toggle");
+    if (!badge) return;
+    const next = badge.dataset.edition === "2024" ? "2014" : "2024";
+    setRulesEdition(badge.dataset.editionEntry, next);
+    const entry = classEntries().find(item => item.key === badge.dataset.editionEntry);
+    showToast(`<span class="toast-label">${escapeHtml(getClasses()[entry?.classId]?.name || "Class")} now uses the ${next} rules</span><span>Shown on the sheet, in exports and to the rules assistant. Click the badge again to switch back.</span>`);
+  });
   document.querySelector("#backgroundUpload").addEventListener("click", handleBackgroundButton);
   document.querySelector("#backgroundFile").addEventListener("change", handleBackgroundFile);
   document.querySelector("#applyDamageButton").addEventListener("click", () => applyDamage());
@@ -344,6 +354,16 @@ function bindEvents() {
   document.querySelector("#exportPdfButton").addEventListener("click", exportCharacterPdf);
   document.querySelector("#exportCharacterJsonButton").addEventListener("click", () => exportCharacterJson(false));
   document.querySelector("#aiPromptButton").addEventListener("click", openAiPrompt);
+  document.querySelector("#aiButton").addEventListener("click", openAiDialog);
+  document.querySelector("#closeAiDialog").addEventListener("click", () => document.querySelector("#aiDialog").close());
+  document.querySelector("#aiDialog .ai-setup").addEventListener("change", handleAiSetupInput);
+  document.querySelector("#aiKeyInput").addEventListener("input", handleAiSetupInput);
+  document.querySelector("#forgetAiKey").addEventListener("click", forgetAiKey);
+  document.querySelector("#clearAiConversation").addEventListener("click", clearAiConversation);
+  document.querySelector("#aiForm").addEventListener("submit", sendAiQuestion);
+  document.querySelector("#aiQuestion").addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) sendAiQuestion(event);
+  });
   document.querySelector("#aiPromptQuestion").addEventListener("input", renderAiPrompt);
   document.querySelector("#copyAiPrompt").addEventListener("click", copyAiPrompt);
   document.querySelector("#downloadAiPrompt").addEventListener("click", downloadAiPrompt);
